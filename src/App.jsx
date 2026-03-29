@@ -1,5 +1,5 @@
 // src/App.jsx 
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Import All Components
@@ -26,7 +26,7 @@ import SupplierDetailsModal from './components/Suppliers/SupplierDetailsModal';
 import CommissionPage from './components/Commission/CommissionPage';
 import SupplierProfitReport from './components/Suppliers/SupplierProfitReport';
 import FinancialReport from './components/Reports/FinancialReport';
-import LoanReportManager from './components/LoanManager/LoanReportManager'; // ✅ Add this
+import LoanReportManager from './components/LoanManager/LoanReportManager';
 import SupplierReport2 from './components/Reports/supplierfinalreport';
 import PrintedSalesReport from './components/Reports/PrintedSalesReport';
 import SalesReport from './components/Reports/SalesReport2';
@@ -36,14 +36,14 @@ import ViewSupplierBill from './pages/ViewSupplierBill';
 import FarmerLoanManager from './components/LoanManager/FarmerLoanManager';
 import SupplierReportPrinted from './components/Suppliers/SupplierReportPrinted';
 import SupplierLoanReport from './components/Reports/SupplierLoanReport'; 
-import SupplierFinalReport from './components/Reports/SupplierFullReport';// Adjust the path based on where you saved the file
+import SupplierFinalReport from './components/Reports/SupplierFullReport';
 
+// Import Layout
+import Layout from './components/Layout/Layout';
 
 // ✅ ProtectedRoute component — blocks access if user not logged in
 const ProtectedRoute = ({ children }) => {
     const user = localStorage.getItem('user');
-    // NOTE: It's better practice to check for the token, not 'user' 
-    // since the provided API uses the 'token'.
     const token = localStorage.getItem('token');
 
     if (!token) {
@@ -53,6 +53,15 @@ const ProtectedRoute = ({ children }) => {
 };
 
 export default function App() {
+    // State for bill size and print mode
+    const [billSize, setBillSize] = useState('3inch');
+    const [printMode, setPrintMode] = useState('thermal');
+
+    // Handler for bill size change
+    const handleBillSizeChange = (e) => {
+        setBillSize(e.target.value);
+    };
+
     return (
         <BrowserRouter>
             <Routes>
@@ -65,7 +74,14 @@ export default function App() {
                     path="/"
                     element={
                         <ProtectedRoute>
-                            <Dashboard />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <Dashboard />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -75,7 +91,14 @@ export default function App() {
                     path="/customers"
                     element={
                         <ProtectedRoute>
-                            <CustomerList />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CustomerList />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -83,7 +106,14 @@ export default function App() {
                     path="/customers/create"
                     element={
                         <ProtectedRoute>
-                            <CustomerForm mode="create" />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CustomerForm mode="create" />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -91,7 +121,14 @@ export default function App() {
                     path="/customers/:id/edit"
                     element={
                         <ProtectedRoute>
-                            <CustomerForm mode="edit" />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CustomerForm mode="edit" />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -101,7 +138,14 @@ export default function App() {
                     path="/items"
                     element={
                         <ProtectedRoute>
-                            <ItemList />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <ItemList />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -109,7 +153,14 @@ export default function App() {
                     path="/items/create"
                     element={
                         <ProtectedRoute>
-                            <CreateItem />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CreateItem />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -117,7 +168,14 @@ export default function App() {
                     path="/items/edit/:id"
                     element={
                         <ProtectedRoute>
-                            <EditItem />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <EditItem />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -127,7 +185,14 @@ export default function App() {
                     path="/suppliers"
                     element={
                         <ProtectedRoute>
-                            <SupplierList />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierList />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -135,7 +200,14 @@ export default function App() {
                     path="/suppliers/create"
                     element={
                         <ProtectedRoute>
-                            <CreateSupplier />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CreateSupplier />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -143,7 +215,14 @@ export default function App() {
                     path="/suppliers/edit/:id"
                     element={
                         <ProtectedRoute>
-                            <EditSupplier />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <EditSupplier />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -153,7 +232,14 @@ export default function App() {
                     path="/grn"
                     element={
                         <ProtectedRoute>
-                            <GrnList />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <GrnList />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -161,7 +247,14 @@ export default function App() {
                     path="/grn/create"
                     element={
                         <ProtectedRoute>
-                            <CreateGrn />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CreateGrn />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -169,7 +262,14 @@ export default function App() {
                     path="/grn/edit/:id"
                     element={
                         <ProtectedRoute>
-                            <EditGrn />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <EditGrn />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -177,7 +277,14 @@ export default function App() {
                     path="/grn/entries"
                     element={
                         <ProtectedRoute>
-                            <GrnEntryForm />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <GrnEntryForm />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -187,27 +294,49 @@ export default function App() {
                     path="/customers-loans"
                     element={
                         <ProtectedRoute>
-                            {/* 🚀 CORRECTION: Use LoanManager for the main loans page */}
-                            <LoanManager />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <LoanManager />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
-                {/* Loan Report View is often considered protected data */}
                 <Route
                     path="/customers-loans/report"
                     element={
                         <ProtectedRoute>
-                            <LoanReportView />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <LoanReportView />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
 
-                {/* ⚠️ CRITICAL CORRECTION: Sales Entry MUST be Protected */}
+                {/* ⚠️ SALES ENTRY - Pass printMode as prop */}
                 <Route
                     path="/sales"
                     element={
                         <ProtectedRoute>
-                            <SalesEntry />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SalesEntry 
+                                    printMode={printMode} 
+                                    setPrintMode={setPrintMode}
+                                />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -217,7 +346,14 @@ export default function App() {
                     path="/commissions"
                     element={
                         <ProtectedRoute>
-                            <CommissionPage />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <CommissionPage />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -225,16 +361,29 @@ export default function App() {
                     path="/supplierreport"
                     element={
                         <ProtectedRoute>
-                            <SupplierReport />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierReport />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
-                {/* Supplier Details Modal is likely a standalone page for quick links, should be protected */}
                 <Route
                     path="/suppliermodal"
                     element={
                         <ProtectedRoute>
-                            <SupplierDetailsModal />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierDetailsModal />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -242,7 +391,14 @@ export default function App() {
                     path="/supplier-profit"
                     element={
                         <ProtectedRoute>
-                            <SupplierProfitReport />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierProfitReport />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -250,7 +406,14 @@ export default function App() {
                     path="/financial-report"
                     element={
                         <ProtectedRoute>
-                            <FinancialReport />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <FinancialReport />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
@@ -258,28 +421,148 @@ export default function App() {
                     path="/loan-report"
                     element={
                         <ProtectedRoute>
-                            <LoanReportManager />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <LoanReportManager />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
-                <Route path="/reports/supplier" element={<SupplierReport2 />} />
-                <Route path="/reports/printed-sales" element={<PrintedSalesReport />} />
+                <Route 
+                    path="/reports/supplier" 
+                    element={
+                        <ProtectedRoute>
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierReport2 />
+                            </Layout>
+                        </ProtectedRoute>
+                    } 
+                />
+                <Route 
+                    path="/reports/printed-sales" 
+                    element={
+                        <ProtectedRoute>
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <PrintedSalesReport />
+                            </Layout>
+                        </ProtectedRoute>
+                    } 
+                />
                 <Route
                     path="/reports/newsales"
                     element={
                         <ProtectedRoute>
-                            <SalesReport />
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SalesReport />
+                            </Layout>
                         </ProtectedRoute>
                     }
                 />
+                
+                {/* Public Routes - No Layout Needed */}
                 <Route path="/view-bill/:token" element={<PublicBill />} />
-
                 <Route path="/suppliers/dobreport" element={<SupplierdobReport />} />
                 <Route path="/view-supplier-bill/:token" element={<ViewSupplierBill />} />
-                <Route path="/farmer-loans" element={<FarmerLoanManager />} />
-                <Route path="/suppliers/printed-report" element={<SupplierReportPrinted />} />
-                <Route path="/supplier-loan-report" element={<SupplierLoanReport />} />
-                <Route path="/supplier-finalreport" element={<SupplierFinalReport />} />
+                
+                {/* Protected Routes with Layout */}
+                <Route 
+                    path="/farmer-loans" 
+                    element={
+                        <ProtectedRoute>
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <FarmerLoanManager />
+                            </Layout>
+                        </ProtectedRoute>
+                    } 
+                />
+                <Route 
+                    path="/suppliers/printed-report" 
+                    element={
+                        <ProtectedRoute>
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierReportPrinted />
+                            </Layout>
+                        </ProtectedRoute>
+                    } 
+                />
+                <Route 
+                    path="/supplier-loan-report" 
+                    element={
+                        <ProtectedRoute>
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierLoanReport />
+                            </Layout>
+                        </ProtectedRoute>
+                    } 
+                />
+                <Route 
+                    path="/supplier-finalreport" 
+                    element={
+                        <ProtectedRoute>
+                            <Layout 
+                                billSize={billSize} 
+                                handleBillSizeChange={handleBillSizeChange}
+                                printMode={printMode}
+                                setPrintMode={setPrintMode}
+                            >
+                                <SupplierFinalReport />
+                            </Layout>
+                        </ProtectedRoute>
+                    } 
+                />
+              
+<Route
+    path="/sales"
+    element={
+        <ProtectedRoute>
+            <Layout 
+                billSize={billSize} 
+                handleBillSizeChange={handleBillSizeChange}
+                printMode={printMode}
+                setPrintMode={setPrintMode}
+            >
+                <SalesEntry 
+                    printMode={printMode} 
+                    setPrintMode={setPrintMode}
+                />
+            </Layout>
+        </ProtectedRoute>
+    }
+/>
 
                 {/* ❌ Fallback route: Redirect all unknown paths to the main dashboard */}
                 <Route path="*" element={<Navigate to="/" replace />} />

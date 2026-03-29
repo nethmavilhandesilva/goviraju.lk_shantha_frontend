@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "/sms_new_frontend_50500",
+  "homepage": "/DBS_frontend_30500",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

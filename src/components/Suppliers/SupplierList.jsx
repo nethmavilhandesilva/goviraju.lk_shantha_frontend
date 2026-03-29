@@ -10,7 +10,7 @@ const SupplierList = () => {
   const navigate = useNavigate();
 
   // ⭐ LOCALHOST STORAGE LINK
-  const STORAGE_URL = "https://goviraju.lk/sms_new_backend_50500/application/public/storage/";
+  const STORAGE_URL = "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
 
   useEffect(() => {
     loadSuppliers();

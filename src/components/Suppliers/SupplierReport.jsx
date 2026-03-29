@@ -49,6 +49,8 @@ const SupplierReport = () => {
     const [editingRecord, setEditingRecord] = useState(null);
     const [newFarmerCode, setNewFarmerCode] = useState('');
     const [newCustomerCode, setNewCustomerCode] = useState('');
+    // 🚀 BULK EDIT STATE
+    const [applyToAllSameItems, setApplyToAllSameItems] = useState(true);
 
     // --- Function to fetch the summary data ---
     const fetchSummary = useCallback(async () => {
@@ -108,15 +110,24 @@ const SupplierReport = () => {
         }
     };
 
-    // --- 🚀 NEW: Update Farmer Logic ---
+    // --- 🚀 NEW: Update Farmer Logic (Enhanced for Bulk) ---
     const handleUpdateFarmer = async () => {
-        // Both are now technically optional, but we need at least one change or we just send existing values
         const finalSupplierCode = newFarmerCode || editingRecord.supplier_code;
         const finalCustomerCode = newCustomerCode || editingRecord.customer_code;
 
+        // Logic to determine which IDs to update
+        let idsToUpdate = [editingRecord.id];
+        if (applyToAllSameItems) {
+            idsToUpdate = supplierDetails
+                .filter(item => item.item_name === editingRecord.item_name)
+                .map(item => item.id);
+        }
+
         try {
             setIsDetailsLoading(true);
-            const response = await api.put(`/sales/${editingRecord.id}/update-supplier`, {
+            // Using a generic update endpoint that handles arrays or multiple IDs
+            const response = await api.put(`/sales/bulk-update-supplier`, {
+                transaction_ids: idsToUpdate,
                 supplier_code: finalSupplierCode,
                 customer_code: finalCustomerCode
             });
@@ -125,6 +136,7 @@ const SupplierReport = () => {
                 setEditingRecord(null);
                 setNewFarmerCode('');
                 setNewCustomerCode('');
+                setApplyToAllSameItems(true);
 
                 // Refresh current view
                 if (isUnprintedBill) {
@@ -616,7 +628,7 @@ const handlePrint = useCallback(async () => {
         // Helper to format URLs correctly
         const formatUrl = (path) => {
             if (!path) return null;
-            return path.startsWith('http') ? path : `https://goviraju.lk/sms_new_backend_50500/application/public/storage/${path}`;
+            return path.startsWith('http') ? path : `https://goviraju.lk/DBS_backend_30500/application/public/storage/${path}`;
         };
 
         const onClose = () => setIsImageModalOpen(false);
@@ -691,6 +703,10 @@ const handlePrint = useCallback(async () => {
     // 🚀 NEW: Edit Modal UI
     const renderEditModal = () => {
         if (!editingRecord) return null;
+
+        // Logic to count how many records have the same item name
+        const sameItemCount = supplierDetails.filter(item => item.item_name === editingRecord.item_name).length;
+
         return (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
                 <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', width: '400px', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
@@ -700,6 +716,21 @@ const handlePrint = useCallback(async () => {
                         <p style={{ margin: '2px 0' }}><strong>බිල් අං:</strong> {editingRecord.bill_no || selectedBillNo}</p>
                         <p style={{ margin: '2px 0' }}><strong>අයිතමය:</strong> {editingRecord.item_name} | {editingRecord.weight} kg</p>
                     </div>
+
+                    {/* 🚀 BULK CHECKBOX */}
+                    {sameItemCount > 1 && (
+                        <div style={{ backgroundColor: '#fff3cd', padding: '10px', borderRadius: '4px', marginBottom: '15px', border: '1px solid #ffeeba' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.85rem', color: '#856404', fontWeight: 'bold' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={applyToAllSameItems} 
+                                    onChange={(e) => setApplyToAllSameItems(e.target.checked)} 
+                                    style={{ width: '18px', height: '18px' }}
+                                />
+                                සියලුම "{editingRecord.item_name}" ({sameItemCount}) වෙනස් කරන්න
+                            </label>
+                        </div>
+                    )}
 
                     {/* Supplier Code Input */}
                     <div style={{ marginTop: '15px' }}>
@@ -728,7 +759,7 @@ const handlePrint = useCallback(async () => {
 
                     <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
                         <button onClick={handleUpdateFarmer} style={{ flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>OK</button>
-                        <button onClick={() => { setEditingRecord(null); setNewFarmerCode(''); setNewCustomerCode(''); }} style={{ flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
+                        <button onClick={() => { setEditingRecord(null); setNewFarmerCode(''); setNewCustomerCode(''); setApplyToAllSameItems(true); }} style={{ flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
                     </div>
                 </div>
             </div>
@@ -850,7 +881,7 @@ const handlePrint = useCallback(async () => {
                     {profilePic && (
                         <div style={{ marginLeft: '20px' }}>
                             <img
-                                src={profilePic.startsWith('http') ? profilePic : `https://goviraju.lk/sms_new_backend_50500/application/public/storage/${profilePic}`}
+                                src={profilePic.startsWith('http') ? profilePic : `https://goviraju.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
                                 alt="Supplier"
                                 onClick={() => setIsImageModalOpen(true)}
                                 style={{

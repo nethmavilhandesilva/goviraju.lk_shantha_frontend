@@ -22,7 +22,7 @@ const ViewSupplierBill = () => {
 
     const fetchBillData = () => {
         setLoading(true);
-        api.get(`https://goviraju.lk/sms_new_backend_50500/api/public/supplier-bill/${token}`)
+        api.get(`https://goviraju.lk/DBS_backend_30500/api/public/supplier-bill/${token}`)
             .then(res => {
                 setBill(res.data);
                 if (res.data && res.data.bill_no) {

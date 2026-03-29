@@ -157,7 +157,7 @@ const SupplierReport = () => {
     const renderFullReportView = () => {
         if (!fullReportData) return null;
         const { profile, loans, sales } = fullReportData;
-        const storageUrl = "https://goviraju.lk/sms_new_backend_50500/application/public/storage/";
+        const storageUrl = "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
 
         return (
             <div style={dashboardOverlay}>
@@ -286,7 +286,7 @@ const SupplierReport = () => {
                         <div style={mainDetailsPanel}>
                             <div style={headerStyle}>
                                 <h2 style={{ color: 'white' }}>බිල්පත් විස්තර: {selectedBillNo || '...'}</h2>
-                                {profilePic && <img src={`https://goviraju.lk/sms_new_backend_50500/application/public/storage/${profilePic}`} style={profilePicStyle} alt="S" />}
+                                {profilePic && <img src={`https://goviraju.lk/DBS_backend_30500/application/public/storage/${profilePic}`} style={profilePicStyle} alt="S" />}
                             </div>
                             <table style={dataTable}>
                                 <thead><tr style={{ backgroundColor: '#4e73df', color: 'white' }}><th>බිල්</th><th>ගනුදෙ</th><th>අයිතමය</th><th>බර</th><th>එකතුව</th></tr></thead>

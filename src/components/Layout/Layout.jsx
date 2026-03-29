@@ -11,7 +11,7 @@ import GrnSalesOverviewReport2 from '../GrnSalesOverview/GrnSalesOverviewReport2
 import SalesReportModal from '../SalesReport/SalesReportModal';
 import DayProcessModal from '../Modals/DayProcessModal';
 
-const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
+const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintMode }) => {
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -34,7 +34,7 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
     const [bottomPassword, setBottomPassword] = useState('');
     const [isBottomUnlocked, setIsBottomUnlocked] = useState(true);
 
-    const HOSTED_SYSTEM_URL = 'https://goviraju.lk/sms_new_frontend_50500/';
+    const HOSTED_SYSTEM_URL = 'http://localhost:5173/';
 
     useEffect(() => {
         // 1. Handle User Session
@@ -89,7 +89,7 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
     const closeDayProcessModal = () => setIsDayProcessModalOpen(false);
 
     const handleProfitReportClick = () => {
-        window.location.href = '/sms_new_frontend_50500/supplier-profit';
+        window.location.href = '/DBS_frontend_30500/supplier-profit';
     };
 
     const handleSupplierReportClick = () => {
@@ -116,7 +116,7 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
     return (
         <div>
             {/* === Top Navigation Bar === */}
-            <nav className="navbar navbar-expand-lg navbar-dark fixed-top" style={{ backgroundColor: '#004d00', width: '100%' }}>
+            <nav className="navbar navbar-expand-lg navbar-dark fixed-top" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
                 <div className="container-fluid d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center">
                         <Link className="navbar-brand fw-bold d-flex align-items-center me-3" to="/">
@@ -145,7 +145,6 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
                                 </ul>
                             </div>
 
-                            {/* 🛡️ Conditional: Hide for Admin */}
                             {user?.role !== 'Admin' && (
                                 <>
                                     <Link to="/customers-loans" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }}>ණය දීම/ගැනීම</Link>
@@ -155,19 +154,40 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
                             )}
                         </div>
 
-                        {/* 🛡️ Conditional: Hide Bill Size for Admin */}
+                        {/* Print Mode and Bill Size Controls - Only show on Sales Entry page */}
                         {isSalesEntryPage && user?.role !== 'Admin' && (
                             <div className="d-flex align-items-center me-3" style={{ marginLeft: '20px' }}>
-                                <label htmlFor="bill-size-select" className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Bill Size:</label>
-                                <select id="bill-size-select" value={billSize} onChange={handleBillSizeChange} className="form-select form-select-sm" style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}>
-                                    <option value="3inch">3 Inch (Def)</option>
-                                    <option value="4inch">4 Inch</option>
+                                <label className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Print Mode:</label>
+                                <select 
+                                    value={printMode} 
+                                    onChange={(e) => setPrintMode(e.target.value)} 
+                                    className="form-select form-select-sm me-2"
+                                    style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}
+                                >
+                                    <option value="thermal">Thermal</option>
+                                    <option value="a4">A4 Paper</option>
                                 </select>
+                                
+                                {/* Only show Bill Size selector when in Thermal mode */}
+                                {printMode === 'thermal' && (
+                                    <>
+                                        <label htmlFor="bill-size-select" className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Bill Size:</label>
+                                        <select 
+                                            id="bill-size-select" 
+                                            value={billSize} 
+                                            onChange={handleBillSizeChange} 
+                                            className="form-select form-select-sm"
+                                            style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}
+                                        >
+                                            <option value="3inch">3 Inch (Def)</option>
+                                            <option value="4inch">4 Inch</option>
+                                        </select>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
 
-                    {/* Right Side: Display fetched value in Red and Logout Button */}
                     {user && (
                         <div className="d-flex align-items-center text-white">
                             <span className="me-3 fw-bold" style={{ color: '#ff4444', fontSize: '1.1rem' }}>{settingValue}</span>
@@ -182,8 +202,8 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
                 {children}
             </main>
 
-            {/* Bottom Nav */}
-            <nav className="navbar navbar-expand-lg navbar-dark fixed-bottom" style={{ backgroundColor: '#004d00', width: '100%' }}>
+            {/* Bottom Navigation Bar */}
+            <nav className="navbar navbar-expand-lg navbar-dark fixed-bottom" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
                 <div className="container-fluid d-flex justify-content-start align-items-center">
                     <input
                         type="password"
@@ -193,36 +213,61 @@ const Layout = ({ children, currentView, billSize, handleBillSizeChange }) => {
                         className="form-control form-control-sm me-3"
                         style={{ width: '100px', backgroundColor: '#003300', color: '#fff', border: '1px solid #66bb6a' }}
                     />
-
-                    {[
-                        { label: 'එළවළු', onClick: openItemReportModal },
-                        { label: 'බර මත', onClick: openWeightReportModal },
-                        { label: 'වෙනස් කිරීම', onClick: openSalesAdjustmentReportModal },
-                        { label: 'ආදායම් / වියදම්', onClick: () => window.location.href = '/sms_new_frontend_50500/financial-report' },
-                        { label: 'විකුණුම් වාර්තාව', onClick: openSalesReportModal },
-                        { label: 'සැපයුම් ලාභ ', onClick: handleProfitReportClick },
-                        { label: 'සැපයුම් වාර්තාව', onClick: handleSupplierReportClick }
-                    ].map((btn, idx) => (
-                        <button
-                            key={idx}
-                            type="button"
-                            onClick={btn.onClick}
-                            style={{
-                                ...navTextBtn,
-                                fontSize: '16px',
-                                fontWeight: '700',
-                                letterSpacing: '0.5px',
-                                opacity: 1,
-                                pointerEvents: 'auto',
-                                marginRight: '15px'
-                            }}
-                        >
-                            {btn.label}
-                        </button>
-                    ))}
+                    
+                    {/* Bottom Navigation Buttons */}
+                    <button
+                        type="button"
+                        onClick={openItemReportModal}
+                        style={navTextBtn}
+                    >
+                        එළවළු
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openWeightReportModal}
+                        style={navTextBtn}
+                    >
+                        බර මත
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openSalesAdjustmentReportModal}
+                        style={navTextBtn}
+                    >
+                        වෙනස් කිරීම
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => window.location.href = '/DBS_frontend_30500/financial-report'}
+                        style={navTextBtn}
+                    >
+                        ආදායම් / වියදම්
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openSalesReportModal}
+                        style={navTextBtn}
+                    >
+                        විකුණුම් වාර්තාව
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleProfitReportClick}
+                        style={navTextBtn}
+                    >
+                        සැපයුම් ලාභ
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSupplierReportClick}
+                        style={navTextBtn}
+                    >
+                        සැපයුම් වාර්තාව
+                    </button>
                 </div>
             </nav>
             
+            {/* Modals */}
             <ItemReportModal isOpen={isItemReportModalOpen} onClose={closeItemReportModal} onGenerateReport={() => { }} loading={false} />
             <WeightReportModal isOpen={isWeightReportModalOpen} onClose={closeWeightReportModal} />
             <GrnSaleReportModal isOpen={isGrnSaleReportModalOpen} onClose={closeGrnSaleReportModal} />

@@ -440,7 +440,7 @@ const LoanManager = () => {
                             </tbody>
                         </table>
                         <div className="d-flex flex-wrap gap-2 mt-3">
-                            <a href="/sms_new_frontend_50500/loan-report" className="btn btn-sm btn-dark">ණය වාර්තාව</a>
+                            <a href="/DBS_frontend_30500/loan-report" className="btn btn-sm btn-dark">ණය වාර්තාව</a>
                         </div>
                     </div>
                 </div>

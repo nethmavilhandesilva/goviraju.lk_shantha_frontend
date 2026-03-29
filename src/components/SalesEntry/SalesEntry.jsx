@@ -3,7 +3,9 @@ import Select from "react-select";
 import Layout from "../Layout/Layout";
 import '../../App.css';
 import api from "../../api";
-
+import AdminView from "../AdminView";
+import { ThermalBillHTML, A4BillHTML } from '../BillTemplates';
+import ImagePreviewModal from '../ImagePreviewModal';
 
 const routes = {
     markPrinted: "/sales/mark-printed",
@@ -17,8 +19,7 @@ const routes = {
     getCustomerGivenAmount: "/sales/customer/given-amount"
 };
 
-// --- Sub-Components ---
-
+// --- Sub-Components  ---
 const BreakdownDisplay = ({ sale, formatDecimal }) => {
     if (!sale?.breakdown_history) return null;
     let history = [];
@@ -56,336 +57,7 @@ const BreakdownDisplay = ({ sale, formatDecimal }) => {
     );
 };
 
-// --- Admin Modal Component (Popup Window) ---
-const AdminDataTableModal = ({ isOpen, onClose, title, sales, type, formatDecimal, billSize = '3inch' }) => {
-    if (!isOpen || !sales || sales.length === 0) return null;
-
-    const isFarmer = type === 'farmer';
-    const is4Inch = billSize === '4inch';
-
-    // Exact width for thermal preview
-    const receiptMaxWidth = is4Inch ? '4in' : '350px';
-
-    // --- REPLICATED FORMATTING LOGIC ---
-    // Farmer uses maxDecimals = 3, Customer uses fixed 2 decimals
-    const formatNumber = (value) => {
-        if (typeof value !== 'number' && typeof value !== 'string') return '0';
-        const number = parseFloat(value);
-        if (isNaN(number)) return '0';
-
-        if (Number.isInteger(number)) {
-            return number.toLocaleString('en-US');
-        } else {
-            const maxD = isFarmer ? 3 : 2;
-            const parts = number.toFixed(maxD).split('.');
-            // For farmers, we strip trailing zeros as per your getBillContent logic
-            const processedDecimals = isFarmer ? parts[1].replace(/0+$/, '') : parts[1];
-            const wholePart = parseInt(parts[0]).toLocaleString('en-US');
-            return processedDecimals ? `${wholePart}.${processedDecimals}` : wholePart;
-        }
-    };
-
-    // --- DATA PROCESSING ---
-    const date = isFarmer ? new Date().toLocaleDateString('si-LK') : new Date().toLocaleDateString();
-    const time = isFarmer ? new Date().toLocaleTimeString('si-LK') : new Date().toLocaleTimeString();
-    const mobile = '0777672838/071437115';
-    const displayName = isFarmer ? sales[0].supplier_code : (sales[0].customer_code || "").toUpperCase();
-    const billNo = isFarmer ? (sales[0].supplier_bill_no || 'N/A') : (sales[0].bill_no || 'N/A');
-
-    // Consolidated Summary Logic
-    const consolidatedSummary = {};
-    sales.forEach(s => {
-        const itemName = s.item_name || 'Unknown';
-        if (!consolidatedSummary[itemName]) consolidatedSummary[itemName] = { totalWeight: 0, totalPacks: 0 };
-        consolidatedSummary[itemName].totalWeight += parseFloat(isFarmer ? s.SupplierWeight : s.weight) || 0;
-        consolidatedSummary[itemName].totalPacks += parseInt(s.packs) || 0;
-    });
-
-    const totalPacksSum = Object.values(consolidatedSummary).reduce((sum, item) => sum + item.totalPacks, 0);
-
-    // Value Calculation logic differs for Farmer vs Customer
-    const totalSalesSum = sales.reduce((sum, s) => {
-        const w = parseFloat(isFarmer ? s.SupplierWeight : s.weight) || 0;
-        const p = parseFloat(isFarmer ? s.SupplierPricePerKg : s.price_per_kg) || 0;
-        const total = isFarmer ? (parseFloat(s.SupplierTotal) || (w * p)) : (w * p);
-        return sum + total;
-    }, 0);
-
-    const totalPackCost = isFarmer ? 0 : sales.reduce((sum, s) => sum + ((parseFloat(s.CustomerPackCost) || 0) * (parseFloat(s.packs) || 0)), 0);
-    const finalGrandTotal = totalSalesSum + totalPackCost;
-
-    const givenAmount = !isFarmer ? (sales.find(s => parseFloat(s.given_amount) > 0)?.given_amount || 0) : 0;
-    const remaining = givenAmount > 0 ? Math.abs(givenAmount - finalGrandTotal) : 0;
-
-    // Style Constants
-    const fontSizeBody = '25px';
-    const fontSizeHeader = '23px';
-    const fontSizeTotal = '28px';
-
-    return (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
-            <div style={{ backgroundColor: '#fff', borderRadius: '12px', width: '95%', maxWidth: '450px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
-
-                <div style={{ padding: '12px', background: '#111827', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 'bold' }}>බිල්පත් පෙරදසුන ({isFarmer ? 'ගොවියා' : 'පාරිභෝගිකයා'})</span>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px' }}>✕</button>
-                </div>
-
-                <div style={{ padding: '20px', overflowY: 'auto', backgroundColor: '#e5e7eb', flexGrow: 1 }}>
-                    <div style={{ width: receiptMaxWidth, margin: '0 auto', padding: '10px', backgroundColor: 'white', fontFamily: "'Courier New', monospace", color: '#000', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-
-                        {/* HEADER SECTION */}
-                        <div style={{ textAlign: 'center', fontWeight: 'bold' }}>
-                            <div style={{ fontSize: '24px' }}>මංජු සහ සහෝදරයෝ</div>
-                            {!isFarmer && <div style={{ fontSize: '20px', marginBottom: '5px' }}>colombage lanka (Pvt) Ltd</div>}
-
-                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', margin: '12px 0' }}>
-                                <span style={{ border: '2.5px solid #000', padding: '5px 12px', fontSize: '22px' }}>N66</span>
-                                {isFarmer ? (
-                                    <div style={{ fontSize: '18px' }}>ගොවියා: <span style={{ border: '2.5px solid #000', padding: '5px 10px', fontSize: '22px' }}>{displayName}</span></div>
-                                ) : (
-                                    <span style={{ border: '2.5px solid #000', padding: '5px 12px', fontSize: '22px' }}>{displayName}</span>
-                                )}
-                            </div>
-
-                            <div style={{ fontSize: '16px' }}>{isFarmer ? 'එළවළු තොග වෙළෙන්දෝ බණ්ඩාරවෙල' : 'එළවළු,පළතුරු තොග වෙළෙන්දෝ'}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '6px', padding: '0 5px' }}>
-                                <span>බණ්ඩාරවෙල</span>
-                                <span>{time}</span>
-                            </div>
-                        </div>
-
-                        <div style={{ fontSize: '19px', marginTop: '10px', padding: '0 5px' }}>
-                            <div style={{ fontWeight: 'bold' }}>දුර: {mobile}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
-                                <span>බිල් අංකය: {billNo}</span>
-                                <span>දිනය: {date}</span>
-                            </div>
-                        </div>
-
-                        <hr style={{ border: 'none', borderTop: '2.5px solid #000', margin: '10px 0' }} />
-
-                        {/* ITEMS TABLE */}
-                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                            <colgroup>
-                                <col style={{ width: '32%' }} /><col style={{ width: '21%' }} /><col style={{ width: '21%' }} /><col style={{ width: '26%' }} />
-                            </colgroup>
-                            <thead>
-                                <tr style={{ borderBottom: '2.5px solid #000', fontWeight: 'bold' }}>
-                                    <th style={{ textAlign: 'left', paddingBottom: '8px', fontSize: fontSizeHeader }}>වර්ගය<br />මලු</th>
-                                    <th style={{ textAlign: 'right', paddingBottom: '8px', fontSize: fontSizeHeader, position: 'relative', left: '-50px', top: '24px' }}>කිලෝ</th>
-                                    <th style={{ textAlign: 'right', paddingBottom: '8px', fontSize: fontSizeHeader, position: 'relative', left: '-45px', top: '24px' }}>මිල</th>
-                                    <th style={{ textAlign: 'right', paddingBottom: '8px', fontSize: fontSizeHeader }}>{isFarmer ? 'කේතය' : 'අයිතිය'}<br />අගය</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {sales.map((s, i) => {
-                                    const w = parseFloat(isFarmer ? s.SupplierWeight : s.weight) || 0;
-                                    const p = parseFloat(isFarmer ? s.SupplierPricePerKg : s.price_per_kg) || 0;
-                                    const itemTotal = isFarmer ? (parseFloat(s.SupplierTotal) || (w * p)) : (w * p);
-                                    const code = isFarmer ? s.customer_code?.toUpperCase() : s.supplier_code;
-
-                                    return (
-                                        <tr key={i} style={{ fontSize: fontSizeBody, fontWeight: 'bold', verticalAlign: 'bottom' }}>
-                                            <td style={{ textAlign: 'left', padding: '10px 0', whiteSpace: 'nowrap' }}>
-                                                {s.item_name}<br />{formatNumber(parseInt(s.packs))}
-                                            </td>
-                                            <td style={{ textAlign: 'right', padding: '10px 2px', position: 'relative', left: '-70px' }}>
-                                                {formatNumber(w)}
-                                            </td>
-                                            <td style={{ textAlign: 'right', padding: '10px 2px', position: 'relative', left: '-65px' }}>
-                                                {formatNumber(p)}
-                                            </td>
-                                            <td style={{ padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                                <div style={{ fontSize: '25px', whiteSpace: 'nowrap' }}>{code}</div>
-                                                <div style={{ fontWeight: '900', whiteSpace: 'nowrap' }}>{formatNumber(itemTotal)}</div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                            <tfoot>
-                                <tr style={{ borderTop: '2.5px solid #000', fontWeight: 'bold' }}>
-                                    <td style={{ paddingTop: '12px', fontSize: fontSizeTotal }}>{formatNumber(totalPacksSum)}</td>
-                                    <td colSpan="3" style={{ paddingTop: '12px', fontSize: fontSizeTotal }}>
-                                        <div style={{ textAlign: 'right', float: 'right', whiteSpace: 'nowrap' }}>{formatNumber(totalSalesSum)}</div>
-                                    </td>
-                                </tr>
-                            </tfoot>
-                        </table>
-
-                        {/* TOTALS SECTION */}
-                        <table style={{ width: '100%', marginTop: '20px', fontWeight: 'bold', fontSize: '22px', padding: '0 5px' }}>
-                            {!isFarmer && (
-                                <tr>
-                                    <td>මලු:</td>
-                                    <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(totalPackCost)}</td>
-                                </tr>
-                            )}
-                            <tr>
-                                <td style={{ fontSize: isFarmer ? '15px' : '20px', paddingTop: '8px', whiteSpace: 'nowrap', position: isFarmer ? 'relative' : 'static', left: isFarmer ? '-15px' : '0' }}>
-                                    {isFarmer ? 'මෙම බිලට ගෙවන්න:' : 'එකතුව:'}
-                                </td>
-                                <td style={{ textAlign: 'right', paddingTop: '8px' }}>
-                                    <span style={{ borderBottom: '5px double #000', borderTop: '2px solid #000', fontSize: fontSizeTotal, padding: '5px 10px', paddingLeft: isFarmer ? '25px' : '10px' }}>
-                                        {formatNumber(isFarmer ? totalSalesSum : finalGrandTotal)}
-                                    </span>
-                                </td>
-                            </tr>
-                            {!isFarmer && givenAmount > 0 && (
-                                <>
-                                    <tr>
-                                        <td style={{ fontSize: '18px', paddingTop: '18px' }}>දුන් මුදල:</td>
-                                        <td style={{ textAlign: 'right', fontSize: '20px', paddingTop: '18px', fontWeight: 'bold' }}>{formatNumber(parseFloat(givenAmount))}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style={{ fontSize: '22px' }}>ඉතිරිය:</td>
-                                        <td style={{ textAlign: 'right', fontSize: '26px' }}>{formatNumber(remaining)}</td>
-                                    </tr>
-                                </>
-                            )}
-                        </table>
-
-                        {/* SUMMARY GRID */}
-                        <div style={{ marginTop: '25px', borderTop: '1px dashed #000', paddingTop: '10px' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'center' }}>
-                                <tbody>
-                                    {Object.entries(consolidatedSummary).reduce((rows, key, index) => {
-                                        if (index % 2 === 0) rows.push([key]);
-                                        else rows[rows.length - 1].push(key);
-                                        return rows;
-                                    }, []).map((row, i) => (
-                                        <tr key={i}>
-                                            {row.map(([name, data]) => (
-                                                <td key={name} style={{ padding: '6px', width: '50%', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '14px' }}>
-                                                    {name}:{formatNumber(data.totalWeight)}/{formatNumber(data.totalPacks)}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* FOOTER */}
-                        <div style={{ textAlign: 'center', marginTop: '25px', fontSize: '13px', borderTop: '2.5px solid #000', paddingTop: '10px' }}>
-                            <p style={{ margin: '4px 0', fontWeight: 'bold' }}>භාණ්ඩ පරීක්ෂාකර බලා රැගෙන යන්න</p>
-                            <p style={{ margin: '4px 0' }}>නැවත භාර ගනු නොලැබේ</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-const ImagePreviewModal = ({ isOpen, onClose, data }) => {
-    if (!isOpen || !data) return null;
-
-    const baseUrl = "https://goviraju.lk/sms_new_backend_50500/application/public/storage/";
-
-    const formatUrl = (path) => {
-        if (!path) return null;
-        return path.startsWith('http') ? path : `${baseUrl}${path}`;
-    };
-
-    return (
-        <div
-            style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                backdropFilter: 'blur(10px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 10000
-            }}
-            onClick={onClose}
-        >
-            <div
-                style={{
-                    backgroundColor: '#1f2937',
-                    borderRadius: '20px',
-                    width: '95%',
-                    maxWidth: '1000px',
-                    maxHeight: '95vh',
-                    padding: '25px',
-                    position: 'relative',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-                    border: '1px solid #4b5563',
-                    display: 'flex',
-                    flexDirection: 'column'
-                }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header Area */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #374151', paddingBottom: '15px' }}>
-                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: 'white', margin: 0 }}>
-                        {data.title} -({data.type === 'customer' ? 'ගනුදෙනුකරු' : 'සැපයුම්කරු'})
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        style={{ background: '#374151', border: 'none', color: 'white', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                {/* Larger Images Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1.5fr', gap: '20px', overflowY: 'auto', padding: '5px' }}>
-                    {/* Profile Picture */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase' }}>ප්‍රධාන රූපය</span>
-                        <div style={{ width: '100%', borderRadius: '12px', overflow: 'hidden', border: '2px solid #3b82f6', backgroundColor: '#111827', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-                            {data.profile ? (
-                                <img src={data.profile} style={{ width: '100%', height: 'auto', display: 'block' }} alt="Profile" />
-                            ) : (
-                                <div style={{ height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>ඡායාරූපයක් නොමැත</div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* NIC Front */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: '#9ca3af', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase' }}>NIC ඉදිරිපස</span>
-                        <div style={{ width: '100%', borderRadius: '12px', overflow: 'hidden', border: '2px solid #4b5563', backgroundColor: '#111827', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-                            {data.nic_front ? (
-                                <img src={formatUrl(data.nic_front)} style={{ width: '100%', height: 'auto', maxHeight: '500px', display: 'block', objectFit: 'contain' }} alt="NIC Front" />
-                            ) : (
-                                <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>ඡායාරූපයක් නොමැත</div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* NIC Back */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: '#9ca3af', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase' }}>NIC පසුපස</span>
-                        <div style={{ width: '100%', borderRadius: '12px', overflow: 'hidden', border: '2px solid #4b5563', backgroundColor: '#111827', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-                            {data.nic_back ? (
-                                <img src={formatUrl(data.nic_back)} style={{ width: '100%', height: 'auto', maxHeight: '500px', display: 'block', objectFit: 'contain' }} alt="NIC Back" />
-                            ) : (
-                                <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>ඡායාරූපයක් නොමැත</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Action Area */}
-                <div style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #374151', paddingTop: '15px' }}>
-                    <button
-                        onClick={onClose}
-                        style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '10px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
+//customer list section
 const CustomerList = React.memo(({ customers, type, searchQuery, onSearchChange, selectedPrintedCustomer, selectedUnprintedCustomer, handleCustomerClick, formatDecimal, allSales, lastUpdate, isCashFilterActive, toggleCashFilter }) => {
     const getPrintedCustomerGroups = () => {
         const groups = {};
@@ -456,21 +128,7 @@ const CustomerList = React.memo(({ customers, type, searchQuery, onSearchChange,
 
                     {/* Only show the checkbox for the "printed" column */}
                     {type === "printed" && (
-                        <div
-                            onClick={() => toggleCashFilter()}
-                            className="cursor-pointer transition-all border border-white rounded"
-                            style={{
-                                width: '18px',
-                                height: '18px',
-                                backgroundColor: isCashFilterActive ? '#2563eb' : 'transparent',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                                marginLeft: '90px',
-                                marginTop: '-22px',
-                            }}
-                        >
+                        <div onClick={() => toggleCashFilter()} className="cursor-pointer transition-all border border-white rounded" style={{ width: '18px', height: '18px', backgroundColor: isCashFilterActive ? '#2563eb' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '90px', marginTop: '-22px' }}>
                             {isCashFilterActive && <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>✓</span>}
                         </div>
                     )}
@@ -666,13 +324,20 @@ const initialFormData = { customer_code: "", customer_name: "", supplier_code: "
 const fieldOrder = ["telephone_no", "customer_code_input", "customer_code_select", "supplier_code", "item_code_select", "weight", "price_per_kg_grid_item", "packs", "total"];
 const skipMap = { telephone_no: "customer_code_input", customer_code_input: "supplier_code", customer_code_select: "supplier_code", given_amount: "supplier_code", supplier_code: "item_code_select", item_code_select: "weight", price_per_kg: "packs", price_per_kg_grid_item: "packs" };
 
-export default function SalesEntry() {
+export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPrintMode: propSetPrintMode }) {
+    const [localPrintMode, setLocalPrintMode] = useState(propPrintMode || 'thermal');
+
+    // Use propPrintMode if available, otherwise use local state
+    const printMode = propPrintMode || localPrintMode;
+    const setPrintMode = propSetPrintMode || setLocalPrintMode;
+
     const refs = {
         telephone_no: useRef(null), customer_code_input: useRef(null), customer_code_select: useRef(null), given_amount: useRef(null),
         supplier_code: useRef(null), item_code_select: useRef(null), item_name: useRef(null),
         weight: useRef(null), price_per_kg: useRef(null), packs: useRef(null), total: useRef(null),
         price_per_kg_grid_item: useRef(null),
     };
+    const adminViewRef = useRef(null);
 
     const [state, setState] = useState({
         allSales: [], selectedPrintedCustomer: null, selectedUnprintedCustomer: null, editingSaleId: null,
@@ -680,9 +345,9 @@ export default function SalesEntry() {
         isSubmitting: false, formData: initialFormData, packCost: 0, customerSearchInput: "", itemSearchInput: "",
         supplierSearchInput: "", currentBillNo: null, isLoading: false, customers: [], items: [], suppliers: [],
         forceUpdate: null, windowFocused: null, isPrinting: false, billSize: '3inch', priceManuallyChanged: false,
-        gridPricePerKg: "", selectedSaleForBreakdown: null, showSavePhoneButton: false,
+        gridPricePerKg: "", selectedSaleForBreakdown: null, showSavePhoneButton: false, isTelephoneValid: false,
         currentUser: null,
-        isAdminModalOpen: false, modalTitle: "", modalData: [], modalType: "", isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" },
+        isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" }, selectedSalesIds: [], selectionCriteria: null, isBulkUpdateModalOpen: false, bulkUpdateSupplierCode: "", bulkUpdateContextMenu: { x: 0, y: 0, show: false }, isBulkPrintEnabled: true,
     });
 
     const setFormData = (updater) => setState(prev => ({ ...prev, formData: typeof updater === 'function' ? updater(prev.formData) : updater }));
@@ -691,7 +356,7 @@ export default function SalesEntry() {
     const { allSales, customerSearchInput, selectedPrintedCustomer, selectedUnprintedCustomer, editingSaleId,
         searchQueries, errors, loanAmount, isManualClear, formData, packCost, isLoading, customers,
         items, suppliers, isPrinting, billSize, gridPricePerKg, selectedSaleForBreakdown, currentUser,
-        isAdminModalOpen, modalTitle, modalData, modalType } = state;
+    } = state;
 
     // --- Logic for Farmer Lists (Admin View) ---
     const printedFarmers = useMemo(() => {
@@ -702,6 +367,222 @@ export default function SalesEntry() {
         });
         return Object.values(groups);
     }, [allSales]);
+    // Add this function to combine sales records for bulk printing
+    const combineSalesForPrinting = (salesData) => {
+        const combinedMap = new Map();
+
+        salesData.forEach(sale => {
+            // Create a unique key based on supplier_code, item_code, and price_per_kg
+            const key = `${sale.supplier_code}|${sale.item_code}|${sale.price_per_kg}`;
+
+            if (combinedMap.has(key)) {
+                // Combine existing record with new one
+                const existing = combinedMap.get(key);
+                const newWeight = (parseFloat(existing.weight) || 0) + (parseFloat(sale.weight) || 0);
+                const newPacks = (parseInt(existing.packs) || 0) + (parseInt(sale.packs) || 0);
+                const newTotal = newWeight * (parseFloat(sale.price_per_kg) || 0);
+
+                // Aggregate Kuliya and Pack Cost values
+                const newKuliya = (parseFloat(existing.Kuliya) || 0) + (parseFloat(sale.Kuliya) || 0);
+                const newPackCost = (parseFloat(existing.CustomerPackCost) || 0) + (parseFloat(sale.CustomerPackCost) || 0);
+
+                combinedMap.set(key, {
+                    ...existing,
+                    weight: newWeight,
+                    packs: newPacks,
+                    total: newTotal,
+                    Kuliya: newKuliya,
+                    CustomerPackCost: newPackCost,
+                    // Keep track of original IDs for marking as printed
+                    original_ids: [...(existing.original_ids || [existing.id]), sale.id]
+                });
+            } else {
+                // Add new record
+                combinedMap.set(key, {
+                    ...sale,
+                    original_ids: [sale.id]
+                });
+            }
+        });
+
+        // Convert map back to array
+        return Array.from(combinedMap.values());
+    };
+    //functions related to multiselect and bulk update
+    const toggleSaleSelection = (saleId, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+
+        // Find the sale to select/deselect
+        const saleToSelect = displayedSales.find(s => s.id === saleId);
+        if (!saleToSelect) return;
+
+        const isCurrentlySelected = state.selectedSalesIds.includes(saleId);
+
+        // If deselecting - just remove it
+        if (isCurrentlySelected) {
+            setState(prev => {
+                const newSelectedIds = prev.selectedSalesIds.filter(id => id !== saleId);
+                return {
+                    ...prev,
+                    selectedSalesIds: newSelectedIds,
+                    // Clear criteria if no items selected
+                    selectionCriteria: newSelectedIds.length === 0 ? null : prev.selectionCriteria
+                };
+            });
+            return;
+        }
+        // Case 1: No records selected yet - select this one and set criteria
+        if (state.selectedSalesIds.length === 0) {
+            setState(prev => ({
+                ...prev,
+                selectedSalesIds: [saleId],
+                selectionCriteria: {
+                    supplier_code: saleToSelect.supplier_code,
+                    item_code: saleToSelect.item_code
+                }
+            }));
+            return;
+        }
+
+        // Case 2: Records already selected - validate if it matches criteria
+        const matchesCriteria =
+            saleToSelect.supplier_code === state.selectionCriteria?.supplier_code &&
+            saleToSelect.item_code === state.selectionCriteria?.item_code;
+
+        if (matchesCriteria) {
+            // Valid selection - add it
+            setState(prev => ({
+                ...prev,
+                selectedSalesIds: [...prev.selectedSalesIds, saleId]
+            }));
+        } else {
+            // Invalid selection - show alert with details
+            alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Supplier: ${state.selectionCriteria?.supplier_code}\n   Item: ${state.selectionCriteria?.item_code}\n\n✗ This record has:\n   Supplier: ${saleToSelect.supplier_code}\n   Item: ${saleToSelect.item_code}\n\nPlease clear selection or select matching records.`);
+        }
+    };
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && state.bulkUpdateContextMenu.show) {
+                closeContextMenu();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [state.bulkUpdateContextMenu.show]);
+
+    // Handle right-click on selected records on bulk update
+    const handleRightClick = (e, sale) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Check if the clicked sale is already selected
+        const isSelected = state.selectedSalesIds.includes(sale.id);
+
+        // If not selected, try to select it with validation
+        if (!isSelected) {
+            if (state.selectedSalesIds.length === 0) {
+                setState(prev => ({
+                    ...prev,
+                    selectedSalesIds: [sale.id],
+                    selectionCriteria: {
+                        supplier_code: sale.supplier_code,
+                        item_code: sale.item_code
+                    }
+                }));
+            } else {
+                const matchesCriteria =
+                    sale.supplier_code === state.selectionCriteria?.supplier_code &&
+                    sale.item_code === state.selectionCriteria?.item_code;
+
+                if (matchesCriteria) {
+                    setState(prev => ({
+                        ...prev,
+                        selectedSalesIds: [...prev.selectedSalesIds, sale.id]
+                    }));
+                } else {
+                    alert(`Cannot select this record!`);
+                    return;
+                }
+            }
+        }
+
+        // Show modal - don't pass any supplier code yet
+        setState(prev => ({
+            ...prev,
+            bulkUpdateContextMenu: {
+                show: true,
+                x: e.clientX,
+                y: e.clientY
+            },
+            bulkUpdateSupplierCode: "" // Reset to empty
+        }));
+    };
+
+    // Handle bulk update submission
+    const handleBulkUpdateSupplier = async (newSupplierCode) => {
+        // Use the passed parameter instead of state
+        const supplierCodeToUpdate = newSupplierCode || state.bulkUpdateSupplierCode;
+        const finalSupplierCode = supplierCodeToUpdate.trim().toUpperCase();
+
+        if (!finalSupplierCode) {
+            alert("Please enter a supplier code");
+            return;
+        }
+
+        if (state.selectedSalesIds.length === 0) {
+            alert("No sales selected");
+            return;
+        }
+
+        try {
+            // Show loading state
+            updateState({ isSubmitting: true });
+
+            // Send bulk update request
+            const response = await api.post('/sales/bulk-update-supplier', {
+                sale_ids: state.selectedSalesIds,
+                supplier_code: finalSupplierCode
+            });
+
+            if (response.data.success) {
+                // Update local state with new supplier codes
+                const updatedSales = response.data.sales || [];
+                const updatedSalesMap = {};
+                updatedSales.forEach(sale => {
+                    updatedSalesMap[sale.id] = sale;
+                });
+
+                updateState({
+                    allSales: allSales.map(s => updatedSalesMap[s.id] ? updatedSalesMap[s.id] : s),
+                    selectedSalesIds: [], // Clear selection after update
+                    bulkUpdateContextMenu: { show: false, x: 0, y: 0 },
+                    bulkUpdateSupplierCode: "", // Reset
+                    isSubmitting: false
+                });
+
+
+            } else {
+                throw new Error(response.data.message || "Update failed");
+            }
+        } catch (error) {
+            console.error("Bulk update error:", error);
+            alert("Failed to update supplier codes. Please try again.");
+            updateState({ isSubmitting: false });
+        }
+    };
+
+    // Close context menu
+    const closeContextMenu = () => {
+        setState(prev => ({
+            ...prev,
+            bulkUpdateContextMenu: { show: false, x: 0, y: 0 },
+            bulkUpdateSupplierCode: ""
+        }));
+    };
+    //End of functions releated to multiselect and bulk update
 
     const unprintedFarmers = useMemo(() => {
         const groups = {};
@@ -831,7 +712,7 @@ export default function SalesEntry() {
             );
 
             if (customer) {
-                const baseUrl = "https://goviraju.lk/sms_new_backend_50500/application/public";
+                const baseUrl = "https://goviraju.lk/DBS_backend_30500/application/public";
                 let fileName = customer.profile_pic;
                 let fullPath = null;
 
@@ -869,7 +750,7 @@ export default function SalesEntry() {
 
             if (supplier) {
                 // Root path where the 'storage' symlink is located
-                const baseUrl = "https://goviraju.lk/sms_new_backend_50500/application/public";
+                const baseUrl = "https://goviraju.lk/DBS_backend_30500/application/public";
                 let fileName = supplier.profile_pic;
 
                 let fullPath = null;
@@ -967,8 +848,40 @@ export default function SalesEntry() {
                 refs.supplier_code.current?.focus();
                 return;
             }
+            // If current field is weight, validate required fields before it
+            if (currentFieldName === "weight") {
+                // Check if required fields before weight are filled
+                const requiredBeforeWeight = [
+                    { key: "customer_code", ref: "customer_code_input", label: "Customer Code" },
+                    { key: "supplier_code", ref: "supplier_code", label: "Supplier Code" },
+                    { key: "item_code", ref: "item_code_select", label: "Item" }
+                ];
 
-            // 5. General Navigation Logic
+                let isValid = true;
+                for (const field of requiredBeforeWeight) {
+                    const value = field.key === "customer_code"
+                        ? (formData.customer_code || autoCustomerCode)
+                        : formData[field.key];
+
+                    if (value === null || value === undefined || value.toString().trim() === "") {
+                        updateState({ errors: { form: `කරුණාකර ${field.label} ඇතුළත් කරන්න` } });
+                        const targetRef = refs[field.ref];
+                        if (targetRef?.current) {
+                            targetRef.current.focus();
+                            if (!field.ref.includes("select")) targetRef.current.select();
+                        }
+                        isValid = false;
+                        break;
+                    }
+                }
+
+                // If validation fails, stay on weight field
+                if (!isValid) {
+                    return;
+                }
+            }
+
+            // 6. General Navigation Logic (only if validation passes or field is not weight)
             let nextFieldName = skipMap[currentFieldName];
             if (!nextFieldName) {
                 const currentIndex = fieldOrder.indexOf(currentFieldName);
@@ -1026,9 +939,26 @@ export default function SalesEntry() {
             const givenAmount = firstSale?.given_amount || "";
             setFormData(prev => ({ ...prev, customer_name: customer?.name || "", given_amount: givenAmount }));
             fetchLoanAmount(trimmedValue);
+
+            // Check if both conditions are met to show the save button
+            const telephoneNo = formData.telephone_no || "";
+            const hasValidPhone = telephoneNo.length === 10 && /^\d+$/.test(telephoneNo);
+            updateState({
+                showSavePhoneButton: value.trim().length > 0 && hasValidPhone
+            });
         }
 
-        // --- UPDATED TELEPHONE LOGIC (FOR AUTOMATIC SELECTION & IMAGE) ---
+        if (field === 'telephone_no') {
+            // Check if phone number has exactly 10 digits
+            const isValidPhone = value.length === 10 && /^\d+$/.test(value);
+            updateState({ isTelephoneValid: isValidPhone });
+
+            // Show save button only if customer code is filled AND phone number has 10 digits
+            const customerCode = formData.customer_code || autoCustomerCode;
+            updateState({
+                showSavePhoneButton: customerCode.trim().length > 0 && isValidPhone
+            });
+        }
 
         if (field === 'supplier_code') setFormData(prev => ({ ...prev, supplier_code: value }));
         if (field === "given_amount") {
@@ -1155,8 +1085,6 @@ export default function SalesEntry() {
         }, 0);
     };
 
-    const handleTableRowKeyDown = (e, sale) => { if (e.key === "Enter") { e.preventDefault(); handleEditClick(sale); } };
-
     const handleClearForm = (clearBillNo = false) => {
         setFormData(initialFormData);
         updateState({ editingSaleId: null, loanAmount: 0, isManualClear: false, packCost: 0, customerSearchInput: "", itemSearchInput: "", supplierSearchInput: "", priceManuallyChanged: false, gridPricePerKg: "", isGivenAmountManuallyTouched: false, selectedSaleForBreakdown: null, ...(clearBillNo && { currentBillNo: null }) });
@@ -1202,29 +1130,6 @@ export default function SalesEntry() {
             const autoCalculatedGrandTotal = totals.billTotal + totals.totalBagPrice;
             const isCredit = Math.abs(currentInputAmount - autoCalculatedGrandTotal) > 0.01;
             const creditTransactionStatus = isCredit ? 'Y' : 'N';
-
-            // 3. VALIDATION: Check column status 'Y'
-            /*
-            if (creditTransactionStatus === 'Y') {
-                const customerRecord = customers.find(c =>
-                    String(c.short_name).toUpperCase() === customerCode
-                );
-
-                // Check if record exists and has photos
-                const hasRequiredDocs = customerRecord &&
-                    customerRecord.profile_pic &&
-                    customerRecord.nic_front &&
-                    customerRecord.nic_back;
-
-                if (!hasRequiredDocs) {
-                    alert("ණය ගනුදෙනුවක් සිදු කිරීමට පෙර කරුණාකර මෙම පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.");
-
-                    // Perform your clearing function
-                    handleMarkAllProcessed();
-                    return null; // STOP
-                }
-            }
-                */
 
             // 4. PROCEED: Update database with the determined status
             const updatePromises = salesToUpdate.map(sale =>
@@ -1306,23 +1211,7 @@ export default function SalesEntry() {
                 }
             }
 
-            const payload = {
-                supplier_code: currentSupplierCode.toUpperCase(),
-                customer_code: customerCode,
-                customer_name: currentCustomerName,
-                item_code: formData.item_code,
-                item_name: formData.item_name,
-                weight: parseFloat(formData.weight) || 0,
-                price_per_kg: parseFloat(formData.price_per_kg) || 0,
-                pack_due: parseFloat(formData.pack_due) || 0,
-                total: parseFloat(formData.total) || 0,
-                packs: parseFloat(formData.packs) || 0,
-                given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null,
-                ...(billPrintedStatus && { bill_printed: billPrintedStatus }),
-                ...(billNoToUse && { bill_no: billNoToUse }),
-                update_related_price: shouldUpdateRelatedPrice,
-            };
-
+            const payload = { supplier_code: currentSupplierCode.toUpperCase(), customer_code: customerCode, customer_name: currentCustomerName, item_code: formData.item_code, item_name: formData.item_name, weight: parseFloat(formData.weight) || 0, price_per_kg: parseFloat(formData.price_per_kg) || 0, pack_due: parseFloat(formData.pack_due) || 0, total: parseFloat(formData.total) || 0, packs: parseFloat(formData.packs) || 0, given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null, ...(billPrintedStatus && { bill_printed: billPrintedStatus }), ...(billNoToUse && { bill_no: billNoToUse }), update_related_price: shouldUpdateRelatedPrice };
             const url = isEditing ? `${routes.sales}/${editingSaleId}` : routes.sales;
             const method = isEditing ? "put" : "post";
 
@@ -1334,24 +1223,9 @@ export default function SalesEntry() {
             const updatedIds = updatedSales.map(s => s.id);
             const newAllSales = allSales.filter(s => !updatedIds.includes(s.id)).concat(updatedSales);
 
-            // --- 6. OPTIMIZED UI RESET ---
             // We update everything in one cycle to prevent multiple re-renders
-            setFormData({
-                ...initialFormData,
-                customer_code: customerCode,
-                customer_name: currentCustomerName,
-                telephone_no: currentTelephone,
-                supplier_code: currentSupplierCode,
-            });
-
-            updateState({
-                allSales: newAllSales,
-                editingSaleId: null,
-                isManualClear: false,
-                isSubmitting: false,
-                priceManuallyChanged: false,
-                gridPricePerKg: "",
-            });
+            setFormData({ ...initialFormData, customer_code: customerCode, customer_name: currentCustomerName, telephone_no: currentTelephone, supplier_code: currentSupplierCode });
+            updateState({ allSales: newAllSales, editingSaleId: null, isManualClear: false, isSubmitting: false, priceManuallyChanged: false, gridPricePerKg: "" });
 
             // Immediate focus (no timeout) for faster data entry workflow
             if (refs.supplier_code.current) {
@@ -1369,14 +1243,17 @@ export default function SalesEntry() {
     const handleCustomerClick = async (type, customerCode, billNo = null, salesRecords = []) => {
         if (state.isPrinting) return;
 
-        // --- ADMIN MODAL LOGIC ---
         if (currentUser?.role === 'Admin') {
-            updateState({
-                isAdminModalOpen: true,
-                modalType: 'customer',
-                modalTitle: `Customer: ${customerCode} ${billNo ? `(Bill: ${billNo})` : ''}`,
-                modalData: salesRecords
-            });
+            console.log("Admin user clicked customer:", { customerCode, billNo, salesRecords });
+            console.log("adminViewRef current:", adminViewRef.current);
+
+            // Call the function from AdminView to open customer bill modal
+            if (adminViewRef.current && adminViewRef.current.openCustomerBill) {
+                adminViewRef.current.openCustomerBill(customerCode, billNo, salesRecords);
+            } else {
+                console.error("AdminView ref not available", adminViewRef.current);
+                alert("Customer bill view is loading. Please try again.");
+            }
             return;
         }
 
@@ -1483,223 +1360,18 @@ export default function SalesEntry() {
     };
 
     const buildFullReceiptHTML = (salesData, billNo, customerName, mobile, globalLoanAmount = 0, billSize = '3inch') => {
-        const formatNumber = (num) => {
-            if (typeof num !== 'number' && typeof num !== 'string') return '0';
-            const number = parseFloat(num);
-            if (isNaN(number)) return '0';
-
-            // Check if it's a whole number or has decimals
-            if (Number.isInteger(number)) {
-                return number.toLocaleString('en-US');
-            } else {
-                // For decimal numbers, format the whole part with commas
-                const parts = number.toFixed(2).split('.');
-                const wholePart = parseInt(parts[0]).toLocaleString('en-US');
-                return `${wholePart}.${parts[1]}`;
-            }
-        };
-
-        const date = new Date().toLocaleDateString();
-        const time = new Date().toLocaleTimeString();
-        let totalAmountSum = 0;
-        const consolidatedSummary = {};
-
-        salesData.forEach(s => {
-            const itemName = s.item_name || 'Unknown';
-            if (!consolidatedSummary[itemName]) consolidatedSummary[itemName] = { totalWeight: 0, totalPacks: 0 };
-            consolidatedSummary[itemName].totalWeight += parseFloat(s.weight) || 0;
-            consolidatedSummary[itemName].totalPacks += parseInt(s.packs) || 0;
-            totalAmountSum += parseFloat(s.total) || 0;
-        });
-
-        const totalPacksSum = Object.values(consolidatedSummary).reduce((sum, item) => sum + item.totalPacks, 0);
-        const is4Inch = billSize === '4inch';
-
-        // Increased width to 350px for maximum clarity on 3-inch/80mm printers
-        const receiptMaxWidth = is4Inch ? '4in' : '350px';
-
-        const fontSizeBody = '25px';
-        const fontSizeHeader = '23px';
-        const fontSizeTotal = '28px';
-
-        // Optimized column widths for the new 350px width
-        const colGroups = `
-        <colgroup>
-            <col style="width:32%;"> 
-            <col style="width:21%;">
-            <col style="width:21%;">
-            <col style="width:26%;">
-        </colgroup>`;
-
-        const itemsHtml = salesData.map(s => {
-            const packs = parseInt(s.packs) || 0;
-            const weight = parseFloat(s.weight) || 0;
-            const price = parseFloat(s.price_per_kg) || 0;
-            const value = (weight * price).toFixed(2);
-
-            return `
-        <tr style="font-size:${fontSizeBody}; font-weight:900; vertical-align: bottom;">
-                <td style="text-align:left; padding:10px 0; white-space: nowrap;">
-                    ${s.item_name || ""}<br>${formatNumber(packs)}
-                </td>
-                <td style="text-align:right; padding:10px 2px; position: relative; left: -70px;">
-                   ${formatNumber(weight.toFixed(2))}
-                </td>
-                <td style="text-align:right; padding:10px 2px; position: relative; left: -55px;">${formatNumber(price.toFixed(2))}</td>
-              <td style="padding:10px 0; display:flex; flex-direction:column; align-items:flex-end;">
-    
-    <div style="font-size:25px; white-space:nowrap;">
-        ${s.supplier_code || "ASW"}
-    </div>
-
-    <div style="
-        font-weight:900;
-        white-space:nowrap;
-    ">
-        ${formatNumber(value)}
-    </div>
-
-</td>
-
-
-            </tr>`;
-        }).join("");
-
-        const totalSales = salesData.reduce((sum, s) => sum + ((parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0)), 0);
-        const totalPackCost = salesData.reduce((sum, s) => sum + ((parseFloat(s.CustomerPackCost) || 0) * (parseFloat(s.packs) || 0)), 0);
-        const finalGrandTotal = totalSales + totalPackCost;
-        const givenAmount = salesData.find(s => parseFloat(s.given_amount) > 0)?.given_amount || 0;
-        // This keeps the calculation the same but ensures the displayed 'remaining' is always positive
-        const remaining = givenAmount > 0 ? Math.abs(givenAmount - finalGrandTotal) : 0;
-        const loanRow = globalLoanAmount !== 0 ? `
-        <tr>
-            <td style="font-size:20px; padding-top:8px;">පෙර ණය:</td>
-            <td style="text-align:right; font-size:22px; font-weight:bold; padding-top:8px;">
-                Rs. ${formatNumber(Math.abs(globalLoanAmount).toFixed(2))}
-            </td>
-        </tr>
-    ` : '';
-
-        const summaryEntries = Object.entries(consolidatedSummary);
-        let summaryHtmlContent = '';
-        for (let i = 0; i < summaryEntries.length; i += 2) {
-            const [name1, d1] = summaryEntries[i];
-            const [name2, d2] = summaryEntries[i + 1] || [null, null];
-            const text1 = `${name1}:${formatNumber(d1.totalWeight)}/${formatNumber(d1.totalPacks)}`;
-            const text2 = d2 ? `${name2}:${formatNumber(d2.totalWeight)}/${formatNumber(d2.totalPacks)}` : '';
-            summaryHtmlContent += `
-        <tr>
-            <td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap;">${text1}</td>
-            <td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap;">${text2}</td>
-        </tr>`;
-        }
-
-
-        return `
-    <div style="width:${receiptMaxWidth}; margin:0 auto; padding:10px; font-family: 'Courier New', monospace; color:#000; background:#fff;">
-        <div style="text-align:center; font-weight:bold;">
-            <div style="font-size:24px;">Manju</div>
-            <div style="font-size:20px; margin-bottom:5px;font-weight:bold;">colombage lanka (Pvt) Ltd</div>
-            
-          <div style="display:flex; justify-content:center; align-items:center; gap:15px; margin:12px 0;">
-          <span style="border:2.5px solid #000; padding:5px 12px; font-size:22px;">xx</span>
-          <span style="border:2.5px solid #000; padding:5px 12px; font-size:35px;">
-          ${customerName.toUpperCase()}
-         </span>
-          </div>
-            
-            <div style="font-size:16px;">එළවළු,පළතුරු තොග වෙළෙන්දෝ</div>
-            <div style="display:flex; justify-content:space-between; font-size:14px; margin-top:6px; padding:0 5px;">
-                <span>බණ්ඩාරවෙල</span>
-                <span>${time}</span>
-            </div>
-        </div>
-
-        <div style="font-size:19px; margin-top:10px; padding:0 5px;">
-            <div style="font-weight: bold;">දුර: 0777672838 / 0714371115</div>
-            <div style="display:flex; justify-content:space-between; margin-top:3px;">
-                <span>බිල් අංකය:${billNo}</span>
-                <span>දිනය:${date}</span>
-            </div>
-        </div>
-
-        <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
-
-        <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
-            ${colGroups}
-            <thead>
-                <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
-                    <th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th>
-                    <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
-                    <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px;top: 24px;">මිල</th>
-                    <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">අයිතිය<br>අගය</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${itemsHtml}
-            </tbody>
-            <tfoot>
-                <tr style="border-top:2.5px solid #000; font-weight:bold;">
-                    <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
-                  <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};">
-    <div style="text-align:right; float:right; white-space:nowrap;">
-    ${Number(totalSales).toFixed(2)}
-</div>
-
-</td>
-
-                </tr>
-            </tfoot>
-        </table>
-
-        <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
-            <tr>
-                <td>මලු:</td>
-               <td style="text-align:right; font-weight:bold;">
-    ${formatNumber(totalPackCost.toFixed(2))}
-</td>
-
-            </tr>
-            <tr>
-                <td style="font-size:20px; padding-top:8px;">එකතුව:</td>
-                <td style="text-align:right; padding-top:8px;">
-                <span style="border-bottom:5px double #000; border-top:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">
-                ${(Number(finalGrandTotal).toFixed(2))}
-                </span>
-                </td>
-            </tr>
-            <!-- ✅ LOAN ROW HERE -->
-${loanRow}
-            ${givenAmount > 0 ? `
-            <tr>
-                <td style="font-size:18px; padding-top:18px;">දුන් මුදල:</td>
-                <td style="text-align:right; font-size:20px; padding-top:18px; font-weight:bold;">
-                ${formatNumber(parseFloat(givenAmount).toFixed(2))}
-                </td>
-            </tr>
-            <tr>
-                <td style="font-size:22px;">ඉතිරිය:</td>
-                <td style="text-align:right; font-size:26px;">${formatNumber(remaining.toFixed(2))}</td>
-            </tr>` : ''}
-        </table>
-
-        <table style="width:100%; border-collapse:collapse; margin-top:25px; font-size:14px; text-align:center;">
-            ${summaryHtmlContent}
-        </table>
-
-        <div style="text-align:center; margin-top:25px; font-size:13px; border-top:2.5px solid #000; padding-top:10px;">
-            <p style="margin:4px 0; font-weight:bold;">භාණ්ඩ පරීක්ෂාකර බලා රැගෙන යන්න</p>
-            <p style="margin:4px 0;">නැවත භාර ගනු නොලැබේ</p>
-        </div>
-    </div>`;
+        return ThermalBillHTML({ salesData, billNo, customerName, mobile, globalLoanAmount, billSize });
     };
+
     const formatReceiptValue = (value) => {
         if (value === null || value === undefined || value === '') return '0.00';
         const num = parseFloat(value);
         if (isNaN(num)) return '0.00';
         return num.toFixed(2);
     };
-
+    const buildA4ReceiptHTML = (salesData, billNo, customerName, mobile, globalLoanAmount = 0) => {
+        return A4BillHTML({ salesData, billNo, customerName, mobile, globalLoanAmount });
+    };
     const handlePrintAndClear = async () => {
         let salesData = displayedSales.filter(s => s.id);
 
@@ -1708,8 +1380,21 @@ ${loanRow}
             return;
         }
 
+        // Apply bulk printing combination if enabled
+        const shouldCombine = state.isBulkPrintEnabled;
+        let printData = salesData;
+
+        if (shouldCombine) {
+            printData = combineSalesForPrinting(salesData);
+
+            // Show notification about combined records
+            if (printData.length < salesData.length) {
+                console.log(`Combined ${salesData.length} records into ${printData.length} records for printing`);
+            }
+        }
+
         // --- COMMISSION VALIDATION ---
-        for (const s of salesData) {
+        for (const s of printData) {
             if (parseFloat(s.price_per_kg) === parseFloat(s.SupplierPricePerKg)) {
                 const errorMsg = `කේතය: ${s.supplier_code} හි කොමිස් මුදල් අඩුකර නොමැත. කරුණාකර පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.`;
                 alert(errorMsg);
@@ -1718,7 +1403,7 @@ ${loanRow}
         }
 
         // --- ZERO PRICE VALIDATION ---
-        const hasZeroPrice = salesData.some(s => parseFloat(s.price_per_kg) === 0);
+        const hasZeroPrice = printData.some(s => parseFloat(s.price_per_kg) === 0);
         if (hasZeroPrice) {
             alert("මිල 0 ලෙස ඇති අයිතම මුද්‍රණය කළ නොහැක.");
             return;
@@ -1741,8 +1426,14 @@ ${loanRow}
                 console.warn("Loan fetch failed");
             }
 
+            // Get original IDs for marking as printed
+            let idsToMark = salesData.map(s => s.id);
+            if (shouldCombine) {
+                idsToMark = printData.flatMap(s => s.original_ids);
+            }
+
             const printResponse = await api.post(routes.markPrinted, {
-                sales_ids: salesData.map(s => s.id),
+                sales_ids: idsToMark,
                 telephone_no: formData.telephone_no,
                 customer_code: customerCode,
                 customer_name: customerName,
@@ -1754,12 +1445,19 @@ ${loanRow}
             }
 
             const billNo = printResponse.data.bill_no || "";
-            const receiptHtml = buildFullReceiptHTML(salesData, billNo, customerName, mobile, currentLoan, billSize);
+
+            // Choose receipt format based on print mode
+            let receiptHtml;
+            if (printMode === 'a4') {
+                receiptHtml = buildA4ReceiptHTML(printData, billNo, customerName, mobile, currentLoan);
+            } else {
+                receiptHtml = buildFullReceiptHTML(printData, billNo, customerName, mobile, currentLoan, billSize);
+            }
 
             // Update local state before reload
             updateState({
                 allSales: allSales.map(s =>
-                    salesData.some(sd => sd.id === s.id)
+                    idsToMark.includes(s.id)
                         ? { ...s, bill_printed: "Y", bill_no: billNo }
                         : s
                 ),
@@ -1774,21 +1472,23 @@ ${loanRow}
             const printWindow = window.open("", "_blank", "width=800,height=600");
             if (!printWindow) {
                 alert("Please allow pop-ups for printing");
-                window.location.reload(); // Reload anyway if blocked
+                window.location.reload();
                 return;
             }
 
-            printWindow.document.write(`<html><head><title>Print Bill</title></head><body>${receiptHtml}<script>window.onload=function(){window.print();setTimeout(function(){window.close();},100);};</script></body></html>`);
+            printWindow.document.write(receiptHtml);
             printWindow.document.close();
 
-            // --- RELOAD LOGIC ---
-            // This interval checks if the print window is closed every 500ms
-            const checkWindowClosed = setInterval(() => {
-                if (printWindow.closed) {
-                    clearInterval(checkWindowClosed);
-                    window.location.reload(); // Reloads the main screen
-                }
-            }, 500);
+            // Auto print and close
+            printWindow.onload = () => {
+                setTimeout(() => {
+                    printWindow.print();
+                    setTimeout(() => {
+                        printWindow.close();
+                        window.location.reload();
+                    }, 1000);
+                }, 100);
+            };
 
         } catch (error) {
             console.error("Printing error:", error);
@@ -1797,6 +1497,11 @@ ${loanRow}
         }
     };
     const handleBillSizeChange = (e) => updateState({ billSize: e.target.value });
+    useEffect(() => {
+        if (currentUser?.role === 'Admin') {
+            console.log("AdminView ref after mount:", adminViewRef.current);
+        }
+    }, [currentUser]);
 
 
     useEffect(() => {
@@ -1812,21 +1517,8 @@ ${loanRow}
             }
             if (e.key === "F1") {
                 e.preventDefault();
-
-                // Show the save button
-                updateState({ showSavePhoneButton: true });
-
-                if (refs.given_amount.current) {
-                    // Scroll to the field smoothly
-                    refs.given_amount.current.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center"
-                    });
-
-                    // Focus and select text
-                    refs.given_amount.current.focus();
-                    refs.given_amount.current.select();
-                }
+                // Directly call print function without focusing on given amount field
+                handlePrintAndClear();
             }
             else if (e.key === "F5") {
                 e.preventDefault();
@@ -1847,6 +1539,12 @@ ${loanRow}
             return;
         }
 
+        // Validate phone number has exactly 10 digits
+        if (phoneNumber.length !== 10 || !/^\d+$/.test(phoneNumber)) {
+            alert("Please enter a valid 10-digit phone number");
+            return;
+        }
+
         try {
             const response = await api.post('/customers/check-or-create', {
                 short_name: customerCode,
@@ -1860,15 +1558,10 @@ ${loanRow}
                     customer_name: response.data.customer.name || prev.customer_name
                 }));
                 // Hide the save button after saving
-                updateState({ showSavePhoneButton: false });
-
-                // Focus on given_amount field after saving
-                setTimeout(() => {
-                    if (refs.given_amount.current) {
-                        refs.given_amount.current.focus();
-                        refs.given_amount.current.select();
-                    }
-                }, 100);
+                updateState({
+                    showSavePhoneButton: false,
+                    isTelephoneValid: false
+                });
             }
         } catch (err) {
             console.error("Failed to save phone number:", err);
@@ -1877,22 +1570,260 @@ ${loanRow}
     };
 
     const hasData = allSales.length > 0 || customers.length > 0 || items.length > 0 || suppliers.length > 0;
+    //context related to bulkupdate
+    const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
+        // Use local state for input to prevent parent re-renders
+        const [localSupplierCode, setLocalSupplierCode] = React.useState('');
 
+        // Initialize local state when modal opens
+        React.useEffect(() => {
+            if (show) {
+                setLocalSupplierCode('');
+            }
+        }, [show]);
+
+        // Handle input change - only update local state, not parent
+        const handleInputChange = (e) => {
+            const value = e.target.value.toUpperCase();
+            setLocalSupplierCode(value);
+        };
+
+        // Handle update - pass the local value directly
+        const handleUpdate = () => {
+            if (localSupplierCode.trim()) {
+                onUpdate(localSupplierCode.trim().toUpperCase());
+                setLocalSupplierCode(''); // Reset after update
+            } else {
+                alert("Please enter a supplier code");
+            }
+        };
+
+        // Handle close
+        const handleClose = () => {
+            setLocalSupplierCode('');
+            onClose();
+        };
+
+        if (!show) return null;
+
+        return (
+            <>
+                {/* Backdrop Overlay */}
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)', zIndex: 9999 }} onClick={handleClose} />
+
+                {/* Modal Container */}
+                <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', zIndex: 10000, width: '90%', maxWidth: '450px', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                    <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .modal-button { transition: all 0.2s ease; cursor: pointer; } .modal-button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); } .modal-button:active { transform: translateY(0); }`}</style>
+
+                    {/* Header with Icon */}
+                    <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '12px 20px', borderTopLeftRadius: '16px', borderTopRightRadius: '16px', color: 'white' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', background: 'rgba(255, 255, 255, 0.2)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                                ⚡
+                            </div>
+                            <div>
+                                <h2 style={{
+                                    margin: 0,
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    letterSpacing: '-0.5px'
+                                }}>
+                                    Bulk Update Supplier
+                                </h2>
+                                <p style={{
+                                    margin: '2px 0 0 0',
+                                    fontSize: '11px',
+                                    opacity: 0.9
+                                }}>
+                                    Update multiple records at once
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{ padding: '16px 20px' }}>
+                        {/* Selection Criteria Card */}
+                        {selectionCriteria && (
+                            <div style={{
+                                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                                borderRadius: '10px',
+                                padding: '10px 12px',
+                                marginBottom: '16px',
+                                border: '1px solid #fbbf24'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    marginBottom: '8px'
+                                }}>
+                                    <span style={{ fontSize: '14px' }}>📋</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '11px',
+                                        color: '#92400e',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Current Selection
+                                    </span>
+                                </div>
+
+                                <div style={{ display: 'grid', gap: '6px' }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        background: 'white',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Supplier:</span>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '12px',
+                                            color: '#92400e',
+                                            fontFamily: 'monospace'
+                                        }}>
+                                            {selectionCriteria.supplier_code}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        background: 'white',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '12px',
+                                            color: '#92400e',
+                                            fontFamily: 'monospace'
+                                        }}>
+                                            {selectionCriteria.item_code}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        background: '#10b981',
+                                        borderRadius: '6px',
+                                        color: 'white'
+                                    }}>
+                                        <span style={{ fontSize: '11px' }}>Selected:</span>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '14px'
+                                        }}>
+                                            {selectedCount || 0}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Input Field */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{
+                                display: 'block',
+                                marginBottom: '6px',
+                                fontWeight: '600',
+                                fontSize: '12px',
+                                color: '#374151'
+                            }}>
+                                ✏️ New Supplier Code
+                            </label>
+                            <input
+                                type="text"
+                                value={localSupplierCode}
+                                onChange={handleInputChange}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleUpdate();
+                                    }
+                                }}
+                                style={{ width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', fontWeight: '500', transition: 'all 0.2s ease', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = '#667eea';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#e5e7eb';
+                                    e.target.style.boxShadow = 'none';
+                                }}
+                                autoFocus
+                                placeholder="e.g., SUP001"
+                            />
+                        </div>
+
+                        {/* Primary Action Button */}
+                        <button
+                            onClick={handleUpdate}
+                            className="modal-button"
+                            style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', marginBottom: '0' }}
+                        >
+                            🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
+                        </button>
+                    </div>
+
+                    {/* Footer with Close Button */}
+                    <div style={{
+                        padding: '12px 20px',
+                        background: '#f9fafb',
+                        borderBottomLeftRadius: '16px',
+                        borderBottomRightRadius: '16px',
+                        borderTop: '1px solid #e5e7eb',
+                        display: 'flex',
+                        justifyContent: 'flex-end'
+                    }}>
+                        <button
+                            onClick={handleClose}
+                            style={{
+                                padding: '6px 16px',
+                                background: 'transparent',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '6px',
+                                color: '#6b7280',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                fontWeight: '500'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.background = '#f3f4f6';
+                                e.target.style.borderColor = '#d1d5db';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.background = 'transparent';
+                                e.target.style.borderColor = '#e5e7eb';
+                            }}
+                        >
+                            Cancel (ESC)
+                        </button>
+                    </div>
+                </div>
+            </>
+        );
+    }, (prevProps, nextProps) => {
+        // Custom comparison to prevent re-renders
+        return prevProps.show === nextProps.show &&
+            prevProps.selectedCount === nextProps.selectedCount &&
+            prevProps.selectionCriteria === nextProps.selectionCriteria;
+    });
     return (
         <Layout style={{ backgroundColor: '#99ff99' }} billSize={billSize} handleBillSizeChange={handleBillSizeChange}>
             <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
                 {isLoading && (<div className="fixed top-0 left-0 right-0 bg-blue-500 text-white py-1 text-center text-sm z-50">Refreshing data...</div>)}
                 {state.isPrinting && (<div className="fixed top-0 left-0 right-0 bg-yellow-500 text-black py-1 text-center text-sm z-50">Printing in progress... Please wait</div>)}
-
-                {/* --- ADDED ADMIN MODAL --- */}
-                <AdminDataTableModal
-                    isOpen={isAdminModalOpen}
-                    onClose={() => updateState({ isAdminModalOpen: false })}
-                    title={modalTitle}
-                    sales={modalData}
-                    type={modalType}
-                    formatDecimal={formatDecimal}
-                />
 
                 <div className="three-column-layout" style={{ opacity: isLoading ? 0.7 : 1, display: 'grid', gridTemplateColumns: '200px 1fr 200px', gap: '16px', padding: '10px', marginTop: '-149px' }}>
                     <div className="left-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto' }}>
@@ -1916,103 +1847,13 @@ ${loanRow}
 
                     <div className="center-form flex flex-col" style={{ backgroundColor: '#111439ff', padding: '20px', borderRadius: '0.75rem', color: 'white', minHeight: '100vh', height: 'auto', boxSizing: 'border-box', gridColumnStart: 2, gridColumnEnd: 3 }}>
                         {currentUser?.role === 'Admin' ? (
-                            <div className="admin-farmer-view h-full flex flex-col">
-                                <div className="flex flex-row overflow-hidden" style={{ minHeight: "60vh", width: "100%", display: "flex", flexDirection: "row", justifyContent: "center", gap: "20px" }}>
-                                    {/* --- Left Column: Printed Farmers --- */}
-                                    <div
-                                        style={{ width: "300px", height: "850px", flexShrink: 0 }}
-                                        className="flex flex-col bg-gray-800 rounded-xl border border-gray-600 overflow-hidden"
-                                    >
-                                        <div className="bg-green-800 p-2 text-center font-bold">
-                                            මුද්‍රණය කළ ගොවීන්
-                                        </div>
-
-                                        <div
-                                            className="p-2 flex-grow"
-                                            style={{ height: "calc(100% - 48px)", overflowY: "auto" }}
-                                        >
-                                            <input type="text" placeholder="සොයන්න..." className="w-full p-2 mb-2 rounded bg-white text-black text-sm" style={{ textTransform: "uppercase" }} value={searchQueries.farmerPrinted || ""} onChange={e => updateState({ searchQueries: { ...searchQueries, farmerPrinted: e.target.value.toUpperCase() } })} />
-                                            {printedFarmers.length > 0 ? (
-                                                printedFarmers
-                                                    .filter((f) => !searchQueries.farmerPrinted || f.supplier_code.includes(searchQueries.farmerPrinted))
-                                                    .map((f) => (
-                                                        <div
-                                                            key={f.supplier_code}
-                                                            onClick={() =>
-                                                                updateState({
-                                                                    isAdminModalOpen: true,
-                                                                    modalType: "farmer",
-                                                                    modalTitle: `ගොවියා: ${f.supplier_code}`,
-                                                                    modalData: allSales.filter(s => s.supplier_code === f.supplier_code && s.supplier_bill_printed === "Y"),
-                                                                })
-                                                            }
-                                                            className="p-1 mb-2 bg-white text-black font-bold rounded-lg border-l-4 border-green-500 shadow hover:bg-gray-100 cursor-pointer"
-                                                        >
-                                                            Code: {f.supplier_code}
-                                                        </div>
-                                                    ))
-                                            ) : (
-                                                <p className="text-center text-gray-400 mt-4">No data found</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* --- Right Column: Unprinted Farmers --- */}
-                                    <div
-                                        style={{ width: "300px", height: "850px", flexShrink: 0 }}
-                                        className="flex flex-col bg-gray-800 rounded-xl border border-gray-600 overflow-hidden"
-                                    >
-                                        <div className="bg-red-800 p-2 text-center font-bold">
-                                            මුද්‍රණය නොකළ ගොවීන්
-                                        </div>
-
-                                        <div
-                                            className="p-2 flex-grow"
-                                            style={{ height: "calc(100% - 48px)", overflowY: "scroll" }}
-                                        >
-                                            <input
-                                                type="text"
-                                                placeholder="සොයන්න..."
-                                                className="w-full p-2 mb-2 rounded bg-white text-black text-sm"
-                                                style={{ textTransform: "uppercase" }}
-                                                value={searchQueries.farmerUnprinted || ""}
-                                                onChange={(e) => {
-                                                    const upper = e.target.value.toUpperCase();
-                                                    updateState({
-                                                        searchQueries: {
-                                                            ...searchQueries,
-                                                            farmerUnprinted: upper,
-                                                        },
-                                                    });
-                                                }}
-                                            />
-
-                                            {unprintedFarmers.length > 0 ? (
-                                                unprintedFarmers
-                                                    .filter((f) => !searchQueries.farmerUnprinted || f.supplier_code.includes(searchQueries.farmerUnprinted))
-                                                    .map((f) => (
-                                                        <div
-                                                            key={f.supplier_code}
-                                                            onClick={() =>
-                                                                updateState({
-                                                                    isAdminModalOpen: true,
-                                                                    modalType: "farmer",
-                                                                    modalTitle: `ගොවියා: ${f.supplier_code}`,
-                                                                    modalData: allSales.filter(s => s.supplier_code === f.supplier_code && s.supplier_bill_printed !== "Y"),
-                                                                })
-                                                            }
-                                                            className="p-1 mb-2 bg-white text-black font-bold rounded-lg border-l-4 border-red-500 shadow hover:bg-gray-100 cursor-pointer"
-                                                        >
-                                                            Code: {f.supplier_code}
-                                                        </div>
-                                                    ))
-                                            ) : (
-                                                <p className="text-center text-gray-400 mt-4">No data found</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <AdminView
+                                ref={adminViewRef}
+                                allSales={allSales}
+                                customers={customers}
+                                items={items}
+                                suppliers={suppliers}
+                            />
                         ) : (
                             <div className="pos-sales-view flex flex-col h-full">
                                 <div className="flex-shrink-0">
@@ -2023,9 +1864,38 @@ ${loanRow}
                                                 <div className="font-bold text-lg" style={{ color: 'red', fontSize: '1.35rem' }}>
                                                     බිල් අං: {currentBillNo}
                                                 </div>
-                                                <div className="font-bold text-xl whitespace-nowrap" style={{ color: 'red', marginLeft: '100px', fontSize: '1.15rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '100px' }}>
+                                                    <div className="font-bold text-xl whitespace-nowrap" style={{ color: 'red', fontSize: '1.15rem' }}>
+                                                        මුළු විකුණුම්: Rs. {formatDecimal(totalSalesValue)}
+                                                    </div>
 
-                                                    මුළු විකුණුම්: Rs. {formatDecimal(totalSalesValue)}
+                                                    {/* Bulk Printing Checkbox */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            id="bulkPrintCheckbox"
+                                                            checked={state.isBulkPrintEnabled}
+                                                            onChange={(e) => updateState({ isBulkPrintEnabled: e.target.checked })}
+                                                            style={{
+                                                                width: '18px',
+                                                                height: '18px',
+                                                                cursor: 'pointer',
+                                                                accentColor: '#4CAF50'
+                                                            }}
+                                                        />
+                                                        <label
+                                                            htmlFor="bulkPrintCheckbox"
+                                                            style={{
+                                                                color: 'white',
+                                                                fontSize: '0.9rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >
+                                                            Bulk Printing
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             </div>
                                             {/* --- PHOTO SECTION (Stays in original position) --- */}
@@ -2070,46 +1940,11 @@ ${loanRow}
                                                 {/* TELEPHONE NUMBER FIELD - Moved up independently using relative positioning */}
                                                 <div className="flex-1 min-w-0" style={{ position: 'relative', top: '-50px' }}>
                                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                        <input
-                                                            id="telephone_no"
-                                                            ref={refs.telephone_no}
-                                                            name="telephone_no"
-                                                            value={formData.telephone_no || ""}
-                                                            onChange={(e) => handleInputChange("telephone_no", e.target.value)}
-                                                            onKeyDown={(e) => handleKeyDown(e, "telephone_no")}
-                                                            type="text"
-                                                            placeholder="දුරකථන අංකය"
-                                                            disabled={!!selectedPrintedCustomer}
-                                                            className="px-2 py-1 font-bold text-sm w-full border rounded text-black placeholder-gray-500"
-                                                            style={{
-                                                                backgroundColor: selectedPrintedCustomer ? '#4a5568' : '#f6f6ff',
-                                                                border: '1px solid #4a5568',
-                                                                color: 'white',
-                                                                height: '36px',
-                                                                fontSize: '1rem',
-                                                                padding: '0 0.75rem',
-                                                                borderRadius: '0.5rem',
-                                                                boxSizing: 'border-box',
-                                                                cursor: selectedPrintedCustomer ? 'not-allowed' : 'text',
-                                                                opacity: selectedPrintedCustomer ? 0.7 : 1,
-                                                                flex: 1
-                                                            }}
-                                                        />
+                                                        <input id="telephone_no" ref={refs.telephone_no} name="telephone_no" value={formData.telephone_no || ""} onChange={(e) => handleInputChange("telephone_no", e.target.value)} onKeyDown={(e) => handleKeyDown(e, "telephone_no")} type="tel" maxLength="10" pattern="\d*" placeholder="දුරකථන අංකය (10 ඉලක්කම්)" disabled={!!selectedPrintedCustomer} className="px-2 py-1 font-bold text-sm w-full border rounded text-black placeholder-gray-500" style={{ backgroundColor: selectedPrintedCustomer ? '#4a5568' : '#f6f6ff', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box', cursor: selectedPrintedCustomer ? 'not-allowed' : 'text', opacity: selectedPrintedCustomer ? 0.7 : 1, flex: 1 }} />
                                                         {state.showSavePhoneButton && (
                                                             <button
                                                                 onClick={savePhoneNumber}
-                                                                style={{
-                                                                    backgroundColor: '#4CAF50',
-                                                                    color: 'white',
-                                                                    border: 'none',
-                                                                    padding: '8px 16px',
-                                                                    borderRadius: '0.5rem',
-                                                                    cursor: 'pointer',
-                                                                    fontWeight: 'bold',
-                                                                    fontSize: '0.9rem',
-                                                                    whiteSpace: 'nowrap',
-                                                                    height: '36px'
-                                                                }}
+                                                                style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', height: '36px' }}
                                                                 onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
                                                                 onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
                                                             >
@@ -2169,14 +2004,15 @@ ${loanRow}
                                                     return (
                                                         <Select
                                                             ref={refs.item_code_select}
-                                                            openMenuOnFocus
+                                                            openMenuOnFocus={false}
                                                             isSearchable
-                                                            tabSelectsValue={false}   // important for POS
+                                                            tabSelectsValue={false}
                                                             closeMenuOnSelect
-                                                            blurInputOnSelect={false}
+                                                            blurInputOnSelect={true}
                                                             inputValue={state.itemSearchInput}
                                                             options={currentFilteredOptions}
                                                             placeholder="භාණ්ඩය"
+                                                            defaultMenuIsOpen={false}
 
                                                             value={
                                                                 formData.item_code
@@ -2206,7 +2042,6 @@ ${loanRow}
                                                             }}
 
                                                             onKeyDown={(e) => {
-
                                                                 // 🔥 "+" shortcut for last sale
                                                                 if (e.key === "Enter" && state.itemSearchInput === "+") {
                                                                     e.preventDefault();
@@ -2234,12 +2069,38 @@ ${loanRow}
                                                                     return;
                                                                 }
 
-                                                                // 🔥 POS ENTER behavior
+                                                                // 🔥 FIXED: Only auto-select when there's text input AND it's a complete match
                                                                 if (e.key === "Enter") {
                                                                     e.preventDefault();
                                                                     e.stopPropagation();
 
-                                                                    if (currentFilteredOptions.length > 0) {
+                                                                    // Don't auto-select if there's no input
+                                                                    if (!state.itemSearchInput) {
+                                                                        // If no input, just move to next field without selecting
+                                                                        setTimeout(() => {
+                                                                            refs.weight.current?.focus();
+                                                                            refs.weight.current?.select();
+                                                                        }, 50);
+                                                                        return;
+                                                                    }
+
+                                                                    // Check if we have an exact match with the typed input
+                                                                    const exactMatch = currentFilteredOptions.find(option =>
+                                                                        option.value.toUpperCase() === state.itemSearchInput.toUpperCase() ||
+                                                                        option.label.toUpperCase().startsWith(state.itemSearchInput.toUpperCase())
+                                                                    );
+
+                                                                    // Only auto-select if we have an exact match
+                                                                    if (exactMatch) {
+                                                                        handleItemSelect(exactMatch);
+                                                                        updateState({ itemSearchInput: "" });
+
+                                                                        setTimeout(() => {
+                                                                            refs.weight.current?.focus();
+                                                                            refs.weight.current?.select();
+                                                                        }, 50);
+                                                                    } else if (state.itemSearchInput && currentFilteredOptions.length === 1) {
+                                                                        // If there's exactly one match, select it
                                                                         const firstOption = currentFilteredOptions[0];
                                                                         handleItemSelect(firstOption);
                                                                         updateState({ itemSearchInput: "" });
@@ -2249,45 +2110,29 @@ ${loanRow}
                                                                             refs.weight.current?.select();
                                                                         }, 50);
                                                                     }
+                                                                    // If no input or multiple options, do nothing - let user choose from dropdown
                                                                 }
+                                                            }}
+
+                                                            onMenuOpen={() => {
+                                                                // When menu opens, ensure no option is pre-highlighted
+                                                                setTimeout(() => {
+                                                                    const menu = document.querySelector('.react-select__menu');
+                                                                    if (menu) {
+                                                                        const firstOption = menu.querySelector('.react-select__option');
+                                                                        if (firstOption) {
+                                                                            firstOption.classList.remove('react-select__option--is-focused');
+                                                                        }
+                                                                    }
+                                                                }, 0);
                                                             }}
 
                                                             className="react-select-container font-bold text-sm w-full"
 
-                                                            styles={{
-                                                                control: base => ({
-                                                                    ...base,
-                                                                    height: "44px",
-                                                                    minHeight: "44px",
-                                                                    fontSize: "1.25rem",
-                                                                    backgroundColor: "white",
-                                                                    borderColor: "#4a5568",
-                                                                    borderRadius: "0.5rem",
-                                                                }),
-                                                                valueContainer: base => ({
-                                                                    ...base,
-                                                                    padding: "0 1rem",
-                                                                    height: "44px"
-                                                                }),
-                                                                input: base => ({
-                                                                    ...base,
-                                                                    color: "black",
-                                                                    fontSize: "1.25rem"
-                                                                }),
-                                                                singleValue: base => ({
-                                                                    ...base,
-                                                                    color: "black",
-                                                                    fontWeight: "bold",
-                                                                    fontSize: "1.25rem",
-                                                                }),
-                                                                option: (base, state) => ({
-                                                                    ...base,
-                                                                    fontWeight: "bold",
-                                                                    color: "black",
-                                                                    backgroundColor: state.isFocused ? "#e5e7eb" : "white",
-                                                                    fontSize: "1rem",
-                                                                }),
-                                                            }}
+                                                            styles={{ control: base => ({ ...base, height: "44px", minHeight: "44px", fontSize: "1.25rem", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }), valueContainer: base => ({ ...base, padding: "0 1rem", height: "44px" }), input: base => ({ ...base, color: "black", fontSize: "1.25rem" }), singleValue: base => ({ ...base, color: "black", fontWeight: "bold", fontSize: "1.25rem" }), option: (base, state) => ({ ...base, fontWeight: "bold", color: "black", backgroundColor: state.isFocused ? "#e5e7eb" : "white", fontSize: "1rem", ...(state.isSelected && { backgroundColor: "#e5e7eb" }) }), menu: base => ({ ...base, marginTop: "4px" }) }}
+
+                                                            openMenuOnClick={true}
+                                                            menuPlacement="auto"
                                                         />
                                                     );
                                                 })()}
@@ -2308,22 +2153,111 @@ ${loanRow}
                                 </div>
                                 <div className="flex-grow overflow-y-auto mt-1">
                                     {displayedSales.length === 0 ? (<div className="text-center py-8 text-gray-500 border rounded-lg bg-gray-50">විකුණුම් වාර්තා කිසිවක් හමු නොවීය.</div>) : (
-                                        <table className="min-w-full border-gray-200 rounded-xl text-sm" style={{ backgroundColor: '#000000', color: 'white', borderCollapse: 'collapse', margin: '0px 0', width: '100%' }}>
-                                            <thead><tr style={{ backgroundColor: '#000000' }}>{['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (<th key={index} className="px-4 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000' }}>{header}</th>))}</tr></thead>
-                                            <tbody>{displayedSales.map((s, idx) => (
-                                                <tr key={idx} tabIndex={0} className="text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" onClick={() => handleEditClick(s)} onKeyDown={(e) => handleTableRowKeyDown(e, s)}>
-                                                    <td className="px-4 py-2 border">{s.supplier_code}</td><td className="px-4 py-2 border">{s.item_code}</td><td className="px-4 py-2 border">{s.item_name}</td><td className="px-2 py-2 border">{formatDecimal(s.weight)}</td><td className="px-2 py-2 border">{formatDecimal(s.price_per_kg)}</td><td className="px-2 py-2 border">{formatDecimal((parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0) + (parseFloat(s.packs) || 0) * (parseFloat(s.pack_due) || 0))}</td><td className="px-2 py-2 border">{s.packs}</td>
-                                                    <td className="px-2 py-2 border text-center"><button onClick={(e) => { e.stopPropagation(); handleDeleteRecord(s.id); }} className="text-black font-bold p-1 rounded-full bg-white hover:bg-gray-200">🗑️</button></td>
+                                        <table
+                                            className="min-w-full border-gray-200 rounded-xl text-sm"
+                                            style={{
+                                                backgroundColor: '#000000',
+                                                color: 'white',
+                                                borderCollapse: 'collapse',
+                                                margin: '0px 0',
+                                                width: '100%',
+                                            }}
+                                        >
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#000000' }}>
+                                                    {/* ❌ Header checkbox removed */}
+
+                                                    <th className="px-2 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}>
+                                                    </th>
+
+                                                    {['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (
+                                                        <th
+                                                            key={index}
+                                                            className="px-4 py-2 border"
+                                                            style={{ backgroundColor: '#f5fafb', color: '#000000' }}
+                                                        >
+                                                            {header}
+                                                        </th>
+                                                    ))}
                                                 </tr>
-                                            ))}</tbody>
+                                            </thead>
+
+                                            <tbody>
+                                                {displayedSales.map((s, idx) => {
+                                                    const isSelected = state.selectedSalesIds.includes(s.id);
+
+                                                    return (
+                                                        <tr
+                                                            key={idx}
+                                                            tabIndex={0}
+                                                            className={`text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? 'bg-blue-900' : ''
+                                                                }`}
+                                                            onClick={() => handleEditClick(s)}
+                                                            onContextMenu={(e) => handleRightClick(e, s)}
+                                                            style={{ backgroundColor: isSelected ? '#1e40af' : 'transparent' }}
+                                                        >
+                                                            {/* ✅ Checkbox column (single click works properly) */}
+                                                            <td
+                                                                className="px-2 py-2 border text-center"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => toggleSaleSelection(s.id)} // ✅ fixed
+                                                                    onClick={(e) => e.stopPropagation()} // ✅ prevents row click
+                                                                    style={{ cursor: 'pointer' }}
+                                                                />
+                                                            </td>
+
+                                                            <td className="px-4 py-2 border">{s.supplier_code}</td>
+                                                            <td className="px-4 py-2 border">{s.item_code}</td>
+                                                            <td className="px-4 py-2 border">{s.item_name}</td>
+                                                            <td className="px-2 py-2 border">{formatDecimal(s.weight)}</td>
+                                                            <td className="px-2 py-2 border">{formatDecimal(s.price_per_kg)}</td>
+                                                            <td className="px-2 py-2 border">
+                                                                {formatDecimal(
+                                                                    (parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0) +
+                                                                    (parseFloat(s.packs) || 0) * (parseFloat(s.pack_due) || 0)
+                                                                )}
+                                                            </td>
+                                                            <td className="px-2 py-2 border">{s.packs}</td>
+
+                                                            <td className="px-2 py-2 border text-center">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteRecord(s.id);
+                                                                    }}
+                                                                    className="text-black font-bold p-1 rounded-full bg-white hover:bg-gray-200"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
                                         </table>
                                     )}
+                                    {/* Context Menu */}
+
+                                    <ContextMenu
+                                        show={state.bulkUpdateContextMenu.show}
+                                        onClose={closeContextMenu}
+                                        onUpdate={handleBulkUpdateSupplier}
+                                        selectionCriteria={state.selectionCriteria}
+                                        selectedCount={state.selectedSalesIds.length}
+                                    />
+
+                                    {/* Click outside to close context menu */}
+
                                     {displayedSales.length > 0 && (<SalesSummaryFooter sales={displayedSales} formatDecimal={formatDecimal} />)}
                                     <div
                                         className="flex items-center space-x-3 overflow-x-auto whitespace-nowrap"
                                         style={{ marginTop: "-75px" }}  // adjust value as needed
                                     >
-                                        <div style={{ marginLeft: '660px', marginTop: '-2px' }}>
+                                        <div style={{ marginLeft: '660px', marginTop: '-2px', display: 'none' }}>
                                             <input id="given_amount" ref={refs.given_amount} name="given_amount_field" type="tel" inputMode="numeric" autoComplete="new-password" value={formData.given_amount ? Number(formData.given_amount).toLocaleString() : ""} onChange={(e) => handleInputChange("given_amount", e.target.value.replace(/,/g, ""))} onKeyDown={(e) => handleKeyDown(e, "given_amount")} placeholder="දුන් මුදල" className="px-4 py-2 border rounded-xl text-right bg-white text-black" style={{ width: "180px", fontWeight: "bold", fontSize: "1.1rem" }} />
                                         </div>
                                     </div>
@@ -2331,9 +2265,16 @@ ${loanRow}
                                     <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
                                         {/* Red Total Text */}
                                         <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                            <div className="text-2xl font-bold" style={{ color: 'red' }}>
-                                                (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
-                                            </div>
+                                            {displayedSales.length > 0 && (
+                                                <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                                    {/* Red Total Text */}
+                                                    <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                                        <div className="text-2xl font-bold" style={{ color: 'red' }}>
+                                                            (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

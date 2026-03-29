@@ -30,7 +30,7 @@ export default function CustomerForm({ customer, onSubmit, onCancel }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const STORAGE_URL =
-    "https://goviraju.lk/sms_new_backend_50500/application/public/storage/";
+    "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
 
   // ================= LOAD DATA FOR EDIT =================
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function CustomerForm({ customer, onSubmit, onCancel }) {
       try {
         if (upperValue.trim()) {
           const response = await axios.get(
-            `https://goviraju.lk/sms_new_backend_50500/api/customers/check-short-name/${upperValue}`
+            `https://goviraju.lk/DBS_backend_30500/api/customers/check-short-name/${upperValue}`
           );
 
           const isDuplicate =
