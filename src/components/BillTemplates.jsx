@@ -158,15 +158,27 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
                     <span class="badge">${customerName.toUpperCase()}</span>
                 </div>
                 <div class="time-row">
-                    <div class="business-sub">විශේෂ ආර්ථික මධ්‍යස්ථානය – දඹුල්ල</div>
+                    <div class="business-sub">විශේෂ ආර්ථික මධ්‍යස්ථානය  දඹුල්ල</div>
                 </div>
             </div>
             <div class="info-section">
                 <div style="font-weight: bold;">දුර: 0777672838 / 0714371115</div>
-                <div class="info-row">
-                    <div class="left"><span>බිල් අංකය: ${billNo}</span></div>
-                    <div class="right"><span>දිනය: ${date}</span><span class="time">${time}</span></div>
-                </div>
+               <div class="info-row" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+  
+  <!-- Left side -->
+  <div class="left" style="display:flex; gap:15px;">
+  <span>බිල් අංකය: ${billNo}</span>
+</div>
+  <!-- Right side, pushed further right -->
+  <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto;">
+  <!-- Date on single line -->
+  <span style="white-space:nowrap;">දිනය: ${date}</span>
+  
+  <!-- Time below -->
+  <span class="time">${time}</span>
+</div>
+
+</div>
             </div>
             <hr />
             <table>
@@ -217,17 +229,16 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     </html>`;
 };
 
-// A4 Bill Template
 export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0 }) => {
     const formatNumber = (num) => {
         if (typeof num !== 'number' && typeof num !== 'string') return '0';
         const number = parseFloat(num);
         if (isNaN(number)) return '0';
-        return number.toFixed(2);
+        return number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const date = new Date().toLocaleDateString('si-LK');
-    const time = new Date().toLocaleTimeString('si-LK');
+    const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit' });
 
     let totalSales = 0;
     let totalPacks = 0;
@@ -260,16 +271,16 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
     const finalGrandTotal = totalSales + totalPackCost;
 
     const itemsRows = itemsList.map(item => `
-        <tr style="border-bottom: 1px solid #ddd;">
-            <td style="padding: 8px; text-align: center;">${item.id}</td>
-            <td style="padding: 8px;">
-                <strong>${item.name}</strong><br>
-                <small style="color: #666;">${item.code}</small>
+        <tr style="border-bottom: 2px solid #000;">
+            <td style="padding: 14px 10px; text-align: center; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${item.id}</td>
+            <td style="padding: 14px 10px; font-weight: bold; color: #000; border: 1px solid #000;">
+                <strong style="font-size: 16px; color: #000;">${item.name}</strong><br>
+                <span style="color: #000; font-size: 13px; font-weight: bold;">${item.code}</span>
             </td>
-            <td style="padding: 8px; text-align: right;">${formatNumber(item.weight)}</td>
-            <td style="padding: 8px; text-align: right;">${formatNumber(item.price)}</td>
-            <td style="padding: 8px; text-align: center;">${item.packs}</td>
-            <td style="padding: 8px; text-align: right;"><strong>${formatNumber(item.total)}</strong></td>
+            <td style="padding: 14px 10px; text-align: right; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${formatNumber(item.weight)}</td>
+            <td style="padding: 14px 10px; text-align: right; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${formatNumber(item.price)}</td>
+            <td style="padding: 14px 10px; text-align: center; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${item.packs}</td>
+            <td style="padding: 14px 10px; text-align: right; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${formatNumber(item.total)}</td>
         </tr>
     `).join('');
 
@@ -280,30 +291,195 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
     <title>Invoice - ${billNo}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: #fff; padding: 40px 20px; }
-        @media print { body { padding: 0; } @page { size: A4; margin: 1.5cm; } .no-print { display: none; } }
-        .receipt { max-width: 800px; margin: 0 auto; background: white; }
-        .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #000; }
-        .shop-name { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
-        .address { font-size: 12px; color: #666; margin-bottom: 5px; }
-        .contact { font-size: 11px; margin-bottom: 10px; }
-        .bill-info { display: flex; justify-content: space-between; font-size: 12px; margin-top: 10px; }
-        .customer-box { background: #f5f5f5; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; }
-        .customer-row { display: flex; justify-content: space-between; align-items: center; }
-        .customer-label { font-size: 11px; color: #666; }
-        .customer-name { font-size: 18px; font-weight: bold; }
-        .customer-code-badge { font-size: 16px; font-weight: bold; font-family: monospace; background: white; padding: 5px 12px; border: 1px solid #000; }
-        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-        .items-table th { background: #f0f0f0; padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold; }
-        .items-table td { padding: 8px; border: 1px solid #ddd; }
-        .totals-box { background: #f9f9f9; padding: 15px; margin-bottom: 20px; border: 1px solid #ddd; }
-        .total-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
-        .grand-total { border-top: 2px solid #000; margin-top: 10px; padding-top: 10px; font-size: 18px; font-weight: bold; color: #2c5e2e; }
-        .summary-box { background: #f5f5f5; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; }
-        .summary-title { font-weight: bold; margin-bottom: 10px; font-size: 13px; text-align: center; }
-        .summary-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-        .summary-item { background: white; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 10px; color: #666; }
+        body { 
+            font-family: 'Courier New', 'Segoe UI', monospace; 
+            background: #fff; 
+            padding: 30px 20px; 
+        }
+        @media print { 
+            body { padding: 0; } 
+            @page { size: A4; margin: 1.2cm; } 
+            .no-print { display: none; } 
+        }
+        .receipt { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background: white; 
+        }
+        /* Top section with F2-1 on left and shop name centered */
+        .top-header {
+            position: relative;
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #000;
+        }
+        .f2-badge {
+            position: absolute;
+            left: 0;
+            top: 0;
+            font-size: 24px;
+            font-weight: bold;
+            font-family: monospace;
+            background: #000;
+            color: white;
+            padding: 10px 20px;
+            letter-spacing: 2px;
+            border: 2px solid #000;
+        }
+        .shop-name { 
+            font-size: 32px; 
+            font-weight: bold; 
+            color: #000; 
+            margin-bottom: 10px; 
+            letter-spacing: 1px;
+            display: inline-block;
+        }
+        .address { 
+            font-size: 15px; 
+            font-weight: bold;
+            color: #000; 
+            margin-bottom: 6px; 
+            text-align: center;
+        }
+        .contact { 
+            font-size: 14px; 
+            font-weight: bold;
+            color: #000; 
+            margin-bottom: 15px; 
+            text-align: center;
+        }
+        /* Bill info row - bill number on left, customer on right */
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0 25px 0;
+            padding: 15px 20px;
+            background: #f0f0f0;
+            border: 2px solid #000;
+        }
+        .bill-number-section {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+        }
+        .bill-number-section strong {
+            color: #000;
+            font-size: 22px;
+        }
+        .customer-info-section {
+            text-align: right;
+        }
+        .customer-label-small {
+            font-size: 13px;
+            color: #000;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        /* Black box around customer name */
+        .customer-name-box {
+            background: #000;
+            color: white;
+            padding: 10px 25px;
+            display: inline-block;
+            margin: 5px 0;
+        }
+        .customer-name-large {
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            letter-spacing: 1px;
+        }
+        .mobile-text {
+            font-size: 14px;
+            font-weight: bold;
+            color: #000;
+            margin-top: 6px;
+        }
+        /* Table styles */
+        .items-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 30px; 
+            font-size: 14px; 
+        }
+        .items-table th { 
+            background: #000; 
+            color: white;
+            padding: 14px 10px; 
+            text-align: center; 
+            font-weight: bold; 
+            font-size: 16px;
+            border: 1px solid #000;
+        }
+        .items-table td { 
+            padding: 12px 10px; 
+            border: 1px solid #000; 
+        }
+        .totals-box { 
+            background: #fafafa; 
+            padding: 25px; 
+            margin-bottom: 30px; 
+            border: 2px solid #000; 
+        }
+        .total-line { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 10px 0; 
+            font-size: 18px; 
+            font-weight: bold;
+            color: #000;
+        }
+        .grand-total { 
+            border-top: 3px double #000; 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #000; 
+        }
+        .summary-box { 
+            background: #f5f5f5; 
+            padding: 20px; 
+            margin-bottom: 25px; 
+            border: 2px solid #000; 
+        }
+        .summary-title { 
+            font-weight: bold; 
+            margin-bottom: 15px; 
+            font-size: 18px; 
+            text-align: center; 
+            color: #000;
+        }
+        .summary-grid { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 15px; 
+            justify-content: center; 
+        }
+        .summary-item { 
+            background: white; 
+            padding: 10px 18px; 
+            border: 1px solid #000; 
+            font-size: 14px; 
+            font-weight: bold;
+            color: #000;
+        }
+        .footer { 
+            text-align: center; 
+            margin-top: 30px; 
+            padding-top: 20px; 
+            border-top: 2px solid #000; 
+            font-size: 13px; 
+            font-weight: bold;
+            color: #000; 
+        }
+        .footer p:first-child {
+            color: #000;
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         .font-bold { font-weight: bold; }
@@ -311,28 +487,33 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 </head>
 <body>
     <div class="receipt">
-        <div class="header">
+        <!-- Top section: F2-1 on left, shop name centered -->
+        <div class="top-header">
+            <div class="f2-badge">F2-1</div>
             <div class="shop-name">මහතුන් වෙළඳසැල</div>
-            <div class="address">විශේෂ ආර්ථික මධ්‍යස්ථානය – දඹුල්ල</div>
-            <div class="contact">දුරකථන: 0777672838 / 0714371115</div>
-            <div class="bill-info">
-                <span>බිල් අංකය: <strong>${billNo}</strong></span>
-                <span>දිනය: <strong>${date}</strong></span>
-                <span>වේලාව: <strong>${time}</strong></span>
-            </div>
         </div>
         
-        <div class="customer-box">
-            <div class="customer-row">
-                <div>
-                    <div class="customer-label">ගනුදෙනුකරු</div>
-                    <div class="customer-name">${customerName.toUpperCase()}</div>
-                    <div class="customer-label" style="margin-top: 5px;">දුරකථන: ${mobile}</div>
+        <!-- Address and contact lines centered -->
+        <div class="address">එළවළු හා පලතුරු කොමිස් පීටි ගෙන්වන්නෝ සහ බෙදාහරින්නෝ</div>
+        <div class="address">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
+        <div class="contact">දුරකථන: 0777672838 / 0714371115</div>
+        
+        <!-- Row with Bill Number (left) and Customer Info (right) -->
+        <div class="info-row">
+            <div class="bill-number-section">
+                බිල් අංකය: <strong>${billNo}</strong>
+            </div>
+            <div class="customer-info-section">
+                <div class="customer-label-small">ගනුදෙනුකරු</div>
+                <!-- Black box around customer name -->
+                <div class="customer-name-box">
+                    <div class="customer-name-large">${customerName.toUpperCase()}</div>
                 </div>
-                <div class="customer-code-badge">${customerName.toUpperCase()}</div>
+                <div class="mobile-text">දුරකථන: ${mobile}</div>
             </div>
         </div>
         
+        <!-- Items Table -->
         <table class="items-table">
             <thead>
                 <tr>
@@ -347,6 +528,7 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             <tbody>${itemsRows}</tbody>
         </table>
         
+        <!-- Totals Box -->
         <div class="totals-box">
             <div class="total-line">
                 <span>භාණ්ඩ එකතුව:</span>
@@ -368,6 +550,7 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             </div>
         </div>
         
+        <!-- Summary Box -->
         <div class="summary-box">
             <div class="summary-title">සාරාංශය</div>
             <div class="summary-grid">
@@ -377,11 +560,6 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
                     </div>
                 `).join('')}
             </div>
-        </div>
-        
-        <div class="footer">
-            <p><strong>*** ස්තුතියි! නැවත පැමිණීමට ආරාධනා ***</strong></p>
-            <p>බණ්ඩාරවෙල, ශ්‍රී ලංකාව</p>
         </div>
     </div>
 </body>

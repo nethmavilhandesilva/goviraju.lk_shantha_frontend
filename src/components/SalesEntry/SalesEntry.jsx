@@ -1372,130 +1372,132 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     const buildA4ReceiptHTML = (salesData, billNo, customerName, mobile, globalLoanAmount = 0) => {
         return A4BillHTML({ salesData, billNo, customerName, mobile, globalLoanAmount });
     };
-    const handlePrintAndClear = async () => {
-        let salesData = displayedSales.filter(s => s.id);
+   // In your SalesEntry component, modify the handlePrintAndClear function:
 
-        if (!salesData.length) {
-            alert("මුද්‍රණය කිරීමට දත්ත නොමැත!");
+const handlePrintAndClear = async () => {
+    let salesData = displayedSales.filter(s => s.id);
+
+    if (!salesData.length) {
+        alert("මුද්‍රණය කිරීමට දත්ත නොමැත!");
+        return;
+    }
+
+    // Apply bulk printing combination if enabled
+    const shouldCombine = state.isBulkPrintEnabled;
+    let printData = salesData;
+
+    if (shouldCombine) {
+        printData = combineSalesForPrinting(salesData);
+        if (printData.length < salesData.length) {
+            console.log(`Combined ${salesData.length} records into ${printData.length} records for printing`);
+        }
+    }
+
+    // --- COMMISSION VALIDATION ---
+    for (const s of printData) {
+        if (parseFloat(s.price_per_kg) === parseFloat(s.SupplierPricePerKg)) {
+            const errorMsg = `කේතය: ${s.supplier_code} හි කොමිස් මුදල් අඩුකර නොමැත. කරුණාකර පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.`;
+            alert(errorMsg);
             return;
         }
+    }
 
-        // Apply bulk printing combination if enabled
-        const shouldCombine = state.isBulkPrintEnabled;
-        let printData = salesData;
+    // --- ZERO PRICE VALIDATION ---
+    const hasZeroPrice = printData.some(s => parseFloat(s.price_per_kg) === 0);
+    if (hasZeroPrice) {
+        alert("මිල 0 ලෙස ඇති අයිතම මුද්‍රණය කළ නොහැක.");
+        return;
+    }
 
-        if (shouldCombine) {
-            printData = combineSalesForPrinting(salesData);
+    try {
+        updateState({ isPrinting: true });
 
-            // Show notification about combined records
-            if (printData.length < salesData.length) {
-                console.log(`Combined ${salesData.length} records into ${printData.length} records for printing`);
-            }
-        }
+        const customerCode = salesData[0].customer_code || "N/A";
+        const customerName = salesData[0].customer_code || salesData[0].customer_code || customerCode;
+        const mobile = salesData[0].mobile || "0777672838 / 071437115";
 
-        // --- COMMISSION VALIDATION ---
-        for (const s of printData) {
-            if (parseFloat(s.price_per_kg) === parseFloat(s.SupplierPricePerKg)) {
-                const errorMsg = `කේතය: ${s.supplier_code} හි කොමිස් මුදල් අඩුකර නොමැත. කරුණාකර පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.`;
-                alert(errorMsg);
-                return;
-            }
-        }
-
-        // --- ZERO PRICE VALIDATION ---
-        const hasZeroPrice = printData.some(s => parseFloat(s.price_per_kg) === 0);
-        if (hasZeroPrice) {
-            alert("මිල 0 ලෙස ඇති අයිතම මුද්‍රණය කළ නොහැක.");
-            return;
-        }
-
+        let currentLoan = 0;
         try {
-            updateState({ isPrinting: true });
-
-            const customerCode = salesData[0].customer_code || "N/A";
-            const customerName = salesData[0].customer_code || salesData[0].customer_code || customerCode;
-            const mobile = salesData[0].mobile || "0777672838 / 071437115";
-
-            let currentLoan = 0;
-            try {
-                const loanRes = await api.post(routes.getLoanAmount, {
-                    customer_short_name: customerCode
-                });
-                currentLoan = parseFloat(loanRes.data.total_loan_amount) || 0;
-            } catch (e) {
-                console.warn("Loan fetch failed");
-            }
-
-            // Get original IDs for marking as printed
-            let idsToMark = salesData.map(s => s.id);
-            if (shouldCombine) {
-                idsToMark = printData.flatMap(s => s.original_ids);
-            }
-
-            const printResponse = await api.post(routes.markPrinted, {
-                sales_ids: idsToMark,
-                telephone_no: formData.telephone_no,
-                customer_code: customerCode,
-                customer_name: customerName,
-                loan_amount: currentLoan
+            const loanRes = await api.post(routes.getLoanAmount, {
+                customer_short_name: customerCode
             });
-
-            if (printResponse.data.status !== "success") {
-                throw new Error("මුද්‍රණය අසාර්ථකයි");
-            }
-
-            const billNo = printResponse.data.bill_no || "";
-
-            // Choose receipt format based on print mode
-            let receiptHtml;
-            if (printMode === 'a4') {
-                receiptHtml = buildA4ReceiptHTML(printData, billNo, customerName, mobile, currentLoan);
-            } else {
-                receiptHtml = buildFullReceiptHTML(printData, billNo, customerName, mobile, currentLoan, billSize);
-            }
-
-            // Update local state before reload
-            updateState({
-                allSales: allSales.map(s =>
-                    idsToMark.includes(s.id)
-                        ? { ...s, bill_printed: "Y", bill_no: billNo }
-                        : s
-                ),
-                selectedPrintedCustomer: null,
-                selectedUnprintedCustomer: null,
-                isPrinting: false
-            });
-
-            handleClearForm(true);
-
-            // Open Print Window
-            const printWindow = window.open("", "_blank", "width=800,height=600");
-            if (!printWindow) {
-                alert("Please allow pop-ups for printing");
-                window.location.reload();
-                return;
-            }
-
-            printWindow.document.write(receiptHtml);
-            printWindow.document.close();
-
-            // Auto print and close
-            printWindow.onload = () => {
-                setTimeout(() => {
-                    printWindow.print();
-                    setTimeout(() => {
-                        printWindow.close();
-                        window.location.reload();
-                    }, 1000);
-                }, 100);
-            };
-
-        } catch (error) {
-            console.error("Printing error:", error);
-            alert("මුද්‍රණය කිරීමේදී දෝෂයක් ඇති විය.");
-            updateState({ isPrinting: false });
+            currentLoan = parseFloat(loanRes.data.total_loan_amount) || 0;
+        } catch (e) {
+            console.warn("Loan fetch failed");
         }
-    };
+
+        // Get original IDs for marking as printed
+        let idsToMark = salesData.map(s => s.id);
+        if (shouldCombine) {
+            idsToMark = printData.flatMap(s => s.original_ids);
+        }
+
+        const printResponse = await api.post(routes.markPrinted, {
+            sales_ids: idsToMark,
+            telephone_no: formData.telephone_no,
+            customer_code: customerCode,
+            customer_name: customerName,
+            loan_amount: currentLoan
+        });
+
+        if (printResponse.data.status !== "success") {
+            throw new Error("මුද්‍රණය අසාර්ථකයි");
+        }
+
+        const billNo = printResponse.data.bill_no || "";
+
+        // FIXED: Use the printMode prop to determine which template to use
+        let receiptHtml;
+        if (printMode === 'a4') {
+            // Use A4 template
+            receiptHtml = buildA4ReceiptHTML(printData, billNo, customerName, mobile, currentLoan);
+        } else {
+            // Use Thermal template (default)
+            receiptHtml = buildFullReceiptHTML(printData, billNo, customerName, mobile, currentLoan, billSize);
+        }
+
+        // Update local state before reload
+        updateState({
+            allSales: allSales.map(s =>
+                idsToMark.includes(s.id)
+                    ? { ...s, bill_printed: "Y", bill_no: billNo }
+                    : s
+            ),
+            selectedPrintedCustomer: null,
+            selectedUnprintedCustomer: null,
+            isPrinting: false
+        });
+
+        handleClearForm(true);
+
+        // Open Print Window
+        const printWindow = window.open("", "_blank", "width=800,height=600");
+        if (!printWindow) {
+            alert("Please allow pop-ups for printing");
+            window.location.reload();
+            return;
+        }
+
+        printWindow.document.write(receiptHtml);
+        printWindow.document.close();
+
+        // Auto print and close
+        printWindow.onload = () => {
+            setTimeout(() => {
+                printWindow.print();
+                setTimeout(() => {
+                    printWindow.close();
+                    window.location.reload();
+                }, 1000);
+            }, 100);
+        };
+
+    } catch (error) {
+        console.error("Printing error:", error);
+        alert("මුද්‍රණය කිරීමේදී දෝෂයක් ඇති විය.");
+        updateState({ isPrinting: false });
+    }
+};
     const handleBillSizeChange = (e) => updateState({ billSize: e.target.value });
     useEffect(() => {
         if (currentUser?.role === 'Admin') {
@@ -1820,7 +1822,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             prevProps.selectionCriteria === nextProps.selectionCriteria;
     });
     return (
-        <Layout style={{ backgroundColor: '#99ff99' }} billSize={billSize} handleBillSizeChange={handleBillSizeChange}>
+        
             <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
                 {isLoading && (<div className="fixed top-0 left-0 right-0 bg-blue-500 text-white py-1 text-center text-sm z-50">Refreshing data...</div>)}
                 {state.isPrinting && (<div className="fixed top-0 left-0 right-0 bg-yellow-500 text-black py-1 text-center text-sm z-50">Printing in progress... Please wait</div>)}
@@ -2291,6 +2293,6 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                     </div>
                 </div>
             </div>
-        </Layout>
+       
     );
 }

@@ -41,6 +41,17 @@ import SupplierFinalReport from './components/Reports/SupplierFullReport';
 // Import Layout
 import Layout from './components/Layout/Layout';
 
+// Helper function to get basename
+const getBasename = () => {
+    const { hostname } = window.location;
+    // Check if we're on the hosted domain
+    if (hostname.includes('goviraju.lk')) {
+        return '/DBS_frontend_30500';
+    }
+    // Local development or other environments
+    return '/';
+};
+
 // ✅ ProtectedRoute component — blocks access if user not logged in
 const ProtectedRoute = ({ children }) => {
     const user = localStorage.getItem('user');
@@ -62,8 +73,10 @@ export default function App() {
         setBillSize(e.target.value);
     };
 
+    const basename = getBasename();
+
     return (
-        <BrowserRouter>
+        <BrowserRouter basename={basename}>
             <Routes>
                 {/* 🔒 Auth Routes: Login and Register are public */}
                 <Route path="/login" element={<LoginPage />} />
@@ -321,7 +334,7 @@ export default function App() {
                     }
                 />
 
-                {/* ⚠️ SALES ENTRY - Pass printMode as prop */}
+                {/* ⚠️ SALES ENTRY - Pass ALL required props */}
                 <Route
                     path="/sales"
                     element={
@@ -335,6 +348,8 @@ export default function App() {
                                 <SalesEntry 
                                     printMode={printMode} 
                                     setPrintMode={setPrintMode}
+                                    billSize={billSize}
+                                    handleBillSizeChange={handleBillSizeChange}
                                 />
                             </Layout>
                         </ProtectedRoute>
@@ -544,25 +559,6 @@ export default function App() {
                         </ProtectedRoute>
                     } 
                 />
-              
-<Route
-    path="/sales"
-    element={
-        <ProtectedRoute>
-            <Layout 
-                billSize={billSize} 
-                handleBillSizeChange={handleBillSizeChange}
-                printMode={printMode}
-                setPrintMode={setPrintMode}
-            >
-                <SalesEntry 
-                    printMode={printMode} 
-                    setPrintMode={setPrintMode}
-                />
-            </Layout>
-        </ProtectedRoute>
-    }
-/>
 
                 {/* ❌ Fallback route: Redirect all unknown paths to the main dashboard */}
                 <Route path="*" element={<Navigate to="/" replace />} />

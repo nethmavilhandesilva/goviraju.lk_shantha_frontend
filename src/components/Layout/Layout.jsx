@@ -15,6 +15,32 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const location = useLocation();
     const navigate = useNavigate();
 
+    // Get base URL dynamically
+    const getBaseUrl = () => {
+        const { protocol, hostname, port } = window.location;
+        // Check if we're on the hosted domain
+        if (hostname.includes('goviraju.lk')) {
+            return `${protocol}//${hostname}/DBS_frontend_30500`;
+        }
+        // Local development
+        if (port === '5173' || hostname === 'localhost') {
+            return 'http://localhost:5173';
+        }
+        // Fallback to current origin
+        return window.location.origin;
+    };
+
+    const BASE_URL = getBaseUrl();
+
+    // Check if current page should hide the navbar (Supplier Report pages)
+    const hideNavbarRoutes = [
+        '/supplierreport',
+        '/suppliers/printed-report',
+        '/supplier-finalreport'
+    ];
+    const shouldHideNavbar = hideNavbarRoutes.includes(location.pathname);
+    const isSalesEntryPage = location.pathname === '/sales' || location.pathname === '/sales-entry';
+
     // === Modal States ===
     const [isItemReportModalOpen, setIsItemReportModalOpen] = useState(false);
     const [isWeightReportModalOpen, setIsWeightReportModalOpen] = useState(false);
@@ -34,8 +60,6 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const [bottomPassword, setBottomPassword] = useState('');
     const [isBottomUnlocked, setIsBottomUnlocked] = useState(true);
 
-    const HOSTED_SYSTEM_URL = 'http://localhost:5173/';
-
     useEffect(() => {
         // 1. Handle User Session
         const storedUser = localStorage.getItem('user');
@@ -43,7 +67,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
             setUser(JSON.parse(storedUser));
         } else {
             // Redirect to hosted system login
-            window.location.href = `${HOSTED_SYSTEM_URL}login`;
+            window.location.href = `${BASE_URL}/login`;
         }
 
         // 2. Fetch Setting Value
@@ -59,13 +83,13 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
         };
 
         fetchSettings();
-    }, []);
+    }, [BASE_URL]);
 
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
         // Redirect to hosted system login
-        window.location.href = `${HOSTED_SYSTEM_URL}login`;
+        window.location.href = `${BASE_URL}/login`;
     };
 
     // === Modal Handlers ===
@@ -89,14 +113,13 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const closeDayProcessModal = () => setIsDayProcessModalOpen(false);
 
     const handleProfitReportClick = () => {
-        window.location.href = '/DBS_frontend_30500/supplier-profit';
+        window.location.href = `${BASE_URL}/supplier-profit`;
     };
 
     const handleSupplierReportClick = () => {
         navigate('/reports/supplier');
     };
 
-    const isSalesEntryPage = location.pathname === '/sales' || location.pathname === '/sales-entry';
     const navTextBtn = {
         background: "none",
         border: "none",
@@ -113,161 +136,177 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
         setBottomPassword(e.target.value);
     };
 
+    // Handle print mode change with safety check
+    const handlePrintModeChange = (e) => {
+        const newMode = e.target.value;
+        if (typeof setPrintMode === 'function') {
+            setPrintMode(newMode);
+        } else {
+            console.error('setPrintMode is not a function', setPrintMode);
+        }
+    };
+
+    // Helper function for navigation with base path
+    const navigateTo = (path) => {
+        // If we're on hosted domain, ensure the path includes /DBS_frontend_30500
+        if (window.location.hostname.includes('goviraju.lk')) {
+            const fullPath = path.startsWith('/') ? path : `/${path}`;
+            navigate(`/DBS_frontend_30500${fullPath}`);
+        } else {
+            navigate(path);
+        }
+    };
+
     return (
         <div>
-            {/* === Top Navigation Bar === */}
-            <nav className="navbar navbar-expand-lg navbar-dark fixed-top" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
-                <div className="container-fluid d-flex align-items-center justify-content-between">
-                    <div className="d-flex align-items-center">
-                        <Link className="navbar-brand fw-bold d-flex align-items-center me-3" to="/">
-                            <i className="material-icons align-middle me-2">warehouse</i>
-                            මුල් පිටුව
-                        </Link>
+            {/* === Top Navigation Bar - Hidden on Supplier Report pages === */}
+            {!shouldHideNavbar && (
+                <nav className="navbar navbar-expand-lg navbar-dark fixed-top" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
+                    <div className="container-fluid d-flex align-items-center justify-content-between">
+                        <div className="d-flex align-items-center">
+                            <Link className="navbar-brand fw-bold d-flex align-items-center me-3" to="/">
+                                <i className="material-icons align-middle me-2">warehouse</i>
+                                මුල් පිටුව
+                            </Link>
 
-                        <div className="navbar-nav d-flex flex-row align-items-center">
-                            <div className="nav-item dropdown mx-1">
-                                <button className="btn btn-outline-light btn-sm dropdown-toggle" id="masterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i className="material-icons align-middle me-1">menu_book</i> ප්‍රධාන ගොනුව
-                                </button>
-                                <ul className="dropdown-menu dropdown-menu-dark" aria-labelledby="masterDropdown">
-                                    <li><Link to="/customers" className="dropdown-item"><i className="material-icons align-middle me-1">people</i> පාරිභෝගිකයින්</Link></li>
-                                    <li><Link to="/items" className="dropdown-item"><i className="material-icons align-middle me-1">inventory_2</i> භාණ්ඩ</Link></li>
-                                    <li><Link to="/suppliers" className="dropdown-item"><i className="material-icons align-middle me-1">local_shipping</i> සැපයුම්කරුවන්</Link></li>
-                                    <li><Link to="/commissions" className="dropdown-item"><i className="material-icons align-middle me-1">attach_money</i>කොමිස් මුදල්</Link></li>
-                                    <li><Link to="/reports/printed-sales" className="dropdown-item flex items-center"><i className="material-icons me-1">analytics</i>ප්‍රින්ට් කළ වාර්තා</Link></li>
-                                    <li><Link to="/reports/printed-sales2" className="dropdown-item flex items-center"><i className="material-icons me-1">analytics</i>ප්‍රින්ට් කළ වාර්තා 2</Link></li>
-                                    <li><hr className="dropdown-divider" /></li>
-                                    <li>
-                                        <button type="button" className="dropdown-item text-warning" onClick={() => window.location.href = '/customers-loans/report'}>
-                                            <i className="material-icons align-middle me-1 text-warning">account_balance</i> ණය වාර්තාව
-                                        </button>
-                                    </li>
-                                </ul>
-                            </div>
+                            <div className="navbar-nav d-flex flex-row align-items-center">
+                                <div className="nav-item dropdown mx-1">
+                                    <button className="btn btn-outline-light btn-sm dropdown-toggle" id="masterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i className="material-icons align-middle me-1">menu_book</i> ප්‍රධාන ගොනුව
+                                    </button>
+                                    <ul className="dropdown-menu dropdown-menu-dark" aria-labelledby="masterDropdown">
+                                        <li><Link to="/customers" className="dropdown-item"><i className="material-icons align-middle me-1">people</i> පාරිභෝගිකයින්</Link></li>
+                                        <li><Link to="/items" className="dropdown-item"><i className="material-icons align-middle me-1">inventory_2</i> භාණ්ඩ</Link></li>
+                                        <li><Link to="/suppliers" className="dropdown-item"><i className="material-icons align-middle me-1">local_shipping</i> සැපයුම්කරුවන්</Link></li>
+                                        <li><Link to="/commissions" className="dropdown-item"><i className="material-icons align-middle me-1">attach_money</i>කොමිස් මුදල්</Link></li>
+                                        <li><Link to="/reports/printed-sales" className="dropdown-item flex items-center"><i className="material-icons me-1">analytics</i>ප්‍රින්ට් කළ වාර්තා</Link></li>
+                                        <li><Link to="/reports/printed-sales2" className="dropdown-item flex items-center"><i className="material-icons me-1">analytics</i>ප්‍රින්ට් කළ වාර්තා 2</Link></li>
+                                        <li><hr className="dropdown-divider" /></li>
+                                        <li>
+                                            <button type="button" className="dropdown-item text-warning" onClick={() => navigateTo('/customers-loans/report')}>
+                                                <i className="material-icons align-middle me-1 text-warning">account_balance</i> ණය වාර්තාව
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
 
-                            {user?.role !== 'Admin' && (
-                                <>
-                                    <Link to="/customers-loans" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }}>ණය දීම/ගැනීම</Link>
-                                    <Link to="/supplierreport" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }}>සැපයුම්කරු බිල්පත්</Link>
-                                    <button type="button" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }} onClick={openDayProcessModal}>දින අවසාන ක්‍රියාවලිය</button>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Print Mode and Bill Size Controls - Only show on Sales Entry page */}
-                        {isSalesEntryPage && user?.role !== 'Admin' && (
-                            <div className="d-flex align-items-center me-3" style={{ marginLeft: '20px' }}>
-                                <label className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Print Mode:</label>
-                                <select 
-                                    value={printMode} 
-                                    onChange={(e) => setPrintMode(e.target.value)} 
-                                    className="form-select form-select-sm me-2"
-                                    style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}
-                                >
-                                    <option value="thermal">Thermal</option>
-                                    <option value="a4">A4 Paper</option>
-                                </select>
-                                
-                                {/* Only show Bill Size selector when in Thermal mode */}
-                                {printMode === 'thermal' && (
+                                {user?.role !== 'Admin' && (
                                     <>
-                                        <label htmlFor="bill-size-select" className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Bill Size:</label>
-                                        <select 
-                                            id="bill-size-select" 
-                                            value={billSize} 
-                                            onChange={handleBillSizeChange} 
-                                            className="form-select form-select-sm"
-                                            style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}
-                                        >
-                                            <option value="3inch">3 Inch (Def)</option>
-                                            <option value="4inch">4 Inch</option>
-                                        </select>
+                                        <Link to="/customers-loans" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }}>ණය දීම/ගැනීම</Link>
+                                        <Link to="/supplierreport" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }}>සැපයුම්කරු බිල්පත්</Link>
+                                        <button type="button" className="btn btn-outline-success btn-sm mx-1" style={{ fontWeight: 'bold', color: '#fff' }} onClick={openDayProcessModal}>දින අවසාන ක්‍රියාවලිය</button>
                                     </>
                                 )}
                             </div>
+
+                            {/* Print Mode and Bill Size Controls - Only show on Sales Entry page */}
+                            {isSalesEntryPage && user?.role !== 'Admin' && (
+                                <div className="d-flex align-items-center me-3" style={{ marginLeft: '20px' }}>
+                                    <label className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Print Mode:</label>
+                                    <select
+                                        value={printMode || 'thermal'}
+                                        onChange={handlePrintModeChange}
+                                        className="form-select form-select-sm me-2"
+                                        style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}
+                                    >
+                                        <option value="thermal">Thermal</option>
+                                        <option value="a4">A4 Paper</option>
+                                    </select>
+
+                                    {/* Only show Bill Size selector when in Thermal mode */}
+                                   
+                                </div>
+                            )}
+                        </div>
+
+                        {user && (
+                            <div className="d-flex align-items-center text-white">
+                                <span className="me-3 fw-bold" style={{ color: '#ff4444', fontSize: '1.1rem' }}>{settingValue}</span>
+                                <button onClick={handleLogout} className="btn btn-sm btn-outline-light" style={{ fontWeight: 'bold' }}>Logout</button>
+                            </div>
                         )}
                     </div>
+                </nav>
+            )}
 
-                    {user && (
-                        <div className="d-flex align-items-center text-white">
-                            <span className="me-3 fw-bold" style={{ color: '#ff4444', fontSize: '1.1rem' }}>{settingValue}</span>
-                            <button onClick={handleLogout} className="btn btn-sm btn-outline-light" style={{ fontWeight: 'bold' }}>Logout</button>
-                        </div>
-                    )}
-                </div>
-            </nav>
-
-            {/* Main Content */}
-            <main className={isSalesEntryPage ? "p-0" : "container-fluid py-4"} style={{ marginTop: '80px', marginBottom: '80px', width: '100%', maxWidth: isSalesEntryPage ? '100%' : undefined }}>
+            {/* Main Content - adjust top margin when navbar is hidden */}
+            <main className={isSalesEntryPage ? "p-0" : "container-fluid py-4"} style={{ 
+                marginTop: shouldHideNavbar ? '20px' : '80px', 
+                marginBottom: '80px', 
+                width: '100%', 
+                maxWidth: isSalesEntryPage ? '100%' : undefined 
+            }}>
                 {children}
             </main>
 
-            {/* Bottom Navigation Bar */}
-            <nav className="navbar navbar-expand-lg navbar-dark fixed-bottom" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
-                <div className="container-fluid d-flex justify-content-start align-items-center">
-                    <input
-                        type="password"
-                        placeholder="Enter password"
-                        value={bottomPassword}
-                        onChange={handleBottomPasswordChange}
-                        className="form-control form-control-sm me-3"
-                        style={{ width: '100px', backgroundColor: '#003300', color: '#fff', border: '1px solid #66bb6a' }}
-                    />
-                    
-                    {/* Bottom Navigation Buttons */}
-                    <button
-                        type="button"
-                        onClick={openItemReportModal}
-                        style={navTextBtn}
-                    >
-                        එළවළු
-                    </button>
-                    <button
-                        type="button"
-                        onClick={openWeightReportModal}
-                        style={navTextBtn}
-                    >
-                        බර මත
-                    </button>
-                    <button
-                        type="button"
-                        onClick={openSalesAdjustmentReportModal}
-                        style={navTextBtn}
-                    >
-                        වෙනස් කිරීම
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => window.location.href = '/DBS_frontend_30500/financial-report'}
-                        style={navTextBtn}
-                    >
-                        ආදායම් / වියදම්
-                    </button>
-                    <button
-                        type="button"
-                        onClick={openSalesReportModal}
-                        style={navTextBtn}
-                    >
-                        විකුණුම් වාර්තාව
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleProfitReportClick}
-                        style={navTextBtn}
-                    >
-                        සැපයුම් ලාභ
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleSupplierReportClick}
-                        style={navTextBtn}
-                    >
-                        සැපයුම් වාර්තාව
-                    </button>
-                </div>
-            </nav>
+            {/* Bottom Navigation Bar - Hidden on Supplier Report pages */}
+            {!shouldHideNavbar && (
+                <nav className="navbar navbar-expand-lg navbar-dark fixed-bottom" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
+                    <div className="container-fluid d-flex justify-content-start align-items-center">
+                        <input
+                            type="password"
+                            placeholder="Enter password"
+                            value={bottomPassword}
+                            onChange={handleBottomPasswordChange}
+                            className="form-control form-control-sm me-3"
+                            style={{ width: '100px', backgroundColor: '#003300', color: '#fff', border: '1px solid #66bb6a' }}
+                        />
+                        
+                        {/* Bottom Navigation Buttons */}
+                        <button
+                            type="button"
+                            onClick={openItemReportModal}
+                            style={navTextBtn}
+                        >
+                            එළවළු
+                        </button>
+                        <button
+                            type="button"
+                            onClick={openWeightReportModal}
+                            style={navTextBtn}
+                        >
+                            බර මත
+                        </button>
+                        <button
+                            type="button"
+                            onClick={openSalesAdjustmentReportModal}
+                            style={navTextBtn}
+                        >
+                            වෙනස් කිරීම
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => window.location.href = `${BASE_URL}/financial-report`}
+                            style={navTextBtn}
+                        >
+                            ආදායම් / වියදම්
+                        </button>
+                        <button
+                            type="button"
+                            onClick={openSalesReportModal}
+                            style={navTextBtn}
+                        >
+                            විකුණුම් වාර්තාව
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleProfitReportClick}
+                            style={navTextBtn}
+                        >
+                            සැපයුම් ලාභ
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSupplierReportClick}
+                            style={navTextBtn}
+                        >
+                            සැපයුම් වාර්තාව
+                        </button>
+                    </div>
+                </nav>
+            )}
             
-            {/* Modals */}
+            {/* Modals - Always visible */}
             <ItemReportModal isOpen={isItemReportModalOpen} onClose={closeItemReportModal} onGenerateReport={() => { }} loading={false} />
             <WeightReportModal isOpen={isWeightReportModalOpen} onClose={closeWeightReportModal} />
             <GrnSaleReportModal isOpen={isGrnSaleReportModalOpen} onClose={closeGrnSaleReportModal} />

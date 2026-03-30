@@ -11,6 +11,8 @@ const SupplierReport = () => {
 
     // 🚀 NEW STATE: Bill size selector (3mm or 4mm)
     const [billSize, setBillSize] = useState('3mm');
+    // 🚀 NEW STATE: Print Format selector (Thermal or A4)
+    const [printFormat, setPrintFormat] = useState('thermal');
 
     const [printedSearchTerm, setPrintedSearchTerm] = useState('');
     const [unprintedSearchTerm, setUnprintedSearchTerm] = useState('');
@@ -379,7 +381,87 @@ const handleLoanSubmit = async (e) => {
         };
     }, [supplierDetails]);
 
-   const getBillContent = useCallback((currentBillNo) => {
+    // 🚀 NEW: A4 Format Content
+    const getA4Content = useCallback((currentBillNo) => {
+        const date = new Date().toLocaleDateString('si-LK');
+        const paidAmountValue = parseFloat(payingAmount) || 0;
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
+
+        return `
+        <div style="width: 210mm; padding: 10mm; font-family: sans-serif; background: white;">
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px;">
+                <h1 style="margin: 0; font-size: 28px;">මහතුන් වෙළඳසැල</h1>
+                <p style="margin: 5px 0;">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</p>
+                <p style="margin: 5px 0;">දුරකථන: 0777672838 / 0714371115</p>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 20px; font-size: 18px;">
+                <div>සැපයුම්කරු කේතය: <strong>${selectedSupplier}</strong></div>
+                <div>බිල්පත් අංකය: <strong>${currentBillNo}</strong></div>
+                <div>දිනය: <strong>${date}</strong></div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 16px;">
+                <thead>
+                    <tr style="background: #f2f2f2;">
+                        <th style="border: 1px solid #000; padding: 10px;">වර්ගය</th>
+                        <th style="border: 1px solid #000; padding: 10px;">මලු</th>
+                        <th style="border: 1px solid #000; padding: 10px;">බර (kg)</th>
+                        <th style="border: 1px solid #000; padding: 10px;">සැපයුම් මිල</th>
+                        <th style="border: 1px solid #000; padding: 10px;">ගනුදෙනුකරු</th>
+                        <th style="border: 1px solid #000; padding: 10px; text-align: right;">එකතුව (රු:)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${supplierDetails.map(record => `
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 8px;">${record.item_name}</td>
+                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${record.packs}</td>
+                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${parseFloat(record.weight).toFixed(2)}</td>
+                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${parseFloat(record.SupplierPricePerKg).toFixed(2)}</td>
+                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${record.customer_code}</td>
+                            <td style="border: 1px solid #000; padding: 8px; text-align: right;">${parseFloat(record.SupplierTotal).toFixed(2)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr style="font-weight: bold; background: #f9f9f9;">
+                        <td style="border: 1px solid #000; padding: 10px;">මුළු එකතුව</td>
+                        <td style="border: 1px solid #000; padding: 10px; text-align: center;">${totalPacksSum}</td>
+                        <td style="border: 1px solid #000; padding: 10px; text-align: center;">${totalWeight.toFixed(2)}</td>
+                        <td colspan="2" style="border: 1px solid #000;"></td>
+                        <td style="border: 1px solid #000; padding: 10px; text-align: right;">${totalsupplierSales.toFixed(2)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div style="margin-top: 30px; width: 300px; float: right; font-size: 18px;">
+                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                    <span>බිල්පත් වටිනාකම:</span>
+                    <span>${totalsupplierSales.toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                    <span>අත්තිකාරම් මුදල්:</span>
+                    <span>- ${advanceAmount.toFixed(2)}</span>
+                </div>
+                ${paidAmountValue > 0 ? `
+                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                    <span>ගෙවූ මුදල:</span>
+                    <span>- ${paidAmountValue.toFixed(2)}</span>
+                </div>` : ''}
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #000; font-weight: bold; font-size: 22px;">
+                    <span>ශුද්ධ ඉතිරිය:</span>
+                    <span>${netPayable.toFixed(2)}</span>
+                </div>
+            </div>
+            
+            <div style="margin-top: 150px; text-align: center; font-size: 14px; border-top: 1px dashed #ccc; padding-top: 20px;">
+                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+            </div>
+        </div>`;
+    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
+
+    const getBillContent = useCallback((currentBillNo) => {
     const date = new Date().toLocaleDateString('si-LK');
     const mobile = '0777672838/071437115';
     const is4Inch = billSize === '4inch';
@@ -447,20 +529,28 @@ const handleLoanSubmit = async (e) => {
     return `
 <div style="width:${receiptMaxWidth}; margin:0 auto; padding:10px; font-family:'Courier New', monospace; color:#000; background:#fff;">
     <div style="text-align:center; font-weight:bold;">
-        <div style="font-size:24px;">Manju</div>
-        <div style="display:flex; justify-content:center; align-items:center; gap:15px; margin:12px 0;">
-            <span style="border:2.5px solid #000; padding:5px 12px; font-size:22px;">xx</span>
-            <div style="font-size:18px;">ගොවියා: <span style="border:2.5px solid #000; padding:5px 10px; font-size:22px;">${selectedSupplier}</span></div>
-        </div>
-      <div style="font-size:16px; white-space: nowrap;">එළවළු තොග වෙළෙන්දෝ බණ්ඩාරවෙල</div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+    <div style="font-size:18px;">අයිතිය: 
+      <span style="border:3.5px solid #000; padding:5px 10px; font-size:25px;">
+        ${selectedSupplier}
+      </span>
     </div>
-    <div style="font-size:19px; margin-top:10px; padding:0 5px;">
-        <div style="font-weight: bold;">දුර:${mobile}</div>
-        <div style="display:flex; justify-content:space-between; margin-top:3px;">
-            <span>බිල් අංකය:${currentBillNo}</span>
-            <span>දිනය:${date}</span>
-        </div>
-    </div>
+    <span style="border:3.5px solid #000; padding:5px 12px; font-size:25px;">F2-1</span>
+  </div>
+
+  <div style="font-size:24px; text-align:left; font-weight:bold;">
+  මහතුන් වෙළඳසැල
+</div>
+</div>
+
+<div style="font-size:19px; margin-top:10px; padding:0 5px;">
+  <div style="font-weight: bold;">දුර: ${mobile}</div>
+  <div style="display:flex; justify-content:space-between; margin-top:3px;">
+    <span>බිල් අංකය: ${currentBillNo}</span>
+    <span>දිනය: ${date}</span>
+  </div>
+</div>
     <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
     <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
         ${colGroups}
@@ -593,20 +683,23 @@ const handlePrint = useCallback(async () => {
     }
 
     // After backend success, proceed to show the browser print dialog
-    const content = getBillContent(finalBillNo);
+    // 🚀 NEW: Choose between A4 and Thermal content
+    const content = printFormat === 'a4' ? getA4Content(finalBillNo) : getBillContent(finalBillNo);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-        printWindow.document.write(`<html><body>${content}</body></html>`);
+        printWindow.document.write(`<html><head><title>Print Bill</title></head><body>${content}</body></html>`);
         printWindow.document.close();
         printWindow.focus();
-        printWindow.print();
-
-        // ✅ Refresh current page after print dialog opens
+        // Delay print slightly for content load
         setTimeout(() => {
-            window.location.reload();
-        }, 500);
+            printWindow.print();
+            // ✅ Refresh current page after print dialog opens
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        }, 300);
     }
-}, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent]);
+}, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
 
     // --- Keyboard event listener ---
     useEffect(() => {
@@ -865,7 +958,7 @@ const handlePrint = useCallback(async () => {
                                         outline: 'none',
                                         boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
                                         cursor: !isUnprintedBill ? 'not-allowed' : 'text',
-                                        opacity: !isUnprintedBill ? 0.8 : 1
+                                        opacity: !isUnprintedBill ? '0.8' : 1
                                     }}
                                 />
                                 {phoneStatus && (
@@ -961,6 +1054,20 @@ const handlePrint = useCallback(async () => {
                                 </p>
                             )}
                         </div>
+                        
+                        {/* 🚀 NEW: Loan/Payment Input before Print */}
+                        <div style={{ marginTop: '20px', padding: '15px', border: '2px solid #17a2b8', borderRadius: '8px', backgroundColor: '#091d3d' }}>
+                            <label style={{ color: '#17a2b8', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>ගෙවන මුදල ඇතුලත් කර Print කරන්න (Enter Paying Amount & Enter):</label>
+                            <input 
+                                type="number"
+                                value={payingAmount}
+                                onChange={(e) => setPayingAmount(e.target.value)}
+                                onKeyDown={handleLoanSubmit}
+                                placeholder="0.00"
+                                style={{ width: '100%', padding: '12px', fontSize: '1.2rem', fontWeight: 'bold', borderRadius: '6px', border: '2px solid #ffc107' }}
+                            />
+                            {loanStatus && <p style={{ color: 'white', marginTop: '5px' }}>{loanStatus}</p>}
+                        </div>
                     </>
                 )}
                 <div style={{ textAlign: 'center' }}>
@@ -971,7 +1078,8 @@ const handlePrint = useCallback(async () => {
             </div>
         );
     };
-    const navBarStyle = { backgroundColor: '#343a40', padding: '15px 50px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' };
+
+    const navBarStyle = { backgroundColor: '#343a40', padding: '15px 50px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1030, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' };
     const reportContainerStyle = { minHeight: '100vh', padding: '90px 50px 50px 50px', fontFamily: 'Roboto, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#1ec139ff' };
 
     if (isLoading) return <div style={loadingStyle}>Loading Supplier Report...</div>;
@@ -980,9 +1088,29 @@ const handlePrint = useCallback(async () => {
         <>
             <nav style={navBarStyle}>
                 <h1 style={{ color: 'white', fontSize: '1.5rem', margin: 0 }}>සැපයුම්කරු වාර්තාව</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    
+                    {/* 🚀 NEW: Print Format Selector */}
+                    <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#495057', padding: '5px 10px', borderRadius: '5px', gap: '10px' }}>
+                        <label style={{ color: 'white', fontSize: '0.9rem', fontWeight: 'bold' }}>Format:</label>
+                        <select 
+                            value={printFormat} 
+                            onChange={(e) => setPrintFormat(e.target.value)}
+                            style={{ padding: '5px', borderRadius: '4px', border: 'none', backgroundColor: 'white', fontWeight: 'bold' }}
+                        >
+                            <option value="thermal">Thermal</option>
+                            <option value="a4">A4 Paper</option>
+                        </select>
+                    </div>
+
+                    {/* 🚀 NEW: Bill Size (Only for Thermal) */}
+                    {printFormat === 'thermal' && (
+                        <button style={{ padding: '8px 15px', fontSize: '0.9rem', fontWeight: 'bold', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }} onClick={() => setBillSize(billSize === '3inch' ? '4inch' : '3inch')}>
+                            Size: {billSize}
+                        </button>
+                    )}
+
                     <button style={{ padding: '8px 15px', fontSize: '1rem', fontWeight: 'bold', backgroundColor: '#e83e8c', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }} onClick={() => navigate('/suppliers/printed-report')}>සැපයුම්කරු ණය</button>
-                    <button style={{ padding: '8px 15px', fontSize: '1rem', fontWeight: 'bold', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }} onClick={() => setBillSize(billSize === '3mm' ? '4mm' : '3mm')}>බිල්පත් ප්‍රමාණය: {billSize}</button>
                     <button style={{ padding: '10px 20px', fontSize: '1rem', fontWeight: 'bold', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }} onClick={goToSalesEntry}>මුල් පිටුව</button>
                 </div>
             </nav>
