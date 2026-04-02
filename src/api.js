@@ -1,43 +1,50 @@
-import axios from 'axios';
+import axios from "axios";
 
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api', // ✅ Laravel API URL
+  baseURL: "https://goviraju.lk/DBS_backend_30500/api", // ✅ Your live Laravel API
   headers: {
-    'Accept': 'application/json'
+    Accept: "application/json",
   },
-  withCredentials: false 
+  withCredentials: false,
 });
 
-// 🔐 Add token and handle Content-Type dynamically
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+// 🔐 Attach token + Dynamic Content-Type handling
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
 
-  // Add Auth Token
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
-  } else {
-    // For regular objects, default back to JSON
-    config.headers['Content-Type'] = 'application/json';
-  }
+    // ✅ Add Bearer Token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
-  return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+    // ✅ IMPORTANT — handle FormData (image uploads etc.)
+    if (config.data instanceof FormData) {
+      // Let browser set multipart boundary automatically
+      delete config.headers["Content-Type"];
+    } else {
+      // Default JSON requests
+      config.headers["Content-Type"] = "application/json";
+    }
 
-// ❗ Handle 401 (Unauthorized) globally
-api.interceptors.response.use((response) => {
-  return response;
-}, (error) => {
-  if (error.response && error.response.status === 401) {
-    console.log("⚠️ Token expired or invalid. Redirecting to login...");
-    localStorage.removeItem("token");
-    window.location.href = "/login"; 
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// ❗ Global 401 handler
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.log("⚠️ Token expired or invalid. Redirecting to login...");
+      localStorage.removeItem("token");
+
+      // ✅ Subfolder-safe redirect (your original fix kept)
+      window.location.href = "/DBS_frontend_30500/login";
+    }
+    return Promise.reject(error);
   }
-  return Promise.reject(error);
-});
+);
 
 export default api;

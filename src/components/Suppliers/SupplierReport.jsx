@@ -461,7 +461,7 @@ const handleLoanSubmit = async (e) => {
         </div>`;
     }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
 
-    const getBillContent = useCallback((currentBillNo) => {
+   const getBillContent = useCallback((currentBillNo) => {
     const date = new Date().toLocaleDateString('si-LK');
     const mobile = '0777672838/071437115';
     const is4Inch = billSize === '4inch';
@@ -509,7 +509,7 @@ const handleLoanSubmit = async (e) => {
                 <div style="font-size:25px; white-space:nowrap;">${customerCode}</div>
                 <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
             </td>
-        </tr>`;
+         </tr>`;
     }).join("");
 
     const summaryEntries = Object.entries(itemSummaryData);
@@ -529,36 +529,36 @@ const handleLoanSubmit = async (e) => {
     return `
 <div style="width:${receiptMaxWidth}; margin:0 auto; padding:10px; font-family:'Courier New', monospace; color:#000; background:#fff;">
     <div style="text-align:center; font-weight:bold;">
-
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-    <div style="font-size:18px;">අයිතිය: 
-      <span style="border:3.5px solid #000; padding:5px 10px; font-size:25px;">
-        ${selectedSupplier}
-      </span>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <div style="font-size:18px;">අයිතිය: 
+                <span style="border:3.5px solid #000; padding:5px 10px; font-size:25px;">
+                    ${selectedSupplier}
+                </span>
+            </div>
+            <span style="border:3.5px solid #000; padding:5px 12px; font-size:25px;">F2-1</span>
+        </div>
+        <div style="font-size:24px; text-align:left; font-weight:bold;">
+            මහතුන් වෙළඳසැල
+        </div>
     </div>
-    <span style="border:3.5px solid #000; padding:5px 12px; font-size:25px;">F2-1</span>
-  </div>
-
-  <div style="font-size:24px; text-align:left; font-weight:bold;">
-  මහතුන් වෙළඳසැල
-</div>
-</div>
-
-<div style="font-size:19px; margin-top:10px; padding:0 5px;">
-  <div style="font-weight: bold;">දුර: ${mobile}</div>
-  <div style="display:flex; justify-content:space-between; margin-top:3px;">
-    <span>බිල් අංකය: ${currentBillNo}</span>
-    <span>දිනය: ${date}</span>
-  </div>
-</div>
+    
+    <div style="font-size:19px; margin-top:10px; padding:0 5px;">
+        <div style="font-weight: bold;">දුර: ${mobile}</div>
+        <div style="display:flex; justify-content:space-between; margin-top:3px;">
+            <span>බිල් අංකය: ${currentBillNo}</span>
+            <span>දිනය: ${date}</span>
+        </div>
+    </div>
+    
     <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
+    
     <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
         ${colGroups}
         <thead>
             <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
                 <th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th>
                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
-                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
+                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
             </tr>
         </thead>
@@ -573,8 +573,8 @@ const handleLoanSubmit = async (e) => {
 
     <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
         <tr>
-          <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
-          <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
+            <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
+            <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
         </tr>
         
         ${paidAmountValue > 0 ? `
@@ -594,19 +594,19 @@ const handleLoanSubmit = async (e) => {
         ` : ''}
 
         <tr style="font-size:18px;">
-          <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
-          <td style="text-align:right; padding-top:5px; color:#000;">
-            - ${advanceAmount.toFixed(2)}
-          </td>
+            <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
+            <td style="text-align:right; padding-top:5px; color:#000;">
+                - ${advanceAmount.toFixed(2)}
+            </td>
         </tr>
 
         <tr style="font-weight:900;">
-          <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
-          <td style="text-align:right; padding-top:10px;">
-            <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
-              ${netPayable.toFixed(2)}
-            </span>
-          </td>
+            <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
+            <td style="text-align:right; padding-top:10px;">
+                <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
+                    ${netPayable.toFixed(2)}
+                </span>
+            </td>
         </tr>
     </table>
 
@@ -1080,7 +1080,7 @@ const handlePrint = useCallback(async () => {
     };
 
     const navBarStyle = { backgroundColor: '#343a40', padding: '15px 50px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1030, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' };
-    const reportContainerStyle = { minHeight: '100vh', padding: '90px 50px 50px 50px', fontFamily: 'Roboto, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#1ec139ff' };
+    const reportContainerStyle = { minHeight: '100vh', padding: '90px 50px 50px 50px', fontFamily: 'Roboto, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#1ec139ff',marginTop: '-25px' };
 
     if (isLoading) return <div style={loadingStyle}>Loading Supplier Report...</div>;
 

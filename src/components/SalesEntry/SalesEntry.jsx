@@ -817,30 +817,25 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
             // 3. Logic for TELEPHONE input (Reverse Lookup)
             if (currentFieldName === "telephone_no") {
-                // Hide save button when navigating away
                 updateState({ showSavePhoneButton: false });
                 refs.customer_code_input.current?.focus();
                 return;
             }
 
-            // 4. Logic for CUSTOMER CODE input - MODIFIED: Removed auto-save
+            // 4. Logic for CUSTOMER CODE input
             if (currentFieldName === "customer_code_input") {
                 const code = (formData.customer_code || autoCustomerCode).trim().toUpperCase();
 
                 if (code) {
-                    // LOCAL LOOKUP ONLY - NO AUTO-SAVE
                     const match = customers.find(c => String(c.short_name).toUpperCase() === code);
 
                     if (match) {
-                        // Only update customer_name
                         setFormData(prev => ({
                             ...prev,
                             customer_name: match.name || ""
                         }));
                         fetchLoanAmount(code);
                     } else {
-                        // Optionally show a message that customer doesn't exist
-                        // but don't auto-create
                         console.log("Customer not found in local data");
                     }
                 }
@@ -848,9 +843,34 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 refs.supplier_code.current?.focus();
                 return;
             }
-            // If current field is weight, validate required fields before it
+
+            // MODIFIED: Logic for WEIGHT field
             if (currentFieldName === "weight") {
-                // Check if required fields before weight are filled
+                // FIRST: Check if required fields are empty (customer_code, supplier_code, item_code)
+                const customerCode = (formData.customer_code || autoCustomerCode).trim();
+                const supplierCode = formData.supplier_code?.trim();
+                const itemCode = formData.item_code?.trim();
+
+                const areRequiredFieldsEmpty = !customerCode || !supplierCode || !itemCode;
+
+                // Get the weight value
+                const weightValue = formData.weight?.trim();
+
+                // If required fields are empty
+                if (areRequiredFieldsEmpty) {
+                    // ONLY move to next field if weight has a value
+                    if (weightValue && weightValue !== "") {
+                        setTimeout(() => {
+                            refs.price_per_kg_grid_item.current?.focus();
+                            refs.price_per_kg_grid_item.current?.select();
+                        }, 50);
+                    }
+                    // If weight is empty, DO NOTHING - stay on weight field
+                    // No else clause - cursor stays on weight field
+                    return; // Exit early to prevent any navigation
+                }
+
+                // ONLY RUN VALIDATION IF REQUIRED FIELDS ARE NOT EMPTY
                 const requiredBeforeWeight = [
                     { key: "customer_code", ref: "customer_code_input", label: "Customer Code" },
                     { key: "supplier_code", ref: "supplier_code", label: "Supplier Code" },
@@ -1372,132 +1392,132 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     const buildA4ReceiptHTML = (salesData, billNo, customerName, mobile, globalLoanAmount = 0) => {
         return A4BillHTML({ salesData, billNo, customerName, mobile, globalLoanAmount });
     };
-   // In your SalesEntry component, modify the handlePrintAndClear function:
+    // In your SalesEntry component, modify the handlePrintAndClear function:
 
-const handlePrintAndClear = async () => {
-    let salesData = displayedSales.filter(s => s.id);
+    const handlePrintAndClear = async () => {
+        let salesData = displayedSales.filter(s => s.id);
 
-    if (!salesData.length) {
-        alert("මුද්‍රණය කිරීමට දත්ත නොමැත!");
-        return;
-    }
-
-    // Apply bulk printing combination if enabled
-    const shouldCombine = state.isBulkPrintEnabled;
-    let printData = salesData;
-
-    if (shouldCombine) {
-        printData = combineSalesForPrinting(salesData);
-        if (printData.length < salesData.length) {
-            console.log(`Combined ${salesData.length} records into ${printData.length} records for printing`);
-        }
-    }
-
-    // --- COMMISSION VALIDATION ---
-    for (const s of printData) {
-        if (parseFloat(s.price_per_kg) === parseFloat(s.SupplierPricePerKg)) {
-            const errorMsg = `කේතය: ${s.supplier_code} හි කොමිස් මුදල් අඩුකර නොමැත. කරුණාකර පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.`;
-            alert(errorMsg);
+        if (!salesData.length) {
+            alert("මුද්‍රණය කිරීමට දත්ත නොමැත!");
             return;
         }
-    }
 
-    // --- ZERO PRICE VALIDATION ---
-    const hasZeroPrice = printData.some(s => parseFloat(s.price_per_kg) === 0);
-    if (hasZeroPrice) {
-        alert("මිල 0 ලෙස ඇති අයිතම මුද්‍රණය කළ නොහැක.");
-        return;
-    }
+        // Apply bulk printing combination if enabled
+        const shouldCombine = state.isBulkPrintEnabled;
+        let printData = salesData;
 
-    try {
-        updateState({ isPrinting: true });
-
-        const customerCode = salesData[0].customer_code || "N/A";
-        const customerName = salesData[0].customer_code || salesData[0].customer_code || customerCode;
-        const mobile = salesData[0].mobile || "0777672838 / 071437115";
-
-        let currentLoan = 0;
-        try {
-            const loanRes = await api.post(routes.getLoanAmount, {
-                customer_short_name: customerCode
-            });
-            currentLoan = parseFloat(loanRes.data.total_loan_amount) || 0;
-        } catch (e) {
-            console.warn("Loan fetch failed");
-        }
-
-        // Get original IDs for marking as printed
-        let idsToMark = salesData.map(s => s.id);
         if (shouldCombine) {
-            idsToMark = printData.flatMap(s => s.original_ids);
+            printData = combineSalesForPrinting(salesData);
+            if (printData.length < salesData.length) {
+                console.log(`Combined ${salesData.length} records into ${printData.length} records for printing`);
+            }
         }
 
-        const printResponse = await api.post(routes.markPrinted, {
-            sales_ids: idsToMark,
-            telephone_no: formData.telephone_no,
-            customer_code: customerCode,
-            customer_name: customerName,
-            loan_amount: currentLoan
-        });
-
-        if (printResponse.data.status !== "success") {
-            throw new Error("මුද්‍රණය අසාර්ථකයි");
+        // --- COMMISSION VALIDATION ---
+        for (const s of printData) {
+            if (parseFloat(s.price_per_kg) === parseFloat(s.SupplierPricePerKg)) {
+                const errorMsg = `කේතය: ${s.supplier_code} හි කොමිස් මුදල් අඩුකර නොමැත. කරුණාකර පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.`;
+                alert(errorMsg);
+                return;
+            }
         }
 
-        const billNo = printResponse.data.bill_no || "";
-
-        // FIXED: Use the printMode prop to determine which template to use
-        let receiptHtml;
-        if (printMode === 'a4') {
-            // Use A4 template
-            receiptHtml = buildA4ReceiptHTML(printData, billNo, customerName, mobile, currentLoan);
-        } else {
-            // Use Thermal template (default)
-            receiptHtml = buildFullReceiptHTML(printData, billNo, customerName, mobile, currentLoan, billSize);
-        }
-
-        // Update local state before reload
-        updateState({
-            allSales: allSales.map(s =>
-                idsToMark.includes(s.id)
-                    ? { ...s, bill_printed: "Y", bill_no: billNo }
-                    : s
-            ),
-            selectedPrintedCustomer: null,
-            selectedUnprintedCustomer: null,
-            isPrinting: false
-        });
-
-        handleClearForm(true);
-
-        // Open Print Window
-        const printWindow = window.open("", "_blank", "width=800,height=600");
-        if (!printWindow) {
-            alert("Please allow pop-ups for printing");
-            window.location.reload();
+        // --- ZERO PRICE VALIDATION ---
+        const hasZeroPrice = printData.some(s => parseFloat(s.price_per_kg) === 0);
+        if (hasZeroPrice) {
+            alert("මිල 0 ලෙස ඇති අයිතම මුද්‍රණය කළ නොහැක.");
             return;
         }
 
-        printWindow.document.write(receiptHtml);
-        printWindow.document.close();
+        try {
+            updateState({ isPrinting: true });
 
-        // Auto print and close
-        printWindow.onload = () => {
-            setTimeout(() => {
-                printWindow.print();
+            const customerCode = salesData[0].customer_code || "N/A";
+            const customerName = salesData[0].customer_code || salesData[0].customer_code || customerCode;
+            const mobile = salesData[0].mobile || "0777672838 / 071437115";
+
+            let currentLoan = 0;
+            try {
+                const loanRes = await api.post(routes.getLoanAmount, {
+                    customer_short_name: customerCode
+                });
+                currentLoan = parseFloat(loanRes.data.total_loan_amount) || 0;
+            } catch (e) {
+                console.warn("Loan fetch failed");
+            }
+
+            // Get original IDs for marking as printed
+            let idsToMark = salesData.map(s => s.id);
+            if (shouldCombine) {
+                idsToMark = printData.flatMap(s => s.original_ids);
+            }
+
+            const printResponse = await api.post(routes.markPrinted, {
+                sales_ids: idsToMark,
+                telephone_no: formData.telephone_no,
+                customer_code: customerCode,
+                customer_name: customerName,
+                loan_amount: currentLoan
+            });
+
+            if (printResponse.data.status !== "success") {
+                throw new Error("මුද්‍රණය අසාර්ථකයි");
+            }
+
+            const billNo = printResponse.data.bill_no || "";
+
+            // FIXED: Use the printMode prop to determine which template to use
+            let receiptHtml;
+            if (printMode === 'a4') {
+                // Use A4 template
+                receiptHtml = buildA4ReceiptHTML(printData, billNo, customerName, mobile, currentLoan);
+            } else {
+                // Use Thermal template (default)
+                receiptHtml = buildFullReceiptHTML(printData, billNo, customerName, mobile, currentLoan, billSize);
+            }
+
+            // Update local state before reload
+            updateState({
+                allSales: allSales.map(s =>
+                    idsToMark.includes(s.id)
+                        ? { ...s, bill_printed: "Y", bill_no: billNo }
+                        : s
+                ),
+                selectedPrintedCustomer: null,
+                selectedUnprintedCustomer: null,
+                isPrinting: false
+            });
+
+            handleClearForm(true);
+
+            // Open Print Window
+            const printWindow = window.open("", "_blank", "width=800,height=600");
+            if (!printWindow) {
+                alert("Please allow pop-ups for printing");
+                window.location.reload();
+                return;
+            }
+
+            printWindow.document.write(receiptHtml);
+            printWindow.document.close();
+
+            // Auto print and close
+            printWindow.onload = () => {
                 setTimeout(() => {
-                    printWindow.close();
-                    window.location.reload();
-                }, 1000);
-            }, 100);
-        };
+                    printWindow.print();
+                    setTimeout(() => {
+                        printWindow.close();
+                        window.location.reload();
+                    }, 1000);
+                }, 100);
+            };
 
-    } catch (error) {
-        console.error("Printing error:", error);
-        alert("මුද්‍රණය කිරීමේදී දෝෂයක් ඇති විය.");
-        updateState({ isPrinting: false });
-    }
-};
+        } catch (error) {
+            console.error("Printing error:", error);
+            alert("මුද්‍රණය කිරීමේදී දෝෂයක් ඇති විය.");
+            updateState({ isPrinting: false });
+        }
+    };
     const handleBillSizeChange = (e) => updateState({ billSize: e.target.value });
     useEffect(() => {
         if (currentUser?.role === 'Admin') {
@@ -1822,477 +1842,477 @@ const handlePrintAndClear = async () => {
             prevProps.selectionCriteria === nextProps.selectionCriteria;
     });
     return (
-        
-            <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-                {isLoading && (<div className="fixed top-0 left-0 right-0 bg-blue-500 text-white py-1 text-center text-sm z-50">Refreshing data...</div>)}
-                {state.isPrinting && (<div className="fixed top-0 left-0 right-0 bg-yellow-500 text-black py-1 text-center text-sm z-50">Printing in progress... Please wait</div>)}
 
-                <div className="three-column-layout" style={{ opacity: isLoading ? 0.7 : 1, display: 'grid', gridTemplateColumns: '200px 1fr 200px', gap: '16px', padding: '10px', marginTop: '-149px' }}>
-                    <div className="left-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto' }}>
+        <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+            {isLoading && (<div className="fixed top-0 left-0 right-0 bg-blue-500 text-white py-1 text-center text-sm z-50">Refreshing data...</div>)}
+            {state.isPrinting && (<div className="fixed top-0 left-0 right-0 bg-yellow-500 text-black py-1 text-center text-sm z-50">Printing in progress... Please wait</div>)}
 
-                        {hasData ? (
-                            <CustomerList customers={printedCustomers} type="printed" searchQuery={searchQueries.printed} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, printed: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} isCashFilterActive={state.isCashFilterActive} toggleCashFilter={() => updateState({ isCashFilterActive: !state.isCashFilterActive })} />
-                        ) : (
-                            <div className="w-full shadow-xl rounded-xl overflow-y-auto border border-black p-4 text-center" style={{ backgroundColor: "#1ec139ff", maxHeight: "80.5vh" }}>
-                                <div style={{ backgroundColor: "#006400" }} className="p-1 rounded-t-xl">
-                                    <h2 className="font-bold text-white mb-1 whitespace-nowrap text-center" style={{ fontSize: '14px' }}>
-                                        මුද්‍රණය කළ
-                                    </h2>
-                                </div>
-                                <div className="py-4">
-                                    <p className="text-gray-700">මුද්‍රණය කළ ගනුදෙනු දත්ත නොමැත.</p>
-                                </div>
+            <div className="three-column-layout" style={{ opacity: isLoading ? 0.7 : 1, display: 'grid', gridTemplateColumns: '200px 1fr 200px', gap: '16px', padding: '10px', marginTop: '-149px' }}>
+                <div className="left-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto' }}>
+
+                    {hasData ? (
+                        <CustomerList customers={printedCustomers} type="printed" searchQuery={searchQueries.printed} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, printed: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} isCashFilterActive={state.isCashFilterActive} toggleCashFilter={() => updateState({ isCashFilterActive: !state.isCashFilterActive })} />
+                    ) : (
+                        <div className="w-full shadow-xl rounded-xl overflow-y-auto border border-black p-4 text-center" style={{ backgroundColor: "#1ec139ff", maxHeight: "80.5vh" }}>
+                            <div style={{ backgroundColor: "#006400" }} className="p-1 rounded-t-xl">
+                                <h2 className="font-bold text-white mb-1 whitespace-nowrap text-center" style={{ fontSize: '14px' }}>
+                                    මුද්‍රණය කළ
+                                </h2>
                             </div>
-                        )}
-                    </div>
+                            <div className="py-4">
+                                <p className="text-gray-700">මුද්‍රණය කළ ගනුදෙනු දත්ත නොමැත.</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
 
-                    <div className="center-form flex flex-col" style={{ backgroundColor: '#111439ff', padding: '20px', borderRadius: '0.75rem', color: 'white', minHeight: '100vh', height: 'auto', boxSizing: 'border-box', gridColumnStart: 2, gridColumnEnd: 3 }}>
-                        {currentUser?.role === 'Admin' ? (
-                            <AdminView
-                                ref={adminViewRef}
-                                allSales={allSales}
-                                customers={customers}
-                                items={items}
-                                suppliers={suppliers}
-                            />
-                        ) : (
-                            <div className="pos-sales-view flex flex-col h-full">
-                                <div className="flex-shrink-0">
-                                    <form onSubmit={handleSubmit} className="space-y-4">
-                                        <div className="w-full flex justify-between items-center">
-                                            {/* --- TEXT SECTION (Moved Up Independently) --- */}
-                                            <div style={{ position: 'relative', top: '-20px', display: 'flex', alignItems: 'center', zIndex: 20 }}>
-                                                <div className="font-bold text-lg" style={{ color: 'red', fontSize: '1.35rem' }}>
-                                                    බිල් අං: {currentBillNo}
+                <div className="center-form flex flex-col" style={{ backgroundColor: '#111439ff', padding: '20px', borderRadius: '0.75rem', color: 'white', minHeight: '100vh', height: 'auto', boxSizing: 'border-box', gridColumnStart: 2, gridColumnEnd: 3 }}>
+                    {currentUser?.role === 'Admin' ? (
+                        <AdminView
+                            ref={adminViewRef}
+                            allSales={allSales}
+                            customers={customers}
+                            items={items}
+                            suppliers={suppliers}
+                        />
+                    ) : (
+                        <div className="pos-sales-view flex flex-col h-full">
+                            <div className="flex-shrink-0">
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div className="w-full flex justify-between items-center">
+                                        {/* --- TEXT SECTION (Moved Up Independently) --- */}
+                                        <div style={{ position: 'relative', top: '-20px', display: 'flex', alignItems: 'center', zIndex: 20 }}>
+                                            <div className="font-bold text-lg" style={{ color: 'red', fontSize: '1.35rem' }}>
+                                                බිල් අං: {currentBillNo}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '100px' }}>
+                                                <div className="font-bold text-xl whitespace-nowrap" style={{ color: 'red', fontSize: '1.15rem' }}>
+                                                    මුළු විකුණුම්: Rs. {formatDecimal(totalSalesValue)}
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '100px' }}>
-                                                    <div className="font-bold text-xl whitespace-nowrap" style={{ color: 'red', fontSize: '1.15rem' }}>
-                                                        මුළු විකුණුම්: Rs. {formatDecimal(totalSalesValue)}
-                                                    </div>
 
-                                                    {/* Bulk Printing Checkbox */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            id="bulkPrintCheckbox"
-                                                            checked={state.isBulkPrintEnabled}
-                                                            onChange={(e) => updateState({ isBulkPrintEnabled: e.target.checked })}
-                                                            style={{
-                                                                width: '18px',
-                                                                height: '18px',
-                                                                cursor: 'pointer',
-                                                                accentColor: '#4CAF50'
-                                                            }}
-                                                        />
-                                                        <label
-                                                            htmlFor="bulkPrintCheckbox"
-                                                            style={{
-                                                                color: 'white',
-                                                                fontSize: '0.9rem',
-                                                                fontWeight: 'bold',
-                                                                cursor: 'pointer',
-                                                                whiteSpace: 'nowrap'
-                                                            }}
-                                                        >
-                                                            Bulk Printing
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {/* --- PHOTO SECTION (Stays in original position) --- */}
-                                            <div className="flex gap-10 items-center justify-start mt-4 mb-4 relative" style={{ minHeight: '150px' }}>
-                                                {/* CUSTOMER PHOTO */}
-                                                {state.customerProfilePic && (
-                                                    <div onClick={() => handleImageClick('customer')}
-                                                        className="cursor-pointer hover:scale-105 transition-transform"
-                                                        style={{ position: 'absolute', left: '805px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', zIndex: 10 }}>
-                                                        <span className="text-xs text-gray-400">ගැ</span>
-                                                        <div style={{ width: '100px', height: '100px', backgroundColor: 'white', border: '5px solid #1ec139', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                                            <img src={state.customerProfilePic} alt="Customer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* SUPPLIER PHOTO */}
-                                                {state.supplierProfilePic && (
-                                                    <div onClick={() => handleImageClick('supplier')}
-                                                        className="cursor-pointer hover:scale-105 transition-transform"
-                                                        style={{ position: 'absolute', left: '940px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="text-xs text-gray-400">සැ</span>
-                                                        <div style={{ width: '100px', height: '100px', backgroundColor: 'white', border: '5px solid #3b82f6', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                                            <img src={state.supplierProfilePic} alt="Supplier Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                <ImagePreviewModal
-                                                    isOpen={state.isImageModalOpen}
-                                                    onClose={() => updateState({ isImageModalOpen: false })}
-                                                    data={state.selectedImageData}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div
-                                            className="flex items-end gap-3 w-full"
-                                            style={{ marginTop: '-160px' }} // Adjust this number until it looks perfect
-                                        >
-                                            {/* STACK TELEPHONE + CUSTOMER CODE VERTICALLY */}
-                                            <div className="flex flex-col gap-2 w-full">
-                                                {/* TELEPHONE NUMBER FIELD - Moved up independently using relative positioning */}
-                                                <div className="flex-1 min-w-0" style={{ position: 'relative', top: '-50px' }}>
-                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                        <input id="telephone_no" ref={refs.telephone_no} name="telephone_no" value={formData.telephone_no || ""} onChange={(e) => handleInputChange("telephone_no", e.target.value)} onKeyDown={(e) => handleKeyDown(e, "telephone_no")} type="tel" maxLength="10" pattern="\d*" placeholder="දුරකථන අංකය (10 ඉලක්කම්)" disabled={!!selectedPrintedCustomer} className="px-2 py-1 font-bold text-sm w-full border rounded text-black placeholder-gray-500" style={{ backgroundColor: selectedPrintedCustomer ? '#4a5568' : '#f6f6ff', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box', cursor: selectedPrintedCustomer ? 'not-allowed' : 'text', opacity: selectedPrintedCustomer ? 0.7 : 1, flex: 1 }} />
-                                                        {state.showSavePhoneButton && (
-                                                            <button
-                                                                onClick={savePhoneNumber}
-                                                                style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', height: '36px' }}
-                                                                onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
-                                                                onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
-                                                            >
-                                                                Save
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                {/* CUSTOMER CODE FIELD - Stays in its original position */}
-                                                <div className="flex-1 min-w-0" style={{ marginTop: '-40px' }}>
-                                                    <input id="customer_code_input" ref={refs.customer_code_input} name="customer_code" value={formData.customer_code || autoCustomerCode} onChange={(e) => handleInputChange("customer_code", e.target.value.toUpperCase())} onKeyDown={(e) => handleKeyDown(e, "customer_code_input")} type="text" placeholder="පාරිභෝගික කේතය" className="px-2 py-1 uppercase font-bold text-sm w-full border rounded bg-white text-black placeholder-gray-500" style={{ backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
-                                                </div>
-                                            </div>
-                                            <div style={{ flex: '0 0 150px', minWidth: '120px', marginLeft: '-100px' }}>
-                                                <Select id="customer_code_select" ref={refs.customer_code_select} value={formData.customer_code ? { value: formData.customer_code, label: `${formData.customer_code}` } : null} onChange={handleCustomerSelect} options={customers.filter(c => !customerSearchInput || c.short_name.charAt(0).toUpperCase() === customerSearchInput.charAt(0).toUpperCase()).map(c => ({ value: c.short_name, label: `${c.short_name}` }))} onInputChange={(v, { action }) => action === "input-change" && updateState({ customerSearchInput: v.toUpperCase() })} inputValue={customerSearchInput} placeholder="පාරිභෝගිකයා තෝරන්න" isClearable isSearchable styles={{ control: b => ({ ...b, minHeight: "36px", height: "36px", fontSize: "25px", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }), valueContainer: b => ({ ...b, padding: "0 6px", height: "36px" }), placeholder: b => ({ ...b, fontSize: "12px", color: "#a0aec0" }), input: b => ({ ...b, fontSize: "12px", color: "black", fontWeight: "bold" }), singleValue: b => ({ ...b, color: "black", fontSize: "12px", fontWeight: "bold" }), option: (b, s) => ({ ...b, color: "black", fontWeight: "bold", fontSize: "12px", backgroundColor: s.isFocused ? "#e5e7eb" : "white", cursor: "pointer" }) }} />
-                                            </div>
-                                            <div style={{ flex: '0 0 60px', minWidth: '120px' }}>
-                                                <input id="price_per_kg" ref={refs.price_per_kg} name="price_per_kg" type="text" value={formData.price_per_kg} onChange={(e) => /^\d*\.?\d*$/.test(e.target.value) && handleInputChange('price_per_kg', e.target.value)} onKeyDown={(e) => handleKeyDown(e, "price_per_kg")} placeholder="එකවර මිල" className="px-2 py-1 uppercase font-bold text-sm w-full border rounded bg-white text-black placeholder-gray-500" style={{ backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="rounded-lg border relative bg-white flex items-center justify-start pl-2 pt-2.5" style={{ flex: "0 0 100px", marginLeft: "5px", height: "36px" }}>
-                                                    <span className="absolute left-2 top-1 text-gray-400 text-[10px] pointer-events-none">
-                                                        Loan Amount
-                                                    </span>
-                                                    <span className="text-black font-bold text-sm">
-                                                        Rs. {loanAmount < 0 ? formatDecimal(Math.abs(loanAmount)) : formatDecimal(loanAmount)}
-                                                    </span>
+                                                {/* Bulk Printing Checkbox */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        id="bulkPrintCheckbox"
+                                                        checked={state.isBulkPrintEnabled}
+                                                        onChange={(e) => updateState({ isBulkPrintEnabled: e.target.checked })}
+                                                        style={{
+                                                            width: '18px',
+                                                            height: '18px',
+                                                            cursor: 'pointer',
+                                                            accentColor: '#4CAF50'
+                                                        }}
+                                                    />
+                                                    <label
+                                                        htmlFor="bulkPrintCheckbox"
+                                                        style={{
+                                                            color: 'white',
+                                                            fontSize: '0.9rem',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        Bulk Printing
+                                                    </label>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="w-full" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", columnGap: "8px", alignItems: "end", marginTop: "8px" }}>
-                                            <div style={{ gridColumnStart: 1, gridColumnEnd: 3 }}>
-                                                <input id="supplier_code" ref={refs.supplier_code} name="supplier_code" value={formData.supplier_code} onChange={(e) => handleInputChange("supplier_code", e.target.value.toUpperCase())} onKeyDown={(e) => handleKeyDown(e, "supplier_code")} type="text" placeholder="සැපයුම්කරු" className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 w-full" style={{ width: "150px", backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '44px', fontSize: '1.25rem', padding: '0 1rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
-                                            </div>
-                                            <div style={{ gridColumnStart: 5, gridColumnEnd: 7, marginLeft: "-120px", marginRight: "-2px" }}>
-                                                {(() => {
-
-                                                    const currentFilteredOptions = [...items]
-                                                        .filter(item => {
-                                                            if (!state.itemSearchInput) return true;
-                                                            const input = state.itemSearchInput.toUpperCase();
-                                                            return String(item.no).toUpperCase().startsWith(input);
-                                                        })
-                                                        .sort((a, b) => {
-                                                            const isANumeric = !isNaN(a.no);
-                                                            const isBNumeric = !isNaN(b.no);
-                                                            if (isANumeric && !isBNumeric) return 1;
-                                                            if (!isANumeric && isBNumeric) return -1;
-                                                            return String(a.no).toUpperCase().localeCompare(String(b.no).toUpperCase());
-                                                        })
-                                                        .map(item => ({
-                                                            value: item.no,
-                                                            label: `${item.no} - ${item.type}`,
-                                                            item,
-                                                        }));
-
-                                                    return (
-                                                        <Select
-                                                            ref={refs.item_code_select}
-                                                            openMenuOnFocus={false}
-                                                            isSearchable
-                                                            tabSelectsValue={false}
-                                                            closeMenuOnSelect
-                                                            blurInputOnSelect={true}
-                                                            inputValue={state.itemSearchInput}
-                                                            options={currentFilteredOptions}
-                                                            placeholder="භාණ්ඩය"
-                                                            defaultMenuIsOpen={false}
-
-                                                            value={
-                                                                formData.item_code
-                                                                    ? {
-                                                                        value: formData.item_code,
-                                                                        label: `${formData.item_code} - ${formData.item_name}`,
-                                                                    }
-                                                                    : null
-                                                            }
-
-                                                            onInputChange={(value, meta) => {
-                                                                if (meta.action === "input-change") {
-                                                                    updateState({ itemSearchInput: value.toUpperCase() });
-                                                                }
-                                                            }}
-
-                                                            onChange={(selectedOption) => {
-                                                                if (!selectedOption) return;
-
-                                                                handleItemSelect(selectedOption);
-                                                                updateState({ itemSearchInput: "" });
-
-                                                                setTimeout(() => {
-                                                                    refs.weight.current?.focus();
-                                                                    refs.weight.current?.select();
-                                                                }, 50);
-                                                            }}
-
-                                                            onKeyDown={(e) => {
-                                                                // 🔥 "+" shortcut for last sale
-                                                                if (e.key === "Enter" && state.itemSearchInput === "+") {
-                                                                    e.preventDefault();
-                                                                    const lastSale = displayedSales[0];
-
-                                                                    if (lastSale) {
-                                                                        setFormData(prev => ({
-                                                                            ...prev,
-                                                                            item_code: lastSale.item_code,
-                                                                            item_name: lastSale.item_name,
-                                                                            pack_due: lastSale.pack_due,
-                                                                            price_per_kg: lastSale.price_per_kg
-                                                                        }));
-
-                                                                        updateState({
-                                                                            itemSearchInput: "",
-                                                                            gridPricePerKg: lastSale.price_per_kg || ""
-                                                                        });
-
-                                                                        setTimeout(() => {
-                                                                            refs.weight.current?.focus();
-                                                                            refs.weight.current?.select();
-                                                                        }, 50);
-                                                                    }
-                                                                    return;
-                                                                }
-
-                                                                // 🔥 FIXED: Only auto-select when there's text input AND it's a complete match
-                                                                if (e.key === "Enter") {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-
-                                                                    // Don't auto-select if there's no input
-                                                                    if (!state.itemSearchInput) {
-                                                                        // If no input, just move to next field without selecting
-                                                                        setTimeout(() => {
-                                                                            refs.weight.current?.focus();
-                                                                            refs.weight.current?.select();
-                                                                        }, 50);
-                                                                        return;
-                                                                    }
-
-                                                                    // Check if we have an exact match with the typed input
-                                                                    const exactMatch = currentFilteredOptions.find(option =>
-                                                                        option.value.toUpperCase() === state.itemSearchInput.toUpperCase() ||
-                                                                        option.label.toUpperCase().startsWith(state.itemSearchInput.toUpperCase())
-                                                                    );
-
-                                                                    // Only auto-select if we have an exact match
-                                                                    if (exactMatch) {
-                                                                        handleItemSelect(exactMatch);
-                                                                        updateState({ itemSearchInput: "" });
-
-                                                                        setTimeout(() => {
-                                                                            refs.weight.current?.focus();
-                                                                            refs.weight.current?.select();
-                                                                        }, 50);
-                                                                    } else if (state.itemSearchInput && currentFilteredOptions.length === 1) {
-                                                                        // If there's exactly one match, select it
-                                                                        const firstOption = currentFilteredOptions[0];
-                                                                        handleItemSelect(firstOption);
-                                                                        updateState({ itemSearchInput: "" });
-
-                                                                        setTimeout(() => {
-                                                                            refs.weight.current?.focus();
-                                                                            refs.weight.current?.select();
-                                                                        }, 50);
-                                                                    }
-                                                                    // If no input or multiple options, do nothing - let user choose from dropdown
-                                                                }
-                                                            }}
-
-                                                            onMenuOpen={() => {
-                                                                // When menu opens, ensure no option is pre-highlighted
-                                                                setTimeout(() => {
-                                                                    const menu = document.querySelector('.react-select__menu');
-                                                                    if (menu) {
-                                                                        const firstOption = menu.querySelector('.react-select__option');
-                                                                        if (firstOption) {
-                                                                            firstOption.classList.remove('react-select__option--is-focused');
-                                                                        }
-                                                                    }
-                                                                }, 0);
-                                                            }}
-
-                                                            className="react-select-container font-bold text-sm w-full"
-
-                                                            styles={{ control: base => ({ ...base, height: "44px", minHeight: "44px", fontSize: "1.25rem", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }), valueContainer: base => ({ ...base, padding: "0 1rem", height: "44px" }), input: base => ({ ...base, color: "black", fontSize: "1.25rem" }), singleValue: base => ({ ...base, color: "black", fontWeight: "bold", fontSize: "1.25rem" }), option: (base, state) => ({ ...base, fontWeight: "bold", color: "black", backgroundColor: state.isFocused ? "#e5e7eb" : "white", fontSize: "1rem", ...(state.isSelected && { backgroundColor: "#e5e7eb" }) }), menu: base => ({ ...base, marginTop: "4px" }) }}
-
-                                                            openMenuOnClick={true}
-                                                            menuPlacement="auto"
-                                                        />
-                                                    );
-                                                })()}
-                                            </div>
-
-                                            {[{ id: 'weight', placeholder: "බර", fieldRef: refs.weight },
-                                            { id: 'price_per_kg_grid_item', placeholder: "මිල", fieldRef: refs.price_per_kg_grid_item },
-                                            { id: 'packs', placeholder: "අසුරුම්", fieldRef: refs.packs },
-                                            { id: 'total', placeholder: "TOTAL", fieldRef: refs.total, isReadOnly: true }].map(({ id, placeholder, fieldRef, isReadOnly = false }) => (
-                                                <div key={id} style={{ ...(id === 'weight' && { gridColumnStart: 8, gridColumnEnd: 9, marginLeft: "-70px", width: "100px" }), ...(id === 'price_per_kg_grid_item' && { gridColumnStart: 9, gridColumnEnd: 10, marginLeft: "-30px", width: "105px" }), ...(id === 'packs' && { gridColumnStart: 10, gridColumnEnd: 11 }), ...(id === 'total' && { gridColumnStart: 11, gridColumnEnd: 14, marginLeft: "10px" }) }}>
-                                                    <input id={id} ref={fieldRef} name={id} type="text" value={id === 'price_per_kg_grid_item' ? gridPricePerKg : formData[id]} onChange={(e) => id === 'price_per_kg_grid_item' ? handleInputChange(id, e.target.value) : (/^\d*\.?\d*$/.test(e.target.value) && handleInputChange(id, e.target.value))} onKeyDown={(e) => handleKeyDown(e, id)} placeholder={placeholder} readOnly={isReadOnly} className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 text-center" style={{ backgroundColor: isReadOnly ? '#e2e8f0' : 'white', borderRadius: '0.5rem', textAlign: 'right', fontSize: '1.125rem', height: '40px', boxSizing: 'border-box', width: '100%' }} />
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <button type="submit" style={{ display: "none" }}></button>
-                                    </form>
-                                    {errors.form && <div className="mt-6 p-3 bg-red-100 text-red-700 rounded-xl">{errors.form}</div>}
-                                </div>
-                                <div className="flex-grow overflow-y-auto mt-1">
-                                    {displayedSales.length === 0 ? (<div className="text-center py-8 text-gray-500 border rounded-lg bg-gray-50">විකුණුම් වාර්තා කිසිවක් හමු නොවීය.</div>) : (
-                                        <table
-                                            className="min-w-full border-gray-200 rounded-xl text-sm"
-                                            style={{
-                                                backgroundColor: '#000000',
-                                                color: 'white',
-                                                borderCollapse: 'collapse',
-                                                margin: '0px 0',
-                                                width: '100%',
-                                            }}
-                                        >
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#000000' }}>
-                                                    {/* ❌ Header checkbox removed */}
-
-                                                    <th className="px-2 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}>
-                                                    </th>
-
-                                                    {['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (
-                                                        <th
-                                                            key={index}
-                                                            className="px-4 py-2 border"
-                                                            style={{ backgroundColor: '#f5fafb', color: '#000000' }}
-                                                        >
-                                                            {header}
-                                                        </th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-
-                                            <tbody>
-                                                {displayedSales.map((s, idx) => {
-                                                    const isSelected = state.selectedSalesIds.includes(s.id);
-
-                                                    return (
-                                                        <tr
-                                                            key={idx}
-                                                            tabIndex={0}
-                                                            className={`text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? 'bg-blue-900' : ''
-                                                                }`}
-                                                            onClick={() => handleEditClick(s)}
-                                                            onContextMenu={(e) => handleRightClick(e, s)}
-                                                            style={{ backgroundColor: isSelected ? '#1e40af' : 'transparent' }}
-                                                        >
-                                                            {/* ✅ Checkbox column (single click works properly) */}
-                                                            <td
-                                                                className="px-2 py-2 border text-center"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={isSelected}
-                                                                    onChange={() => toggleSaleSelection(s.id)} // ✅ fixed
-                                                                    onClick={(e) => e.stopPropagation()} // ✅ prevents row click
-                                                                    style={{ cursor: 'pointer' }}
-                                                                />
-                                                            </td>
-
-                                                            <td className="px-4 py-2 border">{s.supplier_code}</td>
-                                                            <td className="px-4 py-2 border">{s.item_code}</td>
-                                                            <td className="px-4 py-2 border">{s.item_name}</td>
-                                                            <td className="px-2 py-2 border">{formatDecimal(s.weight)}</td>
-                                                            <td className="px-2 py-2 border">{formatDecimal(s.price_per_kg)}</td>
-                                                            <td className="px-2 py-2 border">
-                                                                {formatDecimal(
-                                                                    (parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0) +
-                                                                    (parseFloat(s.packs) || 0) * (parseFloat(s.pack_due) || 0)
-                                                                )}
-                                                            </td>
-                                                            <td className="px-2 py-2 border">{s.packs}</td>
-
-                                                            <td className="px-2 py-2 border text-center">
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteRecord(s.id);
-                                                                    }}
-                                                                    className="text-black font-bold p-1 rounded-full bg-white hover:bg-gray-200"
-                                                                >
-                                                                    🗑️
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    )}
-                                    {/* Context Menu */}
-
-                                    <ContextMenu
-                                        show={state.bulkUpdateContextMenu.show}
-                                        onClose={closeContextMenu}
-                                        onUpdate={handleBulkUpdateSupplier}
-                                        selectionCriteria={state.selectionCriteria}
-                                        selectedCount={state.selectedSalesIds.length}
-                                    />
-
-                                    {/* Click outside to close context menu */}
-
-                                    {displayedSales.length > 0 && (<SalesSummaryFooter sales={displayedSales} formatDecimal={formatDecimal} />)}
-                                    <div
-                                        className="flex items-center space-x-3 overflow-x-auto whitespace-nowrap"
-                                        style={{ marginTop: "-75px" }}  // adjust value as needed
-                                    >
-                                        <div style={{ marginLeft: '660px', marginTop: '-2px', display: 'none' }}>
-                                            <input id="given_amount" ref={refs.given_amount} name="given_amount_field" type="tel" inputMode="numeric" autoComplete="new-password" value={formData.given_amount ? Number(formData.given_amount).toLocaleString() : ""} onChange={(e) => handleInputChange("given_amount", e.target.value.replace(/,/g, ""))} onKeyDown={(e) => handleKeyDown(e, "given_amount")} placeholder="දුන් මුදල" className="px-4 py-2 border rounded-xl text-right bg-white text-black" style={{ width: "180px", fontWeight: "bold", fontSize: "1.1rem" }} />
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4 items-start"><ItemSummary sales={displayedSales} formatDecimal={formatDecimal} /><BreakdownDisplay sale={selectedSaleForBreakdown} formatDecimal={formatDecimal} /></div>
-                                    <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                        {/* Red Total Text */}
-                                        <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                            {displayedSales.length > 0 && (
-                                                <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                                    {/* Red Total Text */}
-                                                    <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                                        <div className="text-2xl font-bold" style={{ color: 'red' }}>
-                                                            (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
-                                                        </div>
+                                        {/* --- PHOTO SECTION (Stays in original position) --- */}
+                                        <div className="flex gap-10 items-center justify-start mt-4 mb-4 relative" style={{ minHeight: '150px' }}>
+                                            {/* CUSTOMER PHOTO */}
+                                            {state.customerProfilePic && (
+                                                <div onClick={() => handleImageClick('customer')}
+                                                    className="cursor-pointer hover:scale-105 transition-transform"
+                                                    style={{ position: 'absolute', left: '805px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', zIndex: 10 }}>
+                                                    <span className="text-xs text-gray-400">ගැ</span>
+                                                    <div style={{ width: '100px', height: '100px', backgroundColor: 'white', border: '5px solid #1ec139', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                                        <img src={state.customerProfilePic} alt="Customer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* SUPPLIER PHOTO */}
+                                            {state.supplierProfilePic && (
+                                                <div onClick={() => handleImageClick('supplier')}
+                                                    className="cursor-pointer hover:scale-105 transition-transform"
+                                                    style={{ position: 'absolute', left: '940px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                                                    <span className="text-xs text-gray-400">සැ</span>
+                                                    <div style={{ width: '100px', height: '100px', backgroundColor: 'white', border: '5px solid #3b82f6', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                                        <img src={state.supplierProfilePic} alt="Supplier Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <ImagePreviewModal
+                                                isOpen={state.isImageModalOpen}
+                                                onClose={() => updateState({ isImageModalOpen: false })}
+                                                data={state.selectedImageData}
+                                            />
                                         </div>
+                                    </div>
+                                    <div
+                                        className="flex items-end gap-3 w-full"
+                                        style={{ marginTop: '-160px' }} // Adjust this number until it looks perfect
+                                    >
+                                        {/* STACK TELEPHONE + CUSTOMER CODE VERTICALLY */}
+                                        <div className="flex flex-col gap-2 w-full">
+                                            {/* TELEPHONE NUMBER FIELD - Moved up independently using relative positioning */}
+                                            <div className="flex-1 min-w-0" style={{ position: 'relative', top: '-50px' }}>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <input id="telephone_no" ref={refs.telephone_no} name="telephone_no" value={formData.telephone_no || ""} onChange={(e) => handleInputChange("telephone_no", e.target.value)} onKeyDown={(e) => handleKeyDown(e, "telephone_no")} type="tel" maxLength="10" pattern="\d*" placeholder="දුරකථන අංකය (10 ඉලක්කම්)" disabled={!!selectedPrintedCustomer} className="px-2 py-1 font-bold text-sm w-full border rounded text-black placeholder-gray-500" style={{ backgroundColor: selectedPrintedCustomer ? '#4a5568' : '#f6f6ff', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box', cursor: selectedPrintedCustomer ? 'not-allowed' : 'text', opacity: selectedPrintedCustomer ? 0.7 : 1, flex: 1 }} />
+                                                    {state.showSavePhoneButton && (
+                                                        <button
+                                                            onClick={savePhoneNumber}
+                                                            style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', height: '36px' }}
+                                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
+                                                            onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
+                                                        >
+                                                            Save
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {/* CUSTOMER CODE FIELD - Stays in its original position */}
+                                            <div className="flex-1 min-w-0" style={{ marginTop: '-40px' }}>
+                                                <input id="customer_code_input" ref={refs.customer_code_input} name="customer_code" value={formData.customer_code || autoCustomerCode} onChange={(e) => handleInputChange("customer_code", e.target.value.toUpperCase())} onKeyDown={(e) => handleKeyDown(e, "customer_code_input")} type="text" placeholder="පාරිභෝගික කේතය" className="px-2 py-1 uppercase font-bold text-sm w-full border rounded bg-white text-black placeholder-gray-500" style={{ backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
+                                            </div>
+                                        </div>
+                                        <div style={{ flex: '0 0 150px', minWidth: '120px', marginLeft: '-100px' }}>
+                                            <Select id="customer_code_select" ref={refs.customer_code_select} value={formData.customer_code ? { value: formData.customer_code, label: `${formData.customer_code}` } : null} onChange={handleCustomerSelect} options={customers.filter(c => !customerSearchInput || c.short_name.charAt(0).toUpperCase() === customerSearchInput.charAt(0).toUpperCase()).map(c => ({ value: c.short_name, label: `${c.short_name}` }))} onInputChange={(v, { action }) => action === "input-change" && updateState({ customerSearchInput: v.toUpperCase() })} inputValue={customerSearchInput} placeholder="පාරිභෝගිකයා තෝරන්න" isClearable isSearchable styles={{ control: b => ({ ...b, minHeight: "36px", height: "36px", fontSize: "25px", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }), valueContainer: b => ({ ...b, padding: "0 6px", height: "36px" }), placeholder: b => ({ ...b, fontSize: "12px", color: "#a0aec0" }), input: b => ({ ...b, fontSize: "12px", color: "black", fontWeight: "bold" }), singleValue: b => ({ ...b, color: "black", fontSize: "12px", fontWeight: "bold" }), option: (b, s) => ({ ...b, color: "black", fontWeight: "bold", fontSize: "12px", backgroundColor: s.isFocused ? "#e5e7eb" : "white", cursor: "pointer" }) }} />
+                                        </div>
+                                        <div style={{ flex: '0 0 60px', minWidth: '120px' }}>
+                                            <input id="price_per_kg" ref={refs.price_per_kg} name="price_per_kg" type="text" value={formData.price_per_kg} onChange={(e) => /^\d*\.?\d*$/.test(e.target.value) && handleInputChange('price_per_kg', e.target.value)} onKeyDown={(e) => handleKeyDown(e, "price_per_kg")} placeholder="එකවර මිල" className="px-2 py-1 uppercase font-bold text-sm w-full border rounded bg-white text-black placeholder-gray-500" style={{ backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="rounded-lg border relative bg-white flex items-center justify-start pl-2 pt-2.5" style={{ flex: "0 0 100px", marginLeft: "5px", height: "36px" }}>
+                                                <span className="absolute left-2 top-1 text-gray-400 text-[10px] pointer-events-none">
+                                                    Loan Amount
+                                                </span>
+                                                <span className="text-black font-bold text-sm">
+                                                    Rs. {loanAmount < 0 ? formatDecimal(Math.abs(loanAmount)) : formatDecimal(loanAmount)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="w-full" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", columnGap: "8px", alignItems: "end", marginTop: "8px" }}>
+                                        <div style={{ gridColumnStart: 1, gridColumnEnd: 3 }}>
+                                            <input id="supplier_code" ref={refs.supplier_code} name="supplier_code" value={formData.supplier_code} onChange={(e) => handleInputChange("supplier_code", e.target.value.toUpperCase())} onKeyDown={(e) => handleKeyDown(e, "supplier_code")} type="text" placeholder="සැපයුම්කරු" className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 w-full" style={{ width: "150px", backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '44px', fontSize: '1.25rem', padding: '0 1rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
+                                        </div>
+                                        <div style={{ gridColumnStart: 5, gridColumnEnd: 7, marginLeft: "-120px", marginRight: "-2px" }}>
+                                            {(() => {
+
+                                                const currentFilteredOptions = [...items]
+                                                    .filter(item => {
+                                                        if (!state.itemSearchInput) return true;
+                                                        const input = state.itemSearchInput.toUpperCase();
+                                                        return String(item.no).toUpperCase().startsWith(input);
+                                                    })
+                                                    .sort((a, b) => {
+                                                        const isANumeric = !isNaN(a.no);
+                                                        const isBNumeric = !isNaN(b.no);
+                                                        if (isANumeric && !isBNumeric) return 1;
+                                                        if (!isANumeric && isBNumeric) return -1;
+                                                        return String(a.no).toUpperCase().localeCompare(String(b.no).toUpperCase());
+                                                    })
+                                                    .map(item => ({
+                                                        value: item.no,
+                                                        label: `${item.no} - ${item.type}`,
+                                                        item,
+                                                    }));
+
+                                                return (
+                                                    <Select
+                                                        ref={refs.item_code_select}
+                                                        openMenuOnFocus={false}
+                                                        isSearchable
+                                                        tabSelectsValue={false}
+                                                        closeMenuOnSelect
+                                                        blurInputOnSelect={true}
+                                                        inputValue={state.itemSearchInput}
+                                                        options={currentFilteredOptions}
+                                                        placeholder="භාණ්ඩය"
+                                                        defaultMenuIsOpen={false}
+
+                                                        value={
+                                                            formData.item_code
+                                                                ? {
+                                                                    value: formData.item_code,
+                                                                    label: `${formData.item_code} - ${formData.item_name}`,
+                                                                }
+                                                                : null
+                                                        }
+
+                                                        onInputChange={(value, meta) => {
+                                                            if (meta.action === "input-change") {
+                                                                updateState({ itemSearchInput: value.toUpperCase() });
+                                                            }
+                                                        }}
+
+                                                        onChange={(selectedOption) => {
+                                                            if (!selectedOption) return;
+
+                                                            handleItemSelect(selectedOption);
+                                                            updateState({ itemSearchInput: "" });
+
+                                                            setTimeout(() => {
+                                                                refs.weight.current?.focus();
+                                                                refs.weight.current?.select();
+                                                            }, 50);
+                                                        }}
+
+                                                        onKeyDown={(e) => {
+                                                            // 🔥 "+" shortcut for last sale
+                                                            if (e.key === "Enter" && state.itemSearchInput === "+") {
+                                                                e.preventDefault();
+                                                                const lastSale = displayedSales[0];
+
+                                                                if (lastSale) {
+                                                                    setFormData(prev => ({
+                                                                        ...prev,
+                                                                        item_code: lastSale.item_code,
+                                                                        item_name: lastSale.item_name,
+                                                                        pack_due: lastSale.pack_due,
+                                                                        price_per_kg: lastSale.price_per_kg
+                                                                    }));
+
+                                                                    updateState({
+                                                                        itemSearchInput: "",
+                                                                        gridPricePerKg: lastSale.price_per_kg || ""
+                                                                    });
+
+                                                                    setTimeout(() => {
+                                                                        refs.weight.current?.focus();
+                                                                        refs.weight.current?.select();
+                                                                    }, 50);
+                                                                }
+                                                                return;
+                                                            }
+
+                                                            // 🔥 FIXED: Only auto-select when there's text input AND it's a complete match
+                                                            if (e.key === "Enter") {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+
+                                                                // Don't auto-select if there's no input
+                                                                if (!state.itemSearchInput) {
+                                                                    // If no input, just move to next field without selecting
+                                                                    setTimeout(() => {
+                                                                        refs.weight.current?.focus();
+                                                                        refs.weight.current?.select();
+                                                                    }, 50);
+                                                                    return;
+                                                                }
+
+                                                                // Check if we have an exact match with the typed input
+                                                                const exactMatch = currentFilteredOptions.find(option =>
+                                                                    option.value.toUpperCase() === state.itemSearchInput.toUpperCase() ||
+                                                                    option.label.toUpperCase().startsWith(state.itemSearchInput.toUpperCase())
+                                                                );
+
+                                                                // Only auto-select if we have an exact match
+                                                                if (exactMatch) {
+                                                                    handleItemSelect(exactMatch);
+                                                                    updateState({ itemSearchInput: "" });
+
+                                                                    setTimeout(() => {
+                                                                        refs.weight.current?.focus();
+                                                                        refs.weight.current?.select();
+                                                                    }, 50);
+                                                                } else if (state.itemSearchInput && currentFilteredOptions.length === 1) {
+                                                                    // If there's exactly one match, select it
+                                                                    const firstOption = currentFilteredOptions[0];
+                                                                    handleItemSelect(firstOption);
+                                                                    updateState({ itemSearchInput: "" });
+
+                                                                    setTimeout(() => {
+                                                                        refs.weight.current?.focus();
+                                                                        refs.weight.current?.select();
+                                                                    }, 50);
+                                                                }
+                                                                // If no input or multiple options, do nothing - let user choose from dropdown
+                                                            }
+                                                        }}
+
+                                                        onMenuOpen={() => {
+                                                            // When menu opens, ensure no option is pre-highlighted
+                                                            setTimeout(() => {
+                                                                const menu = document.querySelector('.react-select__menu');
+                                                                if (menu) {
+                                                                    const firstOption = menu.querySelector('.react-select__option');
+                                                                    if (firstOption) {
+                                                                        firstOption.classList.remove('react-select__option--is-focused');
+                                                                    }
+                                                                }
+                                                            }, 0);
+                                                        }}
+
+                                                        className="react-select-container font-bold text-sm w-full"
+
+                                                        styles={{ control: base => ({ ...base, height: "44px", minHeight: "44px", fontSize: "1.25rem", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }), valueContainer: base => ({ ...base, padding: "0 1rem", height: "44px" }), input: base => ({ ...base, color: "black", fontSize: "1.25rem" }), singleValue: base => ({ ...base, color: "black", fontWeight: "bold", fontSize: "1.25rem" }), option: (base, state) => ({ ...base, fontWeight: "bold", color: "black", backgroundColor: state.isFocused ? "#e5e7eb" : "white", fontSize: "1rem", ...(state.isSelected && { backgroundColor: "#e5e7eb" }) }), menu: base => ({ ...base, marginTop: "4px" }) }}
+
+                                                        openMenuOnClick={true}
+                                                        menuPlacement="auto"
+                                                    />
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {[{ id: 'weight', placeholder: "බර", fieldRef: refs.weight },
+                                        { id: 'price_per_kg_grid_item', placeholder: "මිල", fieldRef: refs.price_per_kg_grid_item },
+                                        { id: 'packs', placeholder: "අසුරුම්", fieldRef: refs.packs },
+                                        { id: 'total', placeholder: "TOTAL", fieldRef: refs.total, isReadOnly: true }].map(({ id, placeholder, fieldRef, isReadOnly = false }) => (
+                                            <div key={id} style={{ ...(id === 'weight' && { gridColumnStart: 8, gridColumnEnd: 9, marginLeft: "-70px", width: "100px" }), ...(id === 'price_per_kg_grid_item' && { gridColumnStart: 9, gridColumnEnd: 10, marginLeft: "-30px", width: "105px" }), ...(id === 'packs' && { gridColumnStart: 10, gridColumnEnd: 11 }), ...(id === 'total' && { gridColumnStart: 11, gridColumnEnd: 14, marginLeft: "10px" }) }}>
+                                                <input id={id} ref={fieldRef} name={id} type="text" value={id === 'price_per_kg_grid_item' ? gridPricePerKg : formData[id]} onChange={(e) => id === 'price_per_kg_grid_item' ? handleInputChange(id, e.target.value) : (/^\d*\.?\d*$/.test(e.target.value) && handleInputChange(id, e.target.value))} onKeyDown={(e) => handleKeyDown(e, id)} placeholder={placeholder} readOnly={isReadOnly} className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 text-center" style={{ backgroundColor: isReadOnly ? '#e2e8f0' : 'white', borderRadius: '0.5rem', textAlign: 'right', fontSize: '1.125rem', height: '40px', boxSizing: 'border-box', width: '100%' }} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button type="submit" style={{ display: "none" }}></button>
+                                </form>
+                                {errors.form && <div className="mt-6 p-3 bg-red-100 text-red-700 rounded-xl">{errors.form}</div>}
+                            </div>
+                            <div className="flex-grow overflow-y-auto mt-1">
+                                {displayedSales.length === 0 ? (<div className="text-center py-8 text-gray-500 border rounded-lg bg-gray-50">විකුණුම් වාර්තා කිසිවක් හමු නොවීය.</div>) : (
+                                    <table
+                                        className="min-w-full border-gray-200 rounded-xl text-sm"
+                                        style={{
+                                            backgroundColor: '#000000',
+                                            color: 'white',
+                                            borderCollapse: 'collapse',
+                                            margin: '0px 0',
+                                            width: '100%',
+                                        }}
+                                    >
+                                        <thead>
+                                            <tr style={{ backgroundColor: '#000000' }}>
+                                                {/* ❌ Header checkbox removed */}
+
+                                                <th className="px-2 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}>
+                                                </th>
+
+                                                {['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (
+                                                    <th
+                                                        key={index}
+                                                        className="px-4 py-2 border"
+                                                        style={{ backgroundColor: '#f5fafb', color: '#000000' }}
+                                                    >
+                                                        {header}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {displayedSales.map((s, idx) => {
+                                                const isSelected = state.selectedSalesIds.includes(s.id);
+
+                                                return (
+                                                    <tr
+                                                        key={idx}
+                                                        tabIndex={0}
+                                                        className={`text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? 'bg-blue-900' : ''
+                                                            }`}
+                                                        onClick={() => handleEditClick(s)}
+                                                        onContextMenu={(e) => handleRightClick(e, s)}
+                                                        style={{ backgroundColor: isSelected ? '#1e40af' : 'transparent' }}
+                                                    >
+                                                        {/* ✅ Checkbox column (single click works properly) */}
+                                                        <td
+                                                            className="px-2 py-2 border text-center"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => toggleSaleSelection(s.id)} // ✅ fixed
+                                                                onClick={(e) => e.stopPropagation()} // ✅ prevents row click
+                                                                style={{ cursor: 'pointer' }}
+                                                            />
+                                                        </td>
+
+                                                        <td className="px-4 py-2 border">{s.supplier_code}</td>
+                                                        <td className="px-4 py-2 border">{s.item_code}</td>
+                                                        <td className="px-4 py-2 border">{s.item_name}</td>
+                                                        <td className="px-2 py-2 border">{formatDecimal(s.weight)}</td>
+                                                        <td className="px-2 py-2 border">{formatDecimal(s.price_per_kg)}</td>
+                                                        <td className="px-2 py-2 border">
+                                                            {formatDecimal(
+                                                                (parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0) +
+                                                                (parseFloat(s.packs) || 0) * (parseFloat(s.pack_due) || 0)
+                                                            )}
+                                                        </td>
+                                                        <td className="px-2 py-2 border">{s.packs}</td>
+
+                                                        <td className="px-2 py-2 border text-center">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteRecord(s.id);
+                                                                }}
+                                                                className="text-black font-bold p-1 rounded-full bg-white hover:bg-gray-200"
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                )}
+                                {/* Context Menu */}
+
+                                <ContextMenu
+                                    show={state.bulkUpdateContextMenu.show}
+                                    onClose={closeContextMenu}
+                                    onUpdate={handleBulkUpdateSupplier}
+                                    selectionCriteria={state.selectionCriteria}
+                                    selectedCount={state.selectedSalesIds.length}
+                                />
+
+                                {/* Click outside to close context menu */}
+
+                                {displayedSales.length > 0 && (<SalesSummaryFooter sales={displayedSales} formatDecimal={formatDecimal} />)}
+                                <div
+                                    className="flex items-center space-x-3 overflow-x-auto whitespace-nowrap"
+                                    style={{ marginTop: "-75px" }}  // adjust value as needed
+                                >
+                                    <div style={{ marginLeft: '660px', marginTop: '-2px', display: 'none' }}>
+                                        <input id="given_amount" ref={refs.given_amount} name="given_amount_field" type="tel" inputMode="numeric" autoComplete="new-password" value={formData.given_amount ? Number(formData.given_amount).toLocaleString() : ""} onChange={(e) => handleInputChange("given_amount", e.target.value.replace(/,/g, ""))} onKeyDown={(e) => handleKeyDown(e, "given_amount")} placeholder="දුන් මුදල" className="px-4 py-2 border rounded-xl text-right bg-white text-black" style={{ width: "180px", fontWeight: "bold", fontSize: "1.1rem" }} />
+                                    </div>
+                                </div>
+                                <div className="flex gap-4 items-start"><ItemSummary sales={displayedSales} formatDecimal={formatDecimal} /><BreakdownDisplay sale={selectedSaleForBreakdown} formatDecimal={formatDecimal} /></div>
+                                <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                    {/* Red Total Text */}
+                                    <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                        {displayedSales.length > 0 && (
+                                            <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                                {/* Red Total Text */}
+                                                <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                                    <div className="text-2xl font-bold" style={{ color: 'red' }}>
+                                                        (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
+                </div>
 
-                    <div className="right-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto', gridColumnStart: 3, gridColumnEnd: 4 }}>
-                        {hasData ? (<CustomerList customers={unprintedCustomers} type="unprinted" searchQuery={searchQueries.unprinted} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, unprinted: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} />) : (
-                            <div className="w-full shadow-xl rounded-xl overflow-y-auto border border-black p-4 text-center" style={{ backgroundColor: "#1ec139ff", maxHeight: "80.5vh" }}>
-                                <div style={{ backgroundColor: "#006400" }} className="p-1 rounded-t-xl"><h2 className="font-bold text-white mb-1 whitespace-nowrap text-center" style={{ fontSize: '14px' }}>මුද්‍රණය නොකළ</h2></div><div className="py-4"><p className="text-gray-700">මුද්‍රණය නොකළ විකුණුම් කිසිවක් සොයාගත නොහැක</p></div>
-                            </div>
-                        )}
-                    </div>
+                <div className="right-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto', gridColumnStart: 3, gridColumnEnd: 4 }}>
+                    {hasData ? (<CustomerList customers={unprintedCustomers} type="unprinted" searchQuery={searchQueries.unprinted} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, unprinted: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} />) : (
+                        <div className="w-full shadow-xl rounded-xl overflow-y-auto border border-black p-4 text-center" style={{ backgroundColor: "#1ec139ff", maxHeight: "80.5vh" }}>
+                            <div style={{ backgroundColor: "#006400" }} className="p-1 rounded-t-xl"><h2 className="font-bold text-white mb-1 whitespace-nowrap text-center" style={{ fontSize: '14px' }}>මුද්‍රණය නොකළ</h2></div><div className="py-4"><p className="text-gray-700">මුද්‍රණය නොකළ විකුණුම් කිසිවක් සොයාගත නොහැක</p></div>
+                        </div>
+                    )}
                 </div>
             </div>
-       
+        </div>
+
     );
 }

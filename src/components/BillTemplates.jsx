@@ -271,16 +271,16 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
     const finalGrandTotal = totalSales + totalPackCost;
 
     const itemsRows = itemsList.map(item => `
-        <tr style="border-bottom: 2px solid #000;">
-            <td style="padding: 14px 10px; text-align: center; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${item.id}</td>
-            <td style="padding: 14px 10px; font-weight: bold; color: #000; border: 1px solid #000;">
-                <strong style="font-size: 16px; color: #000;">${item.name}</strong><br>
-                <span style="color: #000; font-size: 13px; font-weight: bold;">${item.code}</span>
+        <tr style="border-bottom: 1px solid #000;">
+            <td style="padding: 4px 3px; text-align: center; font-size: 8px; font-weight: bold; color: #000; border: 0.5px solid #000;">${item.id}</td>
+            <td style="padding: 4px 3px; font-weight: bold; color: #000; border: 0.5px solid #000;">
+                <strong style="font-size: 9px; color: #000;">${item.name}</strong><br>
+                <span style="color: #000; font-size: 7px; font-weight: bold;">${item.code}</span>
             </td>
-            <td style="padding: 14px 10px; text-align: right; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${formatNumber(item.weight)}</td>
-            <td style="padding: 14px 10px; text-align: right; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${formatNumber(item.price)}</td>
-            <td style="padding: 14px 10px; text-align: center; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${item.packs}</td>
-            <td style="padding: 14px 10px; text-align: right; font-size: 15px; font-weight: bold; color: #000; border: 1px solid #000;">${formatNumber(item.total)}</td>
+            <td style="padding: 4px 3px; text-align: right; font-size: 8px; font-weight: bold; color: #000; border: 0.5px solid #000;">${formatNumber(item.weight)}</td>
+            <td style="padding: 4px 3px; text-align: right; font-size: 8px; font-weight: bold; color: #000; border: 0.5px solid #000;">${formatNumber(item.price)}</td>
+            <td style="padding: 4px 3px; text-align: center; font-size: 8px; font-weight: bold; color: #000; border: 0.5px solid #000;">${item.packs}</td>
+            <td style="padding: 4px 3px; text-align: right; font-size: 8px; font-weight: bold; color: #000; border: 0.5px solid #000;">${formatNumber(item.total)}</td>
         </tr>
     `).join('');
 
@@ -294,15 +294,19 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         body { 
             font-family: 'Courier New', 'Segoe UI', monospace; 
             background: #fff; 
-            padding: 30px 20px; 
+            padding: 5px; 
         }
         @media print { 
             body { padding: 0; } 
-            @page { size: A4; margin: 1.2cm; } 
+            @page { 
+                size: 105mm 74mm; 
+                margin: 2mm; 
+            } 
             .no-print { display: none; } 
         }
         .receipt { 
-            max-width: 900px; 
+            width: 100%;
+            max-width: 105mm;
             margin: 0 auto; 
             background: white; 
         }
@@ -310,43 +314,43 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         .top-header {
             position: relative;
             text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 3px solid #000;
+            margin-bottom: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1.5px solid #000;
         }
         .f2-badge {
             position: absolute;
             left: 0;
             top: 0;
-            font-size: 24px;
+            font-size: 10px;
             font-weight: bold;
             font-family: monospace;
             background: #000;
             color: white;
-            padding: 10px 20px;
-            letter-spacing: 2px;
-            border: 2px solid #000;
+            padding: 3px 6px;
+            letter-spacing: 1px;
+            border: 1px solid #000;
         }
         .shop-name { 
-            font-size: 32px; 
+            font-size: 12px; 
             font-weight: bold; 
             color: #000; 
-            margin-bottom: 10px; 
-            letter-spacing: 1px;
+            margin-bottom: 3px; 
+            letter-spacing: 0.5px;
             display: inline-block;
         }
         .address { 
-            font-size: 15px; 
+            font-size: 7px; 
             font-weight: bold;
             color: #000; 
-            margin-bottom: 6px; 
+            margin-bottom: 2px; 
             text-align: center;
         }
         .contact { 
-            font-size: 14px; 
+            font-size: 6.5px; 
             font-weight: bold;
             color: #000; 
-            margin-bottom: 15px; 
+            margin-bottom: 5px; 
             text-align: center;
         }
         /* Bill info row - bill number on left, customer on right */
@@ -354,131 +358,131 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin: 20px 0 25px 0;
-            padding: 15px 20px;
+            margin: 6px 0 8px 0;
+            padding: 5px 6px;
             background: #f0f0f0;
-            border: 2px solid #000;
+            border: 1px solid #000;
         }
         .bill-number-section {
-            font-size: 18px;
+            font-size: 7px;
             font-weight: bold;
             color: #000;
         }
         .bill-number-section strong {
             color: #000;
-            font-size: 22px;
+            font-size: 8px;
         }
         .customer-info-section {
             text-align: right;
         }
         .customer-label-small {
-            font-size: 13px;
+            font-size: 6px;
             color: #000;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
         }
         /* Black box around customer name */
         .customer-name-box {
             background: #000;
             color: white;
-            padding: 10px 25px;
+            padding: 3px 8px;
             display: inline-block;
-            margin: 5px 0;
+            margin: 2px 0;
         }
         .customer-name-large {
-            font-size: 24px;
+            font-size: 9px;
             font-weight: bold;
             color: white;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
         .mobile-text {
-            font-size: 14px;
+            font-size: 6px;
             font-weight: bold;
             color: #000;
-            margin-top: 6px;
+            margin-top: 2px;
         }
         /* Table styles */
         .items-table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin-bottom: 30px; 
-            font-size: 14px; 
+            margin-bottom: 8px; 
+            font-size: 7px; 
         }
         .items-table th { 
             background: #000; 
             color: white;
-            padding: 14px 10px; 
+            padding: 5px 3px; 
             text-align: center; 
             font-weight: bold; 
-            font-size: 16px;
-            border: 1px solid #000;
+            font-size: 7px;
+            border: 0.5px solid #000;
         }
         .items-table td { 
-            padding: 12px 10px; 
-            border: 1px solid #000; 
+            padding: 4px 3px; 
+            border: 0.5px solid #000; 
         }
         .totals-box { 
             background: #fafafa; 
-            padding: 25px; 
-            margin-bottom: 30px; 
-            border: 2px solid #000; 
+            padding: 8px; 
+            margin-bottom: 8px; 
+            border: 1px solid #000; 
         }
         .total-line { 
             display: flex; 
             justify-content: space-between; 
-            padding: 10px 0; 
-            font-size: 18px; 
+            padding: 3px 0; 
+            font-size: 8px; 
             font-weight: bold;
             color: #000;
         }
         .grand-total { 
-            border-top: 3px double #000; 
-            margin-top: 15px; 
-            padding-top: 15px; 
-            font-size: 24px; 
+            border-top: 2px double #000; 
+            margin-top: 6px; 
+            padding-top: 6px; 
+            font-size: 10px; 
             font-weight: bold; 
             color: #000; 
         }
         .summary-box { 
             background: #f5f5f5; 
-            padding: 20px; 
-            margin-bottom: 25px; 
-            border: 2px solid #000; 
+            padding: 6px; 
+            margin-bottom: 8px; 
+            border: 1px solid #000; 
         }
         .summary-title { 
             font-weight: bold; 
-            margin-bottom: 15px; 
-            font-size: 18px; 
+            margin-bottom: 5px; 
+            font-size: 8px; 
             text-align: center; 
             color: #000;
         }
         .summary-grid { 
             display: flex; 
             flex-wrap: wrap; 
-            gap: 15px; 
+            gap: 4px; 
             justify-content: center; 
         }
         .summary-item { 
             background: white; 
-            padding: 10px 18px; 
-            border: 1px solid #000; 
-            font-size: 14px; 
+            padding: 3px 5px; 
+            border: 0.5px solid #000; 
+            font-size: 6.5px; 
             font-weight: bold;
             color: #000;
         }
         .footer { 
             text-align: center; 
-            margin-top: 30px; 
-            padding-top: 20px; 
-            border-top: 2px solid #000; 
-            font-size: 13px; 
+            margin-top: 6px; 
+            padding-top: 5px; 
+            border-top: 1px solid #000; 
+            font-size: 6px; 
             font-weight: bold;
             color: #000; 
         }
         .footer p:first-child {
             color: #000;
-            font-size: 15px;
-            margin-bottom: 8px;
+            font-size: 7px;
+            margin-bottom: 3px;
         }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
@@ -554,11 +558,12 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         <div class="summary-box">
             <div class="summary-title">සාරාංශය</div>
             <div class="summary-grid">
-                ${itemsList.map(item => `
+                ${itemsList.slice(0, 3).map(item => `
                     <div class="summary-item">
                         ${item.name}: ${formatNumber(item.weight)}kg / ${item.packs}p
                     </div>
                 `).join('')}
+                ${itemsList.length > 3 ? `<div class="summary-item">+${itemsList.length - 3} more</div>` : ''}
             </div>
         </div>
     </div>
