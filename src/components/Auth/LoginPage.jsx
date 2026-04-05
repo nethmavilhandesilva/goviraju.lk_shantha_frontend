@@ -24,7 +24,7 @@ const LoginPage = () => {
         }
 
         // Redirect to dashboard or homepage
-        window.location.href = "/DBS_frontend_30500/sales";
+        window.location.href = "/sms_new_frontend/sales";
       } else {
         setError("Invalid credentials");
       }
@@ -64,7 +64,7 @@ const LoginPage = () => {
           </button>
         </form>
         <p className="text-center mt-3">
-          Don’t have an account? <a href="/DBS_frontend_30500/register">Register</a>
+          Don’t have an account? <a href="/sms_new_frontend/register">Register</a>
         </p>
       </div>
     </div>

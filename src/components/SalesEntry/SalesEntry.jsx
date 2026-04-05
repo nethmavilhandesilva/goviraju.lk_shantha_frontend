@@ -990,12 +990,29 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             const { item } = selectedOption;
             const fetchedPackDue = parseFloat(item?.pack_due) || 0;
             const fetchedPackCost = parseFloat(item?.pack_cost) || 0;
-            setFormData(prev => ({ ...prev, item_code: item.no, item_name: item.type, pack_due: fetchedPackDue, weight: editingSaleId ? prev.weight : "", price_per_kg: editingSaleId ? prev.price_per_kg : "", packs: editingSaleId ? prev.packs : "", leading_sales_id: editingSaleId ? prev.leading_sales_id : "", total: editingSaleId ? prev.total : "" }));
-            updateState({ packCost: fetchedPackCost, itemSearchInput: "", gridPricePerKg: editingSaleId ? formData.price_per_kg : "" });
+
+            setFormData(prev => ({
+                ...prev,
+                item_code: item.no,
+                item_name: item.type,
+                pack_due: fetchedPackDue
+            }));
+
+            updateState({
+                packCost: fetchedPackCost,
+                itemSearchInput: "",
+                gridPricePerKg: formData.price_per_kg || ""
+            });
+
             setTimeout(() => refs.weight.current?.focus(), 100);
         } else {
-            setFormData(prev => ({ ...prev, item_code: "", item_name: "", pack_due: "", price_per_kg: "", weight: "", packs: "", leading_sales_id: "", total: "" }));
-            updateState({ packCost: 0, itemSearchInput: "", gridPricePerKg: "" });
+            setFormData(prev => ({
+                ...prev,
+                item_code: "",
+                item_name: "",
+                pack_due: ""
+            }));
+            updateState({ packCost: 0, itemSearchInput: "" });
         }
     };
 
@@ -1032,78 +1049,101 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }
     };
 
-    const handleEditClick = (sale) => {
-        // If same record clicked again → clear fields EXCEPT customer/contact fields
-        if (state.editingSaleId === sale.id) {
-            setFormData((prev) => ({
-                ...prev,
-                customer_code: sale.customer_code || "",
-                customer_name: sale.customer_name || "",
-                // PRESERVE TELEPHONE:
-                telephone_no: prev.telephone_no || "",
-                supplier_code: "",
-                item_code: "",
-                item_name: "",
-                weight: "",
-                price_per_kg: "",
-                pack_due: "",
-                total: "",
-                packs: ""
-            }));
-
-            updateState({
-                editingSaleId: null,
-                isManualClear: true,
-                priceManuallyChanged: false,
-                gridPricePerKg: "",
-                selectedSaleForBreakdown: null
-            });
-
-            setTimeout(() => {
-                refs.supplier_code?.current?.focus();
-                refs.supplier_code?.current?.select();
-            }, 0);
-
-            return;
-        }
-
-        // === Normal behavior when selecting a record to edit ===
-        let fetchedPackDue = sale.pack_due || "";
-        if (sale.item_code) {
-            const matchingItem = items.find(i => String(i.no) === String(sale.item_code));
-            fetchedPackDue = parseFloat(matchingItem?.pack_due) || sale.pack_due || "";
-        }
-
+   const handleEditClick = (sale) => {
+    // If same record clicked again → clear fields EXCEPT customer/contact fields
+    if (state.editingSaleId === sale.id) {
         setFormData((prev) => ({
-            ...sale,
-            // Ensure we explicitly map these so they don't get lost
-            item_name: sale.item_name || "",
+            ...prev,
             customer_code: sale.customer_code || "",
             customer_name: sale.customer_name || "",
-            // PRESERVE TELEPHONE from the current form state or the sale object
-            telephone_no: sale.telephone_no || prev.telephone_no || "",
-            supplier_code: sale.supplier_code || "",
-            item_code: sale.item_code || "",
-            weight: sale.weight || "",
-            price_per_kg: sale.price_per_kg || "",
-            pack_due: fetchedPackDue,
-            total: sale.total || "",
-            packs: sale.packs || ""
+            // PRESERVE TELEPHONE:
+            telephone_no: prev.telephone_no || "",
+            supplier_code: "",
+            item_code: "",
+            item_name: "",
+            weight: "",
+            price_per_kg: "",
+            pack_due: "",
+            total: "",
+            packs: ""
         }));
 
         updateState({
-            editingSaleId: sale.id,
-            isManualClear: false,
+            editingSaleId: null,
+            isManualClear: true,
             priceManuallyChanged: false,
-            gridPricePerKg: sale.price_per_kg || "",
-            selectedSaleForBreakdown: sale
+            gridPricePerKg: "",
+            selectedSaleForBreakdown: null
         });
 
         setTimeout(() => {
-            refs.weight.current?.focus();
-            refs.weight.current?.select();
+            refs.supplier_code?.current?.focus();
+            refs.supplier_code?.current?.select();
         }, 0);
-    };
+
+        return;
+    }
+
+    // === Normal behavior when selecting a record to edit ===
+    let fetchedPackDue = sale.pack_due || "";
+    if (sale.item_code) {
+        const matchingItem = items.find(i => String(i.no) === String(sale.item_code));
+        fetchedPackDue = parseFloat(matchingItem?.pack_due) || sale.pack_due || "";
+    }
+
+    setFormData((prev) => ({
+        ...sale,
+        // Ensure we explicitly map these so they don't get lost
+        item_name: sale.item_name || "",
+        customer_code: sale.customer_code || "",
+        customer_name: sale.customer_name || "",
+        // PRESERVE TELEPHONE from the current form state or the sale object
+        telephone_no: sale.telephone_no || prev.telephone_no || "",
+        supplier_code: sale.supplier_code || "",
+        item_code: sale.item_code || "",
+        weight: sale.weight || "",
+        price_per_kg: sale.price_per_kg || "",
+        pack_due: fetchedPackDue,
+        total: sale.total || "",
+        packs: sale.packs || ""
+    }));
+
+    updateState({
+        editingSaleId: sale.id,
+        isManualClear: false,
+        priceManuallyChanged: false,
+        gridPricePerKg: sale.price_per_kg || "",
+        selectedSaleForBreakdown: sale
+    });
+
+    // FIX: Set focus to weight field and ensure Enter key navigation works
+    setTimeout(() => {
+        if (refs.weight.current) {
+            refs.weight.current.focus();
+            // Select the text so user can type over it if they want
+            refs.weight.current.select();
+            
+            // Add a one-time keydown listener to handle Enter when value hasn't changed
+            const handleWeightEnter = (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    // Remove this listener to avoid duplicates
+                    refs.weight.current.removeEventListener('keydown', handleWeightEnter);
+                    // Move focus to price field
+                    if (refs.price_per_kg_grid_item.current) {
+                        refs.price_per_kg_grid_item.current.focus();
+                        refs.price_per_kg_grid_item.current.select();
+                    }
+                }
+            };
+            
+            // Remove any existing listener first to avoid duplicates
+            refs.weight.current.removeEventListener('keydown', handleWeightEnter);
+            // Add the new listener
+            refs.weight.current.addEventListener('keydown', handleWeightEnter);
+        }
+    }, 0);
+};
 
     const handleClearForm = (clearBillNo = false) => {
         setFormData(initialFormData);

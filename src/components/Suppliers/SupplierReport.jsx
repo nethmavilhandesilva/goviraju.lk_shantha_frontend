@@ -461,7 +461,7 @@ const handleLoanSubmit = async (e) => {
         </div>`;
     }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
 
-   const getBillContent = useCallback((currentBillNo) => {
+const getBillContent = useCallback((currentBillNo) => {
     const date = new Date().toLocaleDateString('si-LK');
     const mobile = '0777672838/071437115';
     const is4Inch = billSize === '4inch';
@@ -509,7 +509,7 @@ const handleLoanSubmit = async (e) => {
                 <div style="font-size:25px; white-space:nowrap;">${customerCode}</div>
                 <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
             </td>
-         </tr>`;
+          </tr>`;
     }).join("");
 
     const summaryEntries = Object.entries(itemSummaryData);
@@ -527,91 +527,167 @@ const handleLoanSubmit = async (e) => {
     const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
 
     return `
-<div style="width:${receiptMaxWidth}; margin:0 auto; padding:10px; font-family:'Courier New', monospace; color:#000; background:#fff;">
-    <div style="text-align:center; font-weight:bold;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-            <div style="font-size:18px;">අයිතිය: 
-                <span style="border:3.5px solid #000; padding:5px 10px; font-size:25px;">
-                    ${selectedSupplier}
-                </span>
-            </div>
-            <span style="border:3.5px solid #000; padding:5px 12px; font-size:25px;">F2-1</span>
-        </div>
-        <div style="font-size:24px; text-align:left; font-weight:bold;">
-            මහතුන් වෙළඳසැල
-        </div>
-    </div>
-    
-    <div style="font-size:19px; margin-top:10px; padding:0 5px;">
-        <div style="font-weight: bold;">දුර: ${mobile}</div>
-        <div style="display:flex; justify-content:space-between; margin-top:3px;">
-            <span>බිල් අංකය: ${currentBillNo}</span>
-            <span>දිනය: ${date}</span>
-        </div>
-    </div>
-    
-    <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
-    
-    <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
-        ${colGroups}
-        <thead>
-            <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
-                <th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th>
-                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
-                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
-                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
-            </tr>
-        </thead>
-        <tbody>${detailedItemsHtml}</tbody>
-        <tfoot>
-            <tr style="border-top:2.5px solid #000; font-weight:bold;">
-                <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
-                <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${(totalsupplierSales.toFixed(2))}</div></td>
-            </tr>
-        </tfoot>
-    </table>
-
-    <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
-        <tr>
-            <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
-            <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
-        </tr>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bill ${currentBillNo}</title>
+    <style>
+        /* Hide browser header/footer information when printing */
+        @media print {
+            /* Remove default headers and footers */
+            @page {
+                margin: 0;
+                size: auto;
+            }
+            
+            /* Hide URL, date, page number, and other browser-generated content */
+            body {
+                margin: 0;
+                padding: 10px;
+            }
+            
+            /* Hide any browser-added header/footer elements */
+            header, footer, 
+            .header, .footer,
+            #header, #footer,
+            [class*="header"], [class*="footer"],
+            [id*="header"], [id*="footer"] {
+                display: none !important;
+            }
+            
+            /* Remove margins that might contain browser info */
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                height: auto;
+            }
+            
+            /* Ensure the main content doesn't get pushed down */
+            .print-content {
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+            }
+            
+            /* Hide page numbers and URL */
+            @page {
+                margin: 0cm 0cm 0cm 0cm;
+            }
+            
+            /* Additional reset for all elements that might show browser info */
+            * {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
         
-        ${paidAmountValue > 0 ? `
-        <tr style="font-size:18px;">
-            <td style="font-size:15px; padding-top:10px;">ගෙවූ මුදල (Paid):</td>
-            <td style="text-align:right; padding-top:10px; color:#000;">
-                - ${paidAmountValue.toFixed(2)}
-            </td>
-        </tr>
-        <tr style="font-size:18px;">
-            <td style="font-size:15px; padding-top:5px;">ඉතිරි මුදල (Remaining):</td>
-            <td style="text-align:right; padding-top:5px; color:#000;">
-                ${remainingAfterPayment.toFixed(2)}
-            </td>
-        </tr>
-        <tr><td colspan="2" style="border-top:1px dashed #000; padding: 5px 0;"></td></tr>
-        ` : ''}
+        /* Screen styles */
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .print-container {
+            width: ${receiptMaxWidth};
+            margin: 0 auto;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            color: #000;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-container">
+        <div style="text-align:center; font-weight:bold;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <div style="font-size:18px;">අයිතිය: 
+                    <span style="border:3.5px solid #000; padding:5px 10px; font-size:25px;">
+                        ${selectedSupplier}
+                    </span>
+                </div>
+                <span style="border:3.5px solid #000; padding:5px 12px; font-size:25px;">F2-1</span>
+            </div>
+            <div style="font-size:24px; text-align:left; font-weight:bold;">
+                මහතුන් වෙළඳසැල
+            </div>
+        </div>
+        
+        <div style="font-size:19px; margin-top:10px; padding:0 5px;">
+            <div style="font-weight: bold;">දුර: ${mobile}</div>
+            <div style="display:flex; justify-content:space-between; margin-top:3px;">
+                <span>බිල් අංකය: ${currentBillNo}</span>
+                <span>දිනය: ${date}</span>
+            </div>
+        </div>
+        
+        <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
+        
+        <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
+            ${colGroups}
+            <thead>
+                <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
+                    <th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th>
+                    <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
+                    <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
+                    <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
+                </tr>
+            </thead>
+            <tbody>${detailedItemsHtml}</tbody>
+            <tfoot>
+                <tr style="border-top:2.5px solid #000; font-weight:bold;">
+                    <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
+                    <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${(totalsupplierSales.toFixed(2))}</div></td>
+                </tr>
+            </tfoot>
+        </table>
 
-        <tr style="font-size:18px;">
-            <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
-            <td style="text-align:right; padding-top:5px; color:#000;">
-                - ${advanceAmount.toFixed(2)}
-            </td>
-        </tr>
+        <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
+            <tr>
+                <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
+                <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
+            </tr>
+            
+            ${paidAmountValue > 0 ? `
+            <tr style="font-size:18px;">
+                <td style="font-size:15px; padding-top:10px;">ගෙවූ මුදල (Paid):</td>
+                <td style="text-align:right; padding-top:10px; color:#000;">
+                    - ${paidAmountValue.toFixed(2)}
+                </td>
+            </tr>
+            <tr style="font-size:18px;">
+                <td style="font-size:15px; padding-top:5px;">ඉතිරි මුදල (Remaining):</td>
+                <td style="text-align:right; padding-top:5px; color:#000;">
+                    ${remainingAfterPayment.toFixed(2)}
+                </td>
+            </tr>
+            <tr><td colspan="2" style="border-top:1px dashed #000; padding: 5px 0;"></td></tr>
+            ` : ''}
 
-        <tr style="font-weight:900;">
-            <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
-            <td style="text-align:right; padding-top:10px;">
-                <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
-                    ${netPayable.toFixed(2)}
-                </span>
-            </td>
-        </tr>
-    </table>
+            <tr style="font-size:18px;">
+                <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
+                <td style="text-align:right; padding-top:5px; color:#000;">
+                    - ${advanceAmount.toFixed(2)}
+                </td>
+            </tr>
 
-    <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;"><table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}</table></div>
-</div>`;
+            <tr style="font-weight:900;">
+                <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
+                <td style="text-align:right; padding-top:10px;">
+                    <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
+                        ${netPayable.toFixed(2)}
+                    </span>
+                </td>
+            </tr>
+        </table>
+
+        <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;">
+            <table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}</table>
+        </div>
+    </div>
+</body>
+</html>`;
 }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount]);
 
     // --- Print function ---
