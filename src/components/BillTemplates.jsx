@@ -50,8 +50,8 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     const is4Inch = billSize === '4inch';
     const receiptMaxWidth = is4Inch ? '4in' : '350px';
 
-    const fontSizeBody = '25px';
-    const fontSizeHeader = '23px';
+    const fontSizeBody = '20px';
+    const fontSizeHeader = '18px';
     const fontSizeTotal = '28px';
 
     const colGroups = `
@@ -70,7 +70,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
 
         return `
         <tr style="font-size:${fontSizeBody}; font-weight:900; vertical-align: bottom;">
-            <td style="text-align:left; padding:10px 0; white-space: nowrap;">
+            <td style="font-size:20px; text-align:left; padding:10px 0; white-space: nowrap;">
                 ${s.item_name || ""}<br>${formatNumber(packs)}
             </td>
             <td style="text-align:right; padding:10px 2px; position: relative; left: -70px;">

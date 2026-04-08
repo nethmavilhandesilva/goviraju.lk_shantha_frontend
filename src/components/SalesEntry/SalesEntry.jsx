@@ -16,7 +16,8 @@ const routes = {
     customers: "/customers",
     items: "/items",
     suppliers: "/suppliers",
-    getCustomerGivenAmount: "/sales/customer/given-amount"
+    getCustomerGivenAmount: "/sales/customer/given-amount",
+    bulkUpdateCustomer: "/sales/bulk-update-customer"
 };
 
 // --- Sub-Components  ---
@@ -346,7 +347,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         supplierSearchInput: "", currentBillNo: null, isLoading: false, customers: [], items: [], suppliers: [],
         forceUpdate: null, windowFocused: null, isPrinting: false, billSize: '3inch', priceManuallyChanged: false,
         gridPricePerKg: "", selectedSaleForBreakdown: null, showSavePhoneButton: false, isTelephoneValid: false,
-        currentUser: null,
+        currentUser: null, bulkUpdateCustomerCode: "",
         isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" }, selectedSalesIds: [], selectionCriteria: null, isBulkUpdateModalOpen: false, bulkUpdateSupplierCode: "", bulkUpdateContextMenu: { x: 0, y: 0, show: false }, isBulkPrintEnabled: true,
     });
 
@@ -409,60 +410,56 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         return Array.from(combinedMap.values());
     };
     //functions related to multiselect and bulk update
-    const toggleSaleSelection = (saleId, e) => {
-        if (e) {
-            e.stopPropagation();
-            e.preventDefault();
-        }
+   const toggleSaleSelection = (saleId, e) => {
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
 
-        // Find the sale to select/deselect
-        const saleToSelect = displayedSales.find(s => s.id === saleId);
-        if (!saleToSelect) return;
+    const saleToSelect = displayedSales.find(s => s.id === saleId);
+    if (!saleToSelect) return;
 
-        const isCurrentlySelected = state.selectedSalesIds.includes(saleId);
+    const isCurrentlySelected = state.selectedSalesIds.includes(saleId);
 
-        // If deselecting - just remove it
-        if (isCurrentlySelected) {
-            setState(prev => {
-                const newSelectedIds = prev.selectedSalesIds.filter(id => id !== saleId);
-                return {
-                    ...prev,
-                    selectedSalesIds: newSelectedIds,
-                    // Clear criteria if no items selected
-                    selectionCriteria: newSelectedIds.length === 0 ? null : prev.selectionCriteria
-                };
-            });
-            return;
-        }
-        // Case 1: No records selected yet - select this one and set criteria
-        if (state.selectedSalesIds.length === 0) {
-            setState(prev => ({
+    if (isCurrentlySelected) {
+        setState(prev => {
+            const newSelectedIds = prev.selectedSalesIds.filter(id => id !== saleId);
+            return {
                 ...prev,
-                selectedSalesIds: [saleId],
-                selectionCriteria: {
-                    supplier_code: saleToSelect.supplier_code,
-                    item_code: saleToSelect.item_code
-                }
-            }));
-            return;
-        }
+                selectedSalesIds: newSelectedIds,
+                selectionCriteria: newSelectedIds.length === 0 ? null : prev.selectionCriteria
+            };
+        });
+        return;
+    }
+    
+    // Case 1: No records selected yet - select this one and set criteria
+    if (state.selectedSalesIds.length === 0) {
+        setState(prev => ({
+            ...prev,
+            selectedSalesIds: [saleId],
+            selectionCriteria: {
+                customer_code: saleToSelect.customer_code,  // ← CHANGED from supplier_code
+                item_code: saleToSelect.item_code
+            }
+        }));
+        return;
+    }
 
-        // Case 2: Records already selected - validate if it matches criteria
-        const matchesCriteria =
-            saleToSelect.supplier_code === state.selectionCriteria?.supplier_code &&
-            saleToSelect.item_code === state.selectionCriteria?.item_code;
+    // Case 2: Records already selected - validate if it matches criteria
+    const matchesCriteria =
+        saleToSelect.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
+        saleToSelect.item_code === state.selectionCriteria?.item_code;
 
-        if (matchesCriteria) {
-            // Valid selection - add it
-            setState(prev => ({
-                ...prev,
-                selectedSalesIds: [...prev.selectedSalesIds, saleId]
-            }));
-        } else {
-            // Invalid selection - show alert with details
-            alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Supplier: ${state.selectionCriteria?.supplier_code}\n   Item: ${state.selectionCriteria?.item_code}\n\n✗ This record has:\n   Supplier: ${saleToSelect.supplier_code}\n   Item: ${saleToSelect.item_code}\n\nPlease clear selection or select matching records.`);
-        }
-    };
+    if (matchesCriteria) {
+        setState(prev => ({
+            ...prev,
+            selectedSalesIds: [...prev.selectedSalesIds, saleId]
+        }));
+    } else {
+        alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Customer: ${state.selectionCriteria?.customer_code}\n   Item: ${state.selectionCriteria?.item_code}\n\n✗ This record has:\n   Customer: ${saleToSelect.customer_code}\n   Item: ${saleToSelect.item_code}\n\nPlease clear selection or select matching records.`);
+    }
+};
     useEffect(() => {
         const handleEsc = (e) => {
             if (e.key === 'Escape' && state.bulkUpdateContextMenu.show) {
@@ -474,52 +471,85 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     }, [state.bulkUpdateContextMenu.show]);
 
     // Handle right-click on selected records on bulk update
-    const handleRightClick = (e, sale) => {
-        e.preventDefault();
-        e.stopPropagation();
+   const handleRightClick = (e, sale) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-        // Check if the clicked sale is already selected
-        const isSelected = state.selectedSalesIds.includes(sale.id);
+    const isSelected = state.selectedSalesIds.includes(sale.id);
 
-        // If not selected, try to select it with validation
-        if (!isSelected) {
-            if (state.selectedSalesIds.length === 0) {
+    if (!isSelected) {
+        if (state.selectedSalesIds.length === 0) {
+            setState(prev => ({
+                ...prev,
+                selectedSalesIds: [sale.id],
+                selectionCriteria: {
+                    customer_code: sale.customer_code,  // ← CHANGED from supplier_code
+                    item_code: sale.item_code
+                }
+            }));
+        } else {
+            const matchesCriteria =
+                sale.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
+                sale.item_code === state.selectionCriteria?.item_code;
+
+            if (matchesCriteria) {
                 setState(prev => ({
                     ...prev,
-                    selectedSalesIds: [sale.id],
-                    selectionCriteria: {
-                        supplier_code: sale.supplier_code,
-                        item_code: sale.item_code
-                    }
+                    selectedSalesIds: [...prev.selectedSalesIds, sale.id]
                 }));
             } else {
-                const matchesCriteria =
-                    sale.supplier_code === state.selectionCriteria?.supplier_code &&
-                    sale.item_code === state.selectionCriteria?.item_code;
-
-                if (matchesCriteria) {
-                    setState(prev => ({
-                        ...prev,
-                        selectedSalesIds: [...prev.selectedSalesIds, sale.id]
-                    }));
-                } else {
-                    alert(`Cannot select this record!`);
-                    return;
-                }
+                alert(`Cannot select this record!`);
+                return;
             }
         }
+    }
 
-        // Show modal - don't pass any supplier code yet
-        setState(prev => ({
-            ...prev,
-            bulkUpdateContextMenu: {
-                show: true,
-                x: e.clientX,
-                y: e.clientY
-            },
-            bulkUpdateSupplierCode: "" // Reset to empty
-        }));
-    };
+    setState(prev => ({
+        ...prev,
+        bulkUpdateContextMenu: {
+            show: true,
+            x: e.clientX,
+            y: e.clientY
+        },
+        bulkUpdateCustomerCode: ""  // ← CHANGED
+    }));
+};
+const handleBulkUpdateCustomer = async (newCustomerCode) => {
+    const customerCodeToUpdate = newCustomerCode || state.bulkUpdateCustomerCode;
+    const finalCustomerCode = customerCodeToUpdate.trim().toUpperCase();
+
+    if (!finalCustomerCode) {
+        alert("Please enter a customer code");
+        return;
+    }
+
+    if (state.selectedSalesIds.length === 0) {
+        alert("No sales selected");
+        return;
+    }
+
+    try {
+        updateState({ isSubmitting: true });
+
+        const response = await api.post(routes.bulkUpdateCustomer, {
+            sale_ids: state.selectedSalesIds,
+            customer_code: finalCustomerCode
+        });
+
+        if (response.data.success) {
+       
+     
+            // Full page refresh
+            window.location.reload();
+        } else {
+            throw new Error(response.data.message || "Update failed");
+        }
+    } catch (error) {
+        console.error("Bulk update error:", error);
+        alert("Failed to update customer codes. Please try again.");
+        updateState({ isSubmitting: false });
+    }
+};
 
     // Handle bulk update submission
     const handleBulkUpdateSupplier = async (newSupplierCode) => {
@@ -579,7 +609,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         setState(prev => ({
             ...prev,
             bulkUpdateContextMenu: { show: false, x: 0, y: 0 },
-            bulkUpdateSupplierCode: ""
+            bulkUpdateSupplierCode: "",
+             bulkUpdateCustomerCode: "" 
         }));
     };
     //End of functions releated to multiselect and bulk update
@@ -1631,256 +1662,327 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }
     };
 
-    const hasData = allSales.length > 0 || customers.length > 0 || items.length > 0 || suppliers.length > 0;
+   const hasData = allSales.length > 0 || customers.length > 0 || items.length > 0 || suppliers.length > 0;
     //context related to bulkupdate
-    const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
-        // Use local state for input to prevent parent re-renders
-        const [localSupplierCode, setLocalSupplierCode] = React.useState('');
+   const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
+   const [localCustomerCode, setLocalCustomerCode] = React.useState('');
 
-        // Initialize local state when modal opens
-        React.useEffect(() => {
-            if (show) {
-                setLocalSupplierCode('');
-            }
-        }, [show]);
+    React.useEffect(() => {
+        if (show) {
+            setLocalCustomerCode('');
+        }
+    }, [show]);
 
-        // Handle input change - only update local state, not parent
-        const handleInputChange = (e) => {
-            const value = e.target.value.toUpperCase();
-            setLocalSupplierCode(value);
-        };
+    const handleInputChange = (e) => {
+        const value = e.target.value.toUpperCase();
+        setLocalCustomerCode(value);
+    };
 
-        // Handle update - pass the local value directly
-        const handleUpdate = () => {
-            if (localSupplierCode.trim()) {
-                onUpdate(localSupplierCode.trim().toUpperCase());
-                setLocalSupplierCode(''); // Reset after update
-            } else {
-                alert("Please enter a supplier code");
-            }
-        };
+    const handleUpdate = () => {
+        if (localCustomerCode.trim()) {
+            onUpdate(localCustomerCode.trim().toUpperCase());
+            setLocalCustomerCode('');
+        } else {
+            alert("Please enter a customer code");
+        }
+    };
 
-        // Handle close
-        const handleClose = () => {
-            setLocalSupplierCode('');
-            onClose();
-        };
+    const handleClose = () => {
+        setLocalCustomerCode('');
+        onClose();
+    };
 
-        if (!show) return null;
+    if (!show) return null;
 
-        return (
-            <>
-                {/* Backdrop Overlay */}
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)', zIndex: 9999 }} onClick={handleClose} />
+    return (
+        <>
+            {/* Backdrop Overlay */}
+            <div 
+                style={{ 
+                    position: 'fixed', 
+                    top: 0, 
+                    left: 0, 
+                    right: 0, 
+                    bottom: 0, 
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+                    backdropFilter: 'blur(4px)', 
+                    zIndex: 9999 
+                }} 
+                onClick={handleClose} 
+            />
 
-                {/* Modal Container */}
-                <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', zIndex: 10000, width: '90%', maxWidth: '450px', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-                    <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .modal-button { transition: all 0.2s ease; cursor: pointer; } .modal-button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); } .modal-button:active { transform: translateY(0); }`}</style>
+            {/* Modal Container */}
+            <div 
+                style={{ 
+                    position: 'fixed', 
+                    top: '50%', 
+                    left: '50%', 
+                    transform: 'translate(-50%, -50%)', 
+                    backgroundColor: '#ffffff', 
+                    borderRadius: '16px', 
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', 
+                    zIndex: 10000, 
+                    width: '90%', 
+                    maxWidth: '450px', 
+                    maxHeight: '90vh', 
+                    overflow: 'auto' 
+                }} 
+                onClick={(e) => e.stopPropagation()}
+            >
+                <style>{`
+                    @keyframes fadeIn { 
+                        from { opacity: 0; } 
+                        to { opacity: 1; } 
+                    } 
+                    .modal-button { 
+                        transition: all 0.2s ease; 
+                        cursor: pointer; 
+                    } 
+                    .modal-button:hover { 
+                        transform: translateY(-1px); 
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
+                    } 
+                    .modal-button:active { 
+                        transform: translateY(0); 
+                    }
+                `}</style>
 
-                    {/* Header with Icon */}
-                    <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '12px 20px', borderTopLeftRadius: '16px', borderTopRightRadius: '16px', color: 'white' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ width: '32px', height: '32px', background: 'rgba(255, 255, 255, 0.2)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                ⚡
-                            </div>
-                            <div>
-                                <h2 style={{
-                                    margin: 0,
-                                    fontSize: '16px',
-                                    fontWeight: 'bold',
-                                    letterSpacing: '-0.5px'
-                                }}>
-                                    Bulk Update Supplier
-                                </h2>
-                                <p style={{
-                                    margin: '2px 0 0 0',
-                                    fontSize: '11px',
-                                    opacity: 0.9
-                                }}>
-                                    Update multiple records at once
-                                </p>
-                            </div>
+                {/* Header with Icon */}
+                <div style={{ 
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                    padding: '12px 20px', 
+                    borderTopLeftRadius: '16px', 
+                    borderTopRightRadius: '16px', 
+                    color: 'white' 
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ 
+                            width: '32px', 
+                            height: '32px', 
+                            background: 'rgba(255, 255, 255, 0.2)', 
+                            borderRadius: '8px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            fontSize: '16px' 
+                        }}>
+                            ⚡
+                        </div>
+                        <div>
+                            <h2 style={{
+                                margin: 0,
+                                fontSize: '16px',
+                                fontWeight: 'bold',
+                                letterSpacing: '-0.5px'
+                            }}>
+                                Bulk Update Customer
+                            </h2>
+                            <p style={{
+                                margin: '2px 0 0 0',
+                                fontSize: '11px',
+                                opacity: 0.9
+                            }}>
+                                Update multiple customer codes at once
+                            </p>
                         </div>
                     </div>
+                </div>
 
-                    {/* Content */}
-                    <div style={{ padding: '16px 20px' }}>
-                        {/* Selection Criteria Card */}
-                        {selectionCriteria && (
+                {/* Content */}
+                <div style={{ padding: '16px 20px' }}>
+                    {/* Selection Criteria Card */}
+                    {selectionCriteria && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                            borderRadius: '10px',
+                            padding: '10px 12px',
+                            marginBottom: '16px',
+                            border: '1px solid #fbbf24'
+                        }}>
                             <div style={{
-                                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                                borderRadius: '10px',
-                                padding: '10px 12px',
-                                marginBottom: '16px',
-                                border: '1px solid #fbbf24'
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginBottom: '8px'
                             }}>
+                                <span style={{ fontSize: '14px' }}>📋</span>
+                                <span style={{
+                                    fontWeight: 'bold',
+                                    fontSize: '11px',
+                                    color: '#92400e',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px'
+                                }}>
+                                    Current Selection
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '6px' }}>
                                 <div style={{
                                     display: 'flex',
+                                    justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    gap: '6px',
-                                    marginBottom: '8px'
+                                    padding: '6px 8px',
+                                    background: 'white',
+                                    borderRadius: '6px'
                                 }}>
-                                    <span style={{ fontSize: '14px' }}>📋</span>
+                                    <span style={{ fontSize: '11px', color: '#78350f' }}>Customer:</span>
                                     <span style={{
                                         fontWeight: 'bold',
-                                        fontSize: '11px',
+                                        fontSize: '12px',
                                         color: '#92400e',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px'
+                                        fontFamily: 'monospace'
                                     }}>
-                                        Current Selection
+                                        {selectionCriteria.customer_code}
                                     </span>
                                 </div>
 
-                                <div style={{ display: 'grid', gap: '6px' }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '6px 8px',
-                                        background: 'white',
-                                        borderRadius: '6px'
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '6px 8px',
+                                    background: 'white',
+                                    borderRadius: '6px'
+                                }}>
+                                    <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '12px',
+                                        color: '#92400e',
+                                        fontFamily: 'monospace'
                                     }}>
-                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Supplier:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            fontSize: '12px',
-                                            color: '#92400e',
-                                            fontFamily: 'monospace'
-                                        }}>
-                                            {selectionCriteria.supplier_code}
-                                        </span>
-                                    </div>
+                                        {selectionCriteria.item_code}
+                                    </span>
+                                </div>
 
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '6px 8px',
-                                        background: 'white',
-                                        borderRadius: '6px'
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '6px 8px',
+                                    background: '#10b981',
+                                    borderRadius: '6px',
+                                    color: 'white'
+                                }}>
+                                    <span style={{ fontSize: '11px' }}>Selected:</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '14px'
                                     }}>
-                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            fontSize: '12px',
-                                            color: '#92400e',
-                                            fontFamily: 'monospace'
-                                        }}>
-                                            {selectionCriteria.item_code}
-                                        </span>
-                                    </div>
-
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '6px 8px',
-                                        background: '#10b981',
-                                        borderRadius: '6px',
-                                        color: 'white'
-                                    }}>
-                                        <span style={{ fontSize: '11px' }}>Selected:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            fontSize: '14px'
-                                        }}>
-                                            {selectedCount || 0}
-                                        </span>
-                                    </div>
+                                        {selectedCount || 0}
+                                    </span>
                                 </div>
                             </div>
-                        )}
-
-                        {/* Input Field */}
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '6px',
-                                fontWeight: '600',
-                                fontSize: '12px',
-                                color: '#374151'
-                            }}>
-                                ✏️ New Supplier Code
-                            </label>
-                            <input
-                                type="text"
-                                value={localSupplierCode}
-                                onChange={handleInputChange}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleUpdate();
-                                    }
-                                }}
-                                style={{ width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', fontWeight: '500', transition: 'all 0.2s ease', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#667eea';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                                autoFocus
-                                placeholder="e.g., SUP001"
-                            />
                         </div>
+                    )}
 
-                        {/* Primary Action Button */}
-                        <button
-                            onClick={handleUpdate}
-                            className="modal-button"
-                            style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', marginBottom: '0' }}
-                        >
-                            🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
-                        </button>
-                    </div>
-
-                    {/* Footer with Close Button */}
-                    <div style={{
-                        padding: '12px 20px',
-                        background: '#f9fafb',
-                        borderBottomLeftRadius: '16px',
-                        borderBottomRightRadius: '16px',
-                        borderTop: '1px solid #e5e7eb',
-                        display: 'flex',
-                        justifyContent: 'flex-end'
-                    }}>
-                        <button
-                            onClick={handleClose}
-                            style={{
-                                padding: '6px 16px',
-                                background: 'transparent',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '6px',
-                                color: '#6b7280',
-                                fontSize: '12px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                fontWeight: '500'
+                    {/* Input Field */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '6px',
+                            fontWeight: '600',
+                            fontSize: '12px',
+                            color: '#374151'
+                        }}>
+                            ✏️ New Customer Code
+                        </label>
+                        <input
+                            type="text"
+                            value={localCustomerCode}
+                            onChange={handleInputChange}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleUpdate();
+                                }
                             }}
-                            onMouseEnter={(e) => {
-                                e.target.style.background = '#f3f4f6';
-                                e.target.style.borderColor = '#d1d5db';
+                            style={{ 
+                                width: '100%', 
+                                padding: '10px 12px', 
+                                border: '2px solid #e5e7eb', 
+                                borderRadius: '10px', 
+                                fontSize: '13px', 
+                                fontWeight: '500', 
+                                transition: 'all 0.2s ease', 
+                                outline: 'none', 
+                                boxSizing: 'border-box', 
+                                fontFamily: 'monospace' 
                             }}
-                            onMouseLeave={(e) => {
-                                e.target.style.background = 'transparent';
+                            onFocus={(e) => {
+                                e.target.style.borderColor = '#667eea';
+                                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                            }}
+                            onBlur={(e) => {
                                 e.target.style.borderColor = '#e5e7eb';
+                                e.target.style.boxShadow = 'none';
                             }}
-                        >
-                            Cancel (ESC)
-                        </button>
+                            autoFocus
+                            placeholder="e.g., CUST001"
+                        />
                     </div>
+
+                    {/* Primary Action Button */}
+                    <button
+                        onClick={handleUpdate}
+                        className="modal-button"
+                        style={{ 
+                            width: '100%', 
+                            padding: '12px', 
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '10px', 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold', 
+                            fontSize: '14px', 
+                            marginBottom: '0' 
+                        }}
+                    >
+                        🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
+                    </button>
                 </div>
-            </>
-        );
-    }, (prevProps, nextProps) => {
-        // Custom comparison to prevent re-renders
-        return prevProps.show === nextProps.show &&
-            prevProps.selectedCount === nextProps.selectedCount &&
-            prevProps.selectionCriteria === nextProps.selectionCriteria;
-    });
+
+                {/* Footer with Close Button */}
+                <div style={{
+                    padding: '12px 20px',
+                    background: '#f9fafb',
+                    borderBottomLeftRadius: '16px',
+                    borderBottomRightRadius: '16px',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'flex-end'
+                }}>
+                    <button
+                        onClick={handleClose}
+                        style={{
+                            padding: '6px 16px',
+                            background: 'transparent',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            color: '#6b7280',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.background = '#f3f4f6';
+                            e.target.style.borderColor = '#d1d5db';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.background = 'transparent';
+                            e.target.style.borderColor = '#e5e7eb';
+                        }}
+                    >
+                        Cancel (ESC)
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+});
     return (
 
         <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
@@ -2307,7 +2409,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                 <ContextMenu
                                     show={state.bulkUpdateContextMenu.show}
                                     onClose={closeContextMenu}
-                                    onUpdate={handleBulkUpdateSupplier}
+                                    onUpdate={handleBulkUpdateCustomer}
                                     selectionCriteria={state.selectionCriteria}
                                     selectedCount={state.selectedSalesIds.length}
                                 />
