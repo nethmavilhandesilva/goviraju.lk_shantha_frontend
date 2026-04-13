@@ -155,7 +155,7 @@ const SupplierReport = () => {
             setIsDetailsLoading(false);
         }
     };
-    
+
     // --- Filtering Logic ---
     const filteredPrintedItems = useMemo(() => {
         const lowerCaseSearch = printedSearchTerm.toLowerCase();
@@ -269,7 +269,7 @@ const SupplierReport = () => {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
     });
-    
+
     //function to add telephone number
     const handlePhoneSubmit = async (e) => {
         if (e.key === 'Enter') {
@@ -289,54 +289,54 @@ const SupplierReport = () => {
         }
     };
 
-   // 🚀 NEW: Handle loan amount submission and trigger print
-const handleLoanSubmit = async (e) => {
-    if (e.key === 'Enter') {
-        if (!selectedSupplier || !payingAmount || parseFloat(payingAmount) <= 0) {
-            setLoanStatus('⚠️ Invalid amount');
-            setTimeout(() => setLoanStatus(''), 2000);
-            return;
-        }
-
-        setLoanStatus('Processing...');
-        
-        try {
-            // Calculate total amount (SupplierTotal - payingAmount)
-            const totalAmount = totalsupplierSales - parseFloat(payingAmount);
-            
-            // Save the loan amount
-            await api.post('/supplier-loan', {
-                code: selectedSupplier,
-                loan_amount: parseFloat(payingAmount),
-                total_amount: totalAmount,
-                bill_no: selectedBillNo || null
-            });
-            
-            setLoanStatus('✅ Loan saved');
-            
-            // Clear the input
-            setPayingAmount('');
-            
-            // Small delay to ensure the loan is saved before printing
-            setTimeout(() => {
-                // Trigger the print function
-                handlePrint();
-            }, 300);
-            
-        } catch (error) {
-            console.error("Loan Update Error:", error);
-            
-            if (error.response && error.response.status === 422) {
-                setLoanStatus('⚠️ Invalid supplier code');
-            } else {
-                setLoanStatus('❌ Error');
+    // 🚀 NEW: Handle loan amount submission and trigger print
+    const handleLoanSubmit = async (e) => {
+        if (e.key === 'Enter') {
+            if (!selectedSupplier || !payingAmount || parseFloat(payingAmount) <= 0) {
+                setLoanStatus('⚠️ Invalid amount');
+                setTimeout(() => setLoanStatus(''), 2000);
+                return;
             }
-            
-            setTimeout(() => setLoanStatus(''), 2000);
+
+            setLoanStatus('Processing...');
+
+            try {
+                // Calculate total amount (SupplierTotal - payingAmount)
+                const totalAmount = totalsupplierSales - parseFloat(payingAmount);
+
+                // Save the loan amount
+                await api.post('/supplier-loan', {
+                    code: selectedSupplier,
+                    loan_amount: parseFloat(payingAmount),
+                    total_amount: totalAmount,
+                    bill_no: selectedBillNo || null
+                });
+
+                setLoanStatus('✅ Loan saved');
+
+                // Clear the input
+                setPayingAmount('');
+
+                // Small delay to ensure the loan is saved before printing
+                setTimeout(() => {
+                    // Trigger the print function
+                    handlePrint();
+                }, 300);
+
+            } catch (error) {
+                console.error("Loan Update Error:", error);
+
+                if (error.response && error.response.status === 422) {
+                    setLoanStatus('⚠️ Invalid supplier code');
+                } else {
+                    setLoanStatus('❌ Error');
+                }
+
+                setTimeout(() => setLoanStatus(''), 2000);
+            }
         }
-    }
-};
-    
+    };
+
 
     const getRowStyle = (index) => index % 2 === 0 ? { backgroundColor: '#f8f9fa' } : { backgroundColor: '#ffffff' };
 
@@ -461,20 +461,20 @@ const handleLoanSubmit = async (e) => {
         </div>`;
     }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
 
-const getBillContent = useCallback((currentBillNo) => {
-    const date = new Date().toLocaleDateString('si-LK');
-    const mobile = '0777672838/071437115';
-    const is4Inch = billSize === '4inch';
-    const receiptMaxWidth = is4Inch ? '4in' : '350px';
-    const fontSizeBody = '25px';
-    const fontSizeHeader = '23px';
-    const fontSizeTotal = '28px';
+    const getBillContent = useCallback((currentBillNo) => {
+        const date = new Date().toLocaleDateString('si-LK');
+        const mobile = '0777672838/071437115';
+        const is4Inch = billSize === '4inch';
+        const receiptMaxWidth = is4Inch ? '4in' : '350px';
+        const fontSizeBody = '25px';
+        const fontSizeHeader = '23px';
+        const fontSizeTotal = '28px';
 
-    // 🚀 NEW: Calculation for Loan/Partial Payment
-    const paidAmountValue = parseFloat(payingAmount) || 0;
-    const remainingAfterPayment = totalsupplierSales - paidAmountValue;
+        // 🚀 NEW: Calculation for Loan/Partial Payment
+        const paidAmountValue = parseFloat(payingAmount) || 0;
+        const remainingAfterPayment = totalsupplierSales - paidAmountValue;
 
-    const colGroups = `
+        const colGroups = `
     <colgroup>
         <col style="width:32%;"> 
         <col style="width:21%;">
@@ -482,25 +482,25 @@ const getBillContent = useCallback((currentBillNo) => {
         <col style="width:26%;">
     </colgroup>`;
 
-    const formatNumber = (value, maxDecimals = 3) => {
-        if (typeof value !== 'number' && typeof value !== 'string') return '0';
-        const number = parseFloat(value);
-        if (isNaN(number)) return '0';
-        if (Number.isInteger(number)) return number.toLocaleString('en-US');
-        const parts = number.toFixed(maxDecimals).replace(/\.?0+$/, '').split('.');
-        const wholePart = parseInt(parts[0]).toLocaleString('en-US');
-        return parts[1] ? `${wholePart}.${parts[1]}` : wholePart;
-    };
+        const formatNumber = (value, maxDecimals = 3) => {
+            if (typeof value !== 'number' && typeof value !== 'string') return '0';
+            const number = parseFloat(value);
+            if (isNaN(number)) return '0';
+            if (Number.isInteger(number)) return number.toLocaleString('en-US');
+            const parts = number.toFixed(maxDecimals).replace(/\.?0+$/, '').split('.');
+            const wholePart = parseInt(parts[0]).toLocaleString('en-US');
+            return parts[1] ? `${wholePart}.${parts[1]}` : wholePart;
+        };
 
-    const detailedItemsHtml = supplierDetails.map(record => {
-        const weight = parseFloat(record.weight) || 0;
-        const packs = parseInt(record.packs) || 0;
-        const price = parseFloat(record.SupplierPricePerKg) || 0;
-        const total = parseFloat(record.SupplierTotal) || 0;
-        const itemName = record.item_name || '';
-        const customerCode = record.customer_code?.toUpperCase() || '';
+        const detailedItemsHtml = supplierDetails.map(record => {
+            const weight = parseFloat(record.weight) || 0;
+            const packs = parseInt(record.packs) || 0;
+            const price = parseFloat(record.SupplierPricePerKg) || 0;
+            const total = parseFloat(record.SupplierTotal) || 0;
+            const itemName = record.item_name || '';
+            const customerCode = record.customer_code?.toUpperCase() || '';
 
-        return `
+            return `
         <tr style="font-size:${fontSizeBody}; font-weight:bold; vertical-align: bottom;">
             <td style="text-align:left; padding:10px 0; white-space: nowrap;">${itemName}<br>${formatNumber(packs)}</td>
             <td style="text-align:right; padding:10px 2px; position: relative; left: -70px;">${formatNumber(weight.toFixed(2))}</td>
@@ -510,23 +510,23 @@ const getBillContent = useCallback((currentBillNo) => {
                 <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
             </td>
         </tr>`;
-    }).join("");
+        }).join("");
 
-    const summaryEntries = Object.entries(itemSummaryData);
-    let itemSummaryHtml = '';
-    for (let i = 0; i < summaryEntries.length; i += 2) {
-        const [name1, d1] = summaryEntries[i];
-        const [name2, d2] = summaryEntries[i + 1] || [null, null];
-        const text1 = `${name1}:${formatNumber(d1.totalWeight)}/${formatNumber(d1.totalPacks)}`;
-        const text2 = d2 ? `${name2}:${formatNumber(d2.totalWeight)}/${formatNumber(d2.totalPacks)}` : '';
-        itemSummaryHtml += `<tr><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text1}</td><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text2}</td></tr>`;
-    }
+        const summaryEntries = Object.entries(itemSummaryData);
+        let itemSummaryHtml = '';
+        for (let i = 0; i < summaryEntries.length; i += 2) {
+            const [name1, d1] = summaryEntries[i];
+            const [name2, d2] = summaryEntries[i + 1] || [null, null];
+            const text1 = `${name1}:${formatNumber(d1.totalWeight)}/${formatNumber(d1.totalPacks)}`;
+            const text2 = d2 ? `${name2}:${formatNumber(d2.totalWeight)}/${formatNumber(d2.totalPacks)}` : '';
+            itemSummaryHtml += `<tr><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text1}</td><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text2}</td></tr>`;
+        }
 
-    // 🚀 CALCULATION FOR FINAL NET AMOUNT
-    // We subtract both Advance and any current payment made
-    const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
+        // 🚀 CALCULATION FOR FINAL NET AMOUNT
+        // We subtract both Advance and any current payment made
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
 
-    return `
+        return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -633,75 +633,77 @@ const getBillContent = useCallback((currentBillNo) => {
 </div>
 </body>
 </html>`;
-}, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount]);
+    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount]);
 
     // --- Print function ---
- const handlePrint = useCallback(async () => {
-    if (!supplierDetails || supplierDetails.length === 0) return;
+    // --- Print function ---
+    const handlePrint = useCallback(async () => {
+        if (!supplierDetails || supplierDetails.length === 0) return;
 
-    let finalBillNo = selectedBillNo;
+        let finalBillNo = selectedBillNo;
 
-    // If it's a new bill (Unprinted), we must finalize and send SMS
-    if (isUnprintedBill) {
-        setIsDetailsLoading(true);
-        try {
-            const response = await api.post('/suppliers/mark-as-printed', {
-                transaction_ids: supplierDetails.map(r => r.id),
-                telephone_no: phoneNo,
-                advance_amount: advanceAmount,
-                supplier_code: selectedSupplier
-            });
-
-            finalBillNo = response.data.new_bill_no;
-            setSelectedBillNo(finalBillNo);
-
-            if (phoneNo) {
-                console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
-            }
-        } catch (err) {
-            console.error('Finalize/SMS Error:', err);
-            alert('Finalize failed. SMS could not be sent.');
-            return;
-        } finally {
-            setIsDetailsLoading(false);
-        }
-    } else {
-        // For printed bills, send SMS without finalizing
-        if (phoneNo) {
+        // If it's a new bill (Unprinted), we must finalize and send SMS
+        if (isUnprintedBill) {
             setIsDetailsLoading(true);
             try {
-                const smsResponse = await api.post('/suppliers/resend-sms', {
-                    bill_no: selectedBillNo,
-                    telephone_no: phoneNo,
-                    supplier_code: selectedSupplier,
+                const response = await api.post('/suppliers/mark-as-printed', {
                     transaction_ids: supplierDetails.map(r => r.id),
+                    telephone_no: phoneNo,
                     advance_amount: advanceAmount,
-                    is_reprint: true
+                    supplier_code: selectedSupplier
                 });
-                
-                console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
-                
-                setPhoneStatus('📱 SMS resent');
-                setTimeout(() => setPhoneStatus(''), 2000);
-                
+
+                finalBillNo = response.data.new_bill_no;
+                setSelectedBillNo(finalBillNo);
+
+                if (phoneNo) {
+                    console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
+                }
             } catch (err) {
-                console.error('SMS Resend Error:', err);
-                setPhoneStatus('⚠️ SMS failed');
-                setTimeout(() => setPhoneStatus(''), 2000);
+                console.error('Finalize/SMS Error:', err);
+                alert('Finalize failed. SMS could not be sent.');
+                return;
             } finally {
                 setIsDetailsLoading(false);
             }
         } else {
-            setPhoneStatus('⚠️ No phone number');
-            setTimeout(() => setPhoneStatus(''), 2000);
-        }
-    }
+            // For printed bills, send SMS without finalizing
+            if (phoneNo) {
+                setIsDetailsLoading(true);
+                try {
+                    const smsResponse = await api.post('/suppliers/resend-sms', {
+                        bill_no: selectedBillNo,
+                        telephone_no: phoneNo,
+                        supplier_code: selectedSupplier,
+                        transaction_ids: supplierDetails.map(r => r.id),
+                        advance_amount: advanceAmount,
+                        is_reprint: true
+                    });
 
-    // After backend success, proceed to show the browser print dialog
-    const content = printFormat === 'a4' ? getA4Content(finalBillNo) : getBillContent(finalBillNo);
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-        printWindow.document.write(`
+                    console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
+
+                    setPhoneStatus('📱 SMS resent');
+                    setTimeout(() => setPhoneStatus(''), 2000);
+
+                } catch (err) {
+                    console.error('SMS Resend Error:', err);
+                    setPhoneStatus('⚠️ SMS failed');
+                    setTimeout(() => setPhoneStatus(''), 2000);
+                } finally {
+                    setIsDetailsLoading(false);
+                }
+            } else {
+                setPhoneStatus('⚠️ No phone number');
+                setTimeout(() => setPhoneStatus(''), 2000);
+            }
+        }
+
+        // After backend success, proceed to show the browser print dialog
+        const content = printFormat === 'a4' ? getA4Content(finalBillNo) : getBillContent(finalBillNo);
+        const printWindow = window.open('', '_blank');
+
+        if (printWindow) {
+            printWindow.document.write(`
             <html>
                 <head>
                     <title>Print Bill</title>
@@ -727,18 +729,44 @@ const getBillContent = useCallback((currentBillNo) => {
                 <body style="margin: 0; padding: 0;">${content}</body>
             </html>
         `);
-        printWindow.document.close();
-        printWindow.focus();
-        // Delay print slightly for content load
-        setTimeout(() => {
-            printWindow.print();
-            // Refresh current page after print dialog opens
-            setTimeout(() => {
+            printWindow.document.close();
+            printWindow.focus();
+
+            // 🚀 Auto-close the print preview window and refresh main page when print dialog is closed
+            printWindow.onafterprint = function () {
+                printWindow.close();
+                // Refresh the main page after print dialog closes
                 window.location.reload();
-            }, 500);
-        }, 300);
-    }
-}, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
+            };
+
+            // Fallback for browsers that don't support onafterprint
+            setTimeout(() => {
+                printWindow.onafterprint = null;
+                // Try to detect if print dialog was closed by checking if window is still open
+                const checkClosed = setInterval(() => {
+                    if (printWindow.closed) {
+                        clearInterval(checkClosed);
+                        // Refresh the main page
+                        window.location.reload();
+                    } else {
+                        // Try to close it after a delay as fallback
+                        clearInterval(checkClosed);
+                        setTimeout(() => {
+                            if (!printWindow.closed) {
+                                printWindow.close();
+                                window.location.reload();
+                            }
+                        }, 500);
+                    }
+                }, 500);
+            }, 5000); // Check for 5 seconds
+
+            // Delay print slightly for content load
+            setTimeout(() => {
+                printWindow.print();
+            }, 300);
+        }
+    }, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
 
     // --- Keyboard event listener ---
     useEffect(() => {
@@ -752,7 +780,7 @@ const getBillContent = useCallback((currentBillNo) => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [supplierDetails, handlePrint, isDetailsLoading]);
-    
+
     //new profile pic view modal
     const renderImageModal = () => {
         if (!isImageModalOpen) return null;
@@ -853,10 +881,10 @@ const getBillContent = useCallback((currentBillNo) => {
                     {sameItemCount > 1 && (
                         <div style={{ backgroundColor: '#fff3cd', padding: '10px', borderRadius: '4px', marginBottom: '15px', border: '1px solid #ffeeba' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.85rem', color: '#856404', fontWeight: 'bold' }}>
-                                <input 
-                                    type="checkbox" 
-                                    checked={applyToAllSameItems} 
-                                    onChange={(e) => setApplyToAllSameItems(e.target.checked)} 
+                                <input
+                                    type="checkbox"
+                                    checked={applyToAllSameItems}
+                                    onChange={(e) => setApplyToAllSameItems(e.target.checked)}
                                     style={{ width: '18px', height: '18px' }}
                                 />
                                 සියලුම "{editingRecord.item_name}" ({sameItemCount}) වෙනස් කරන්න
@@ -1093,11 +1121,11 @@ const getBillContent = useCallback((currentBillNo) => {
                                 </p>
                             )}
                         </div>
-                        
+
                         {/* 🚀 NEW: Loan/Payment Input before Print */}
                         <div style={{ marginTop: '20px', padding: '15px', border: '2px solid #17a2b8', borderRadius: '8px', backgroundColor: '#091d3d' }}>
                             <label style={{ color: '#17a2b8', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>ගෙවන මුදල ඇතුලත් කර Print කරන්න (Enter Paying Amount & Enter):</label>
-                            <input 
+                            <input
                                 type="number"
                                 value={payingAmount}
                                 onChange={(e) => setPayingAmount(e.target.value)}
@@ -1119,7 +1147,7 @@ const getBillContent = useCallback((currentBillNo) => {
     };
 
     const navBarStyle = { backgroundColor: '#343a40', padding: '15px 50px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1030, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' };
-    const reportContainerStyle = { minHeight: '100vh', padding: '90px 50px 50px 50px', fontFamily: 'Roboto, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#1ec139ff',marginTop: '-25px' };
+    const reportContainerStyle = { minHeight: '100vh', padding: '90px 50px 50px 50px', fontFamily: 'Roboto, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#1ec139ff', marginTop: '-25px' };
 
     if (isLoading) return <div style={loadingStyle}>Loading Supplier Report...</div>;
 
@@ -1128,12 +1156,12 @@ const getBillContent = useCallback((currentBillNo) => {
             <nav style={navBarStyle}>
                 <h1 style={{ color: 'white', fontSize: '1.5rem', margin: 0 }}>සැපයුම්කරු වාර්තාව</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    
+
                     {/* 🚀 NEW: Print Format Selector */}
                     <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#495057', padding: '5px 10px', borderRadius: '5px', gap: '10px' }}>
                         <label style={{ color: 'white', fontSize: '0.9rem', fontWeight: 'bold' }}>Format:</label>
-                        <select 
-                            value={printFormat} 
+                        <select
+                            value={printFormat}
                             onChange={(e) => setPrintFormat(e.target.value)}
                             style={{ padding: '5px', borderRadius: '4px', border: 'none', backgroundColor: 'white', fontWeight: 'bold' }}
                         >

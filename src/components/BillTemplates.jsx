@@ -50,8 +50,8 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     const is4Inch = billSize === '4inch';
     const receiptMaxWidth = is4Inch ? '4in' : '350px';
 
-    const fontSizeBody = '20px';
-    const fontSizeHeader = '18px';
+    const fontSizeBody = '18px';
+    const fontSizeHeader ='18px';
     const fontSizeTotal = '28px';
 
     const colGroups = `
@@ -69,7 +69,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
         const value = (weight * price).toFixed(2);
 
         return `
-        <tr style="font-size:${fontSizeBody}; font-weight:900; vertical-align: bottom;">
+      <tr style="font-size:${fontSizeBody}; font-weight: 900; vertical-align: bottom; color: #000000; font-weight: bold; -webkit-text-stroke: 0.5px #000000;">
             <td style="font-size:20px; text-align:left; padding:10px 0; white-space: nowrap;">
                 ${s.item_name || ""}<br>${formatNumber(packs)}
             </td>
@@ -158,7 +158,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
                     <span class="badge">${customerName.toUpperCase()}</span>
                 </div>
                 <div class="time-row">
-                    <div class="business-sub">විශේෂ ආර්ථික මධ්‍යස්ථානය  දඹුල්ල</div>
+                    <div class="business-sub" style="font-size: 18px; font-weight: bold;">විශේෂ ආර්ථික මධ්‍යස්ථානය  දඹුල්ල</div>
                 </div>
             </div>
             <div class="info-section">

@@ -410,56 +410,56 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         return Array.from(combinedMap.values());
     };
     //functions related to multiselect and bulk update
-   const toggleSaleSelection = (saleId, e) => {
-    if (e) {
-        e.stopPropagation();
-        e.preventDefault();
-    }
+    const toggleSaleSelection = (saleId, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
 
-    const saleToSelect = displayedSales.find(s => s.id === saleId);
-    if (!saleToSelect) return;
+        const saleToSelect = displayedSales.find(s => s.id === saleId);
+        if (!saleToSelect) return;
 
-    const isCurrentlySelected = state.selectedSalesIds.includes(saleId);
+        const isCurrentlySelected = state.selectedSalesIds.includes(saleId);
 
-    if (isCurrentlySelected) {
-        setState(prev => {
-            const newSelectedIds = prev.selectedSalesIds.filter(id => id !== saleId);
-            return {
+        if (isCurrentlySelected) {
+            setState(prev => {
+                const newSelectedIds = prev.selectedSalesIds.filter(id => id !== saleId);
+                return {
+                    ...prev,
+                    selectedSalesIds: newSelectedIds,
+                    selectionCriteria: newSelectedIds.length === 0 ? null : prev.selectionCriteria
+                };
+            });
+            return;
+        }
+
+        // Case 1: No records selected yet - select this one and set criteria
+        if (state.selectedSalesIds.length === 0) {
+            setState(prev => ({
                 ...prev,
-                selectedSalesIds: newSelectedIds,
-                selectionCriteria: newSelectedIds.length === 0 ? null : prev.selectionCriteria
-            };
-        });
-        return;
-    }
-    
-    // Case 1: No records selected yet - select this one and set criteria
-    if (state.selectedSalesIds.length === 0) {
-        setState(prev => ({
-            ...prev,
-            selectedSalesIds: [saleId],
-            selectionCriteria: {
-                customer_code: saleToSelect.customer_code,  // ← CHANGED from supplier_code
-                item_code: saleToSelect.item_code
-            }
-        }));
-        return;
-    }
+                selectedSalesIds: [saleId],
+                selectionCriteria: {
+                    customer_code: saleToSelect.customer_code,  // ← CHANGED from supplier_code
+                    item_code: saleToSelect.item_code
+                }
+            }));
+            return;
+        }
 
-    // Case 2: Records already selected - validate if it matches criteria
-    const matchesCriteria =
-        saleToSelect.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
-        saleToSelect.item_code === state.selectionCriteria?.item_code;
+        // Case 2: Records already selected - validate if it matches criteria
+        const matchesCriteria =
+            saleToSelect.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
+            saleToSelect.item_code === state.selectionCriteria?.item_code;
 
-    if (matchesCriteria) {
-        setState(prev => ({
-            ...prev,
-            selectedSalesIds: [...prev.selectedSalesIds, saleId]
-        }));
-    } else {
-        alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Customer: ${state.selectionCriteria?.customer_code}\n   Item: ${state.selectionCriteria?.item_code}\n\n✗ This record has:\n   Customer: ${saleToSelect.customer_code}\n   Item: ${saleToSelect.item_code}\n\nPlease clear selection or select matching records.`);
-    }
-};
+        if (matchesCriteria) {
+            setState(prev => ({
+                ...prev,
+                selectedSalesIds: [...prev.selectedSalesIds, saleId]
+            }));
+        } else {
+            alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Customer: ${state.selectionCriteria?.customer_code}\n   Item: ${state.selectionCriteria?.item_code}\n\n✗ This record has:\n   Customer: ${saleToSelect.customer_code}\n   Item: ${saleToSelect.item_code}\n\nPlease clear selection or select matching records.`);
+        }
+    };
     useEffect(() => {
         const handleEsc = (e) => {
             if (e.key === 'Escape' && state.bulkUpdateContextMenu.show) {
@@ -471,85 +471,85 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     }, [state.bulkUpdateContextMenu.show]);
 
     // Handle right-click on selected records on bulk update
-   const handleRightClick = (e, sale) => {
-    e.preventDefault();
-    e.stopPropagation();
+    const handleRightClick = (e, sale) => {
+        e.preventDefault();
+        e.stopPropagation();
 
-    const isSelected = state.selectedSalesIds.includes(sale.id);
+        const isSelected = state.selectedSalesIds.includes(sale.id);
 
-    if (!isSelected) {
-        if (state.selectedSalesIds.length === 0) {
-            setState(prev => ({
-                ...prev,
-                selectedSalesIds: [sale.id],
-                selectionCriteria: {
-                    customer_code: sale.customer_code,  // ← CHANGED from supplier_code
-                    item_code: sale.item_code
-                }
-            }));
-        } else {
-            const matchesCriteria =
-                sale.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
-                sale.item_code === state.selectionCriteria?.item_code;
-
-            if (matchesCriteria) {
+        if (!isSelected) {
+            if (state.selectedSalesIds.length === 0) {
                 setState(prev => ({
                     ...prev,
-                    selectedSalesIds: [...prev.selectedSalesIds, sale.id]
+                    selectedSalesIds: [sale.id],
+                    selectionCriteria: {
+                        customer_code: sale.customer_code,  // ← CHANGED from supplier_code
+                        item_code: sale.item_code
+                    }
                 }));
             } else {
-                alert(`Cannot select this record!`);
-                return;
+                const matchesCriteria =
+                    sale.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
+                    sale.item_code === state.selectionCriteria?.item_code;
+
+                if (matchesCriteria) {
+                    setState(prev => ({
+                        ...prev,
+                        selectedSalesIds: [...prev.selectedSalesIds, sale.id]
+                    }));
+                } else {
+                    alert(`Cannot select this record!`);
+                    return;
+                }
             }
         }
-    }
 
-    setState(prev => ({
-        ...prev,
-        bulkUpdateContextMenu: {
-            show: true,
-            x: e.clientX,
-            y: e.clientY
-        },
-        bulkUpdateCustomerCode: ""  // ← CHANGED
-    }));
-};
-const handleBulkUpdateCustomer = async (newCustomerCode) => {
-    const customerCodeToUpdate = newCustomerCode || state.bulkUpdateCustomerCode;
-    const finalCustomerCode = customerCodeToUpdate.trim().toUpperCase();
+        setState(prev => ({
+            ...prev,
+            bulkUpdateContextMenu: {
+                show: true,
+                x: e.clientX,
+                y: e.clientY
+            },
+            bulkUpdateCustomerCode: ""  // ← CHANGED
+        }));
+    };
+    const handleBulkUpdateCustomer = async (newCustomerCode) => {
+        const customerCodeToUpdate = newCustomerCode || state.bulkUpdateCustomerCode;
+        const finalCustomerCode = customerCodeToUpdate.trim().toUpperCase();
 
-    if (!finalCustomerCode) {
-        alert("Please enter a customer code");
-        return;
-    }
-
-    if (state.selectedSalesIds.length === 0) {
-        alert("No sales selected");
-        return;
-    }
-
-    try {
-        updateState({ isSubmitting: true });
-
-        const response = await api.post(routes.bulkUpdateCustomer, {
-            sale_ids: state.selectedSalesIds,
-            customer_code: finalCustomerCode
-        });
-
-        if (response.data.success) {
-       
-     
-            // Full page refresh
-            window.location.reload();
-        } else {
-            throw new Error(response.data.message || "Update failed");
+        if (!finalCustomerCode) {
+            alert("Please enter a customer code");
+            return;
         }
-    } catch (error) {
-        console.error("Bulk update error:", error);
-        alert("Failed to update customer codes. Please try again.");
-        updateState({ isSubmitting: false });
-    }
-};
+
+        if (state.selectedSalesIds.length === 0) {
+            alert("No sales selected");
+            return;
+        }
+
+        try {
+            updateState({ isSubmitting: true });
+
+            const response = await api.post(routes.bulkUpdateCustomer, {
+                sale_ids: state.selectedSalesIds,
+                customer_code: finalCustomerCode
+            });
+
+            if (response.data.success) {
+
+
+                // Full page refresh
+                window.location.reload();
+            } else {
+                throw new Error(response.data.message || "Update failed");
+            }
+        } catch (error) {
+            console.error("Bulk update error:", error);
+            alert("Failed to update customer codes. Please try again.");
+            updateState({ isSubmitting: false });
+        }
+    };
 
     // Handle bulk update submission
     const handleBulkUpdateSupplier = async (newSupplierCode) => {
@@ -610,7 +610,7 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
             ...prev,
             bulkUpdateContextMenu: { show: false, x: 0, y: 0 },
             bulkUpdateSupplierCode: "",
-             bulkUpdateCustomerCode: "" 
+            bulkUpdateCustomerCode: ""
         }));
     };
     //End of functions releated to multiselect and bulk update
@@ -1080,101 +1080,101 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
         }
     };
 
-   const handleEditClick = (sale) => {
-    // If same record clicked again → clear fields EXCEPT customer/contact fields
-    if (state.editingSaleId === sale.id) {
+    const handleEditClick = (sale) => {
+        // If same record clicked again → clear fields EXCEPT customer/contact fields
+        if (state.editingSaleId === sale.id) {
+            setFormData((prev) => ({
+                ...prev,
+                customer_code: sale.customer_code || "",
+                customer_name: sale.customer_name || "",
+                // PRESERVE TELEPHONE:
+                telephone_no: prev.telephone_no || "",
+                supplier_code: "",
+                item_code: "",
+                item_name: "",
+                weight: "",
+                price_per_kg: "",
+                pack_due: "",
+                total: "",
+                packs: ""
+            }));
+
+            updateState({
+                editingSaleId: null,
+                isManualClear: true,
+                priceManuallyChanged: false,
+                gridPricePerKg: "",
+                selectedSaleForBreakdown: null
+            });
+
+            setTimeout(() => {
+                refs.supplier_code?.current?.focus();
+                refs.supplier_code?.current?.select();
+            }, 0);
+
+            return;
+        }
+
+        // === Normal behavior when selecting a record to edit ===
+        let fetchedPackDue = sale.pack_due || "";
+        if (sale.item_code) {
+            const matchingItem = items.find(i => String(i.no) === String(sale.item_code));
+            fetchedPackDue = parseFloat(matchingItem?.pack_due) || sale.pack_due || "";
+        }
+
         setFormData((prev) => ({
-            ...prev,
+            ...sale,
+            // Ensure we explicitly map these so they don't get lost
+            item_name: sale.item_name || "",
             customer_code: sale.customer_code || "",
             customer_name: sale.customer_name || "",
-            // PRESERVE TELEPHONE:
-            telephone_no: prev.telephone_no || "",
-            supplier_code: "",
-            item_code: "",
-            item_name: "",
-            weight: "",
-            price_per_kg: "",
-            pack_due: "",
-            total: "",
-            packs: ""
+            // PRESERVE TELEPHONE from the current form state or the sale object
+            telephone_no: sale.telephone_no || prev.telephone_no || "",
+            supplier_code: sale.supplier_code || "",
+            item_code: sale.item_code || "",
+            weight: sale.weight || "",
+            price_per_kg: sale.price_per_kg || "",
+            pack_due: fetchedPackDue,
+            total: sale.total || "",
+            packs: sale.packs || ""
         }));
 
         updateState({
-            editingSaleId: null,
-            isManualClear: true,
+            editingSaleId: sale.id,
+            isManualClear: false,
             priceManuallyChanged: false,
-            gridPricePerKg: "",
-            selectedSaleForBreakdown: null
+            gridPricePerKg: sale.price_per_kg || "",
+            selectedSaleForBreakdown: sale
         });
 
+        // FIX: Set focus to weight field and ensure Enter key navigation works
         setTimeout(() => {
-            refs.supplier_code?.current?.focus();
-            refs.supplier_code?.current?.select();
-        }, 0);
+            if (refs.weight.current) {
+                refs.weight.current.focus();
+                // Select the text so user can type over it if they want
+                refs.weight.current.select();
 
-        return;
-    }
-
-    // === Normal behavior when selecting a record to edit ===
-    let fetchedPackDue = sale.pack_due || "";
-    if (sale.item_code) {
-        const matchingItem = items.find(i => String(i.no) === String(sale.item_code));
-        fetchedPackDue = parseFloat(matchingItem?.pack_due) || sale.pack_due || "";
-    }
-
-    setFormData((prev) => ({
-        ...sale,
-        // Ensure we explicitly map these so they don't get lost
-        item_name: sale.item_name || "",
-        customer_code: sale.customer_code || "",
-        customer_name: sale.customer_name || "",
-        // PRESERVE TELEPHONE from the current form state or the sale object
-        telephone_no: sale.telephone_no || prev.telephone_no || "",
-        supplier_code: sale.supplier_code || "",
-        item_code: sale.item_code || "",
-        weight: sale.weight || "",
-        price_per_kg: sale.price_per_kg || "",
-        pack_due: fetchedPackDue,
-        total: sale.total || "",
-        packs: sale.packs || ""
-    }));
-
-    updateState({
-        editingSaleId: sale.id,
-        isManualClear: false,
-        priceManuallyChanged: false,
-        gridPricePerKg: sale.price_per_kg || "",
-        selectedSaleForBreakdown: sale
-    });
-
-    // FIX: Set focus to weight field and ensure Enter key navigation works
-    setTimeout(() => {
-        if (refs.weight.current) {
-            refs.weight.current.focus();
-            // Select the text so user can type over it if they want
-            refs.weight.current.select();
-            
-            // Add a one-time keydown listener to handle Enter when value hasn't changed
-            const handleWeightEnter = (e) => {
-                if (e.key === "Enter") {
-                    e.preventDefault();
-                    // Remove this listener to avoid duplicates
-                    refs.weight.current.removeEventListener('keydown', handleWeightEnter);
-                    // Move focus to price field
-                    if (refs.price_per_kg_grid_item.current) {
-                        refs.price_per_kg_grid_item.current.focus();
-                        refs.price_per_kg_grid_item.current.select();
+                // Add a one-time keydown listener to handle Enter when value hasn't changed
+                const handleWeightEnter = (e) => {
+                    if (e.key === "Enter") {
+                        e.preventDefault();
+                        // Remove this listener to avoid duplicates
+                        refs.weight.current.removeEventListener('keydown', handleWeightEnter);
+                        // Move focus to price field
+                        if (refs.price_per_kg_grid_item.current) {
+                            refs.price_per_kg_grid_item.current.focus();
+                            refs.price_per_kg_grid_item.current.select();
+                        }
                     }
-                }
-            };
-            
-            // Remove any existing listener first to avoid duplicates
-            refs.weight.current.removeEventListener('keydown', handleWeightEnter);
-            // Add the new listener
-            refs.weight.current.addEventListener('keydown', handleWeightEnter);
-        }
-    }, 0);
-};
+                };
+
+                // Remove any existing listener first to avoid duplicates
+                refs.weight.current.removeEventListener('keydown', handleWeightEnter);
+                // Add the new listener
+                refs.weight.current.addEventListener('keydown', handleWeightEnter);
+            }
+        }, 0);
+    };
 
     const handleClearForm = (clearBillNo = false) => {
         setFormData(initialFormData);
@@ -1662,74 +1662,74 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
         }
     };
 
-   const hasData = allSales.length > 0 || customers.length > 0 || items.length > 0 || suppliers.length > 0;
+    const hasData = allSales.length > 0 || customers.length > 0 || items.length > 0 || suppliers.length > 0;
     //context related to bulkupdate
-   const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
-   const [localCustomerCode, setLocalCustomerCode] = React.useState('');
+    const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
+        const [localCustomerCode, setLocalCustomerCode] = React.useState('');
 
-    React.useEffect(() => {
-        if (show) {
+        React.useEffect(() => {
+            if (show) {
+                setLocalCustomerCode('');
+            }
+        }, [show]);
+
+        const handleInputChange = (e) => {
+            const value = e.target.value.toUpperCase();
+            setLocalCustomerCode(value);
+        };
+
+        const handleUpdate = () => {
+            if (localCustomerCode.trim()) {
+                onUpdate(localCustomerCode.trim().toUpperCase());
+                setLocalCustomerCode('');
+            } else {
+                alert("Please enter a customer code");
+            }
+        };
+
+        const handleClose = () => {
             setLocalCustomerCode('');
-        }
-    }, [show]);
+            onClose();
+        };
 
-    const handleInputChange = (e) => {
-        const value = e.target.value.toUpperCase();
-        setLocalCustomerCode(value);
-    };
+        if (!show) return null;
 
-    const handleUpdate = () => {
-        if (localCustomerCode.trim()) {
-            onUpdate(localCustomerCode.trim().toUpperCase());
-            setLocalCustomerCode('');
-        } else {
-            alert("Please enter a customer code");
-        }
-    };
+        return (
+            <>
+                {/* Backdrop Overlay */}
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 9999
+                    }}
+                    onClick={handleClose}
+                />
 
-    const handleClose = () => {
-        setLocalCustomerCode('');
-        onClose();
-    };
-
-    if (!show) return null;
-
-    return (
-        <>
-            {/* Backdrop Overlay */}
-            <div 
-                style={{ 
-                    position: 'fixed', 
-                    top: 0, 
-                    left: 0, 
-                    right: 0, 
-                    bottom: 0, 
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
-                    backdropFilter: 'blur(4px)', 
-                    zIndex: 9999 
-                }} 
-                onClick={handleClose} 
-            />
-
-            {/* Modal Container */}
-            <div 
-                style={{ 
-                    position: 'fixed', 
-                    top: '50%', 
-                    left: '50%', 
-                    transform: 'translate(-50%, -50%)', 
-                    backgroundColor: '#ffffff', 
-                    borderRadius: '16px', 
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', 
-                    zIndex: 10000, 
-                    width: '90%', 
-                    maxWidth: '450px', 
-                    maxHeight: '90vh', 
-                    overflow: 'auto' 
-                }} 
-                onClick={(e) => e.stopPropagation()}
-            >
-                <style>{`
+                {/* Modal Container */}
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        backgroundColor: '#ffffff',
+                        borderRadius: '16px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        zIndex: 10000,
+                        width: '90%',
+                        maxWidth: '450px',
+                        maxHeight: '90vh',
+                        overflow: 'auto'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <style>{`
                     @keyframes fadeIn { 
                         from { opacity: 0; } 
                         to { opacity: 1; } 
@@ -1747,242 +1747,242 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
                     }
                 `}</style>
 
-                {/* Header with Icon */}
-                <div style={{ 
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-                    padding: '12px 20px', 
-                    borderTopLeftRadius: '16px', 
-                    borderTopRightRadius: '16px', 
-                    color: 'white' 
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ 
-                            width: '32px', 
-                            height: '32px', 
-                            background: 'rgba(255, 255, 255, 0.2)', 
-                            borderRadius: '8px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            fontSize: '16px' 
-                        }}>
-                            ⚡
-                        </div>
-                        <div>
-                            <h2 style={{
-                                margin: 0,
-                                fontSize: '16px',
-                                fontWeight: 'bold',
-                                letterSpacing: '-0.5px'
-                            }}>
-                                Bulk Update Customer
-                            </h2>
-                            <p style={{
-                                margin: '2px 0 0 0',
-                                fontSize: '11px',
-                                opacity: 0.9
-                            }}>
-                                Update multiple customer codes at once
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div style={{ padding: '16px 20px' }}>
-                    {/* Selection Criteria Card */}
-                    {selectionCriteria && (
-                        <div style={{
-                            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                            borderRadius: '10px',
-                            padding: '10px 12px',
-                            marginBottom: '16px',
-                            border: '1px solid #fbbf24'
-                        }}>
+                    {/* Header with Icon */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        padding: '12px 20px',
+                        borderTopLeftRadius: '16px',
+                        borderTopRightRadius: '16px',
+                        color: 'white'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div style={{
+                                width: '32px',
+                                height: '32px',
+                                background: 'rgba(255, 255, 255, 0.2)',
+                                borderRadius: '8px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                marginBottom: '8px'
+                                justifyContent: 'center',
+                                fontSize: '16px'
                             }}>
-                                <span style={{ fontSize: '14px' }}>📋</span>
-                                <span style={{
-                                    fontWeight: 'bold',
-                                    fontSize: '11px',
-                                    color: '#92400e',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.5px'
-                                }}>
-                                    Current Selection
-                                </span>
+                                ⚡
                             </div>
-
-                            <div style={{ display: 'grid', gap: '6px' }}>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: '6px 8px',
-                                    background: 'white',
-                                    borderRadius: '6px'
+                            <div>
+                                <h2 style={{
+                                    margin: 0,
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    letterSpacing: '-0.5px'
                                 }}>
-                                    <span style={{ fontSize: '11px', color: '#78350f' }}>Customer:</span>
-                                    <span style={{
-                                        fontWeight: 'bold',
-                                        fontSize: '12px',
-                                        color: '#92400e',
-                                        fontFamily: 'monospace'
-                                    }}>
-                                        {selectionCriteria.customer_code}
-                                    </span>
-                                </div>
-
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: '6px 8px',
-                                    background: 'white',
-                                    borderRadius: '6px'
+                                    Bulk Update Customer
+                                </h2>
+                                <p style={{
+                                    margin: '2px 0 0 0',
+                                    fontSize: '11px',
+                                    opacity: 0.9
                                 }}>
-                                    <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
-                                    <span style={{
-                                        fontWeight: 'bold',
-                                        fontSize: '12px',
-                                        color: '#92400e',
-                                        fontFamily: 'monospace'
-                                    }}>
-                                        {selectionCriteria.item_code}
-                                    </span>
-                                </div>
-
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: '6px 8px',
-                                    background: '#10b981',
-                                    borderRadius: '6px',
-                                    color: 'white'
-                                }}>
-                                    <span style={{ fontSize: '11px' }}>Selected:</span>
-                                    <span style={{
-                                        fontWeight: 'bold',
-                                        fontSize: '14px'
-                                    }}>
-                                        {selectedCount || 0}
-                                    </span>
-                                </div>
+                                    Update multiple customer codes at once
+                                </p>
                             </div>
                         </div>
-                    )}
-
-                    {/* Input Field */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{
-                            display: 'block',
-                            marginBottom: '6px',
-                            fontWeight: '600',
-                            fontSize: '12px',
-                            color: '#374151'
-                        }}>
-                            ✏️ New Customer Code
-                        </label>
-                        <input
-                            type="text"
-                            value={localCustomerCode}
-                            onChange={handleInputChange}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleUpdate();
-                                }
-                            }}
-                            style={{ 
-                                width: '100%', 
-                                padding: '10px 12px', 
-                                border: '2px solid #e5e7eb', 
-                                borderRadius: '10px', 
-                                fontSize: '13px', 
-                                fontWeight: '500', 
-                                transition: 'all 0.2s ease', 
-                                outline: 'none', 
-                                boxSizing: 'border-box', 
-                                fontFamily: 'monospace' 
-                            }}
-                            onFocus={(e) => {
-                                e.target.style.borderColor = '#667eea';
-                                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
-                            }}
-                            onBlur={(e) => {
-                                e.target.style.borderColor = '#e5e7eb';
-                                e.target.style.boxShadow = 'none';
-                            }}
-                            autoFocus
-                            placeholder="e.g., CUST001"
-                        />
                     </div>
 
-                    {/* Primary Action Button */}
-                    <button
-                        onClick={handleUpdate}
-                        className="modal-button"
-                        style={{ 
-                            width: '100%', 
-                            padding: '12px', 
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-                            color: 'white', 
-                            border: 'none', 
-                            borderRadius: '10px', 
-                            cursor: 'pointer', 
-                            fontWeight: 'bold', 
-                            fontSize: '14px', 
-                            marginBottom: '0' 
-                        }}
-                    >
-                        🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
-                    </button>
-                </div>
+                    {/* Content */}
+                    <div style={{ padding: '16px 20px' }}>
+                        {/* Selection Criteria Card */}
+                        {selectionCriteria && (
+                            <div style={{
+                                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                                borderRadius: '10px',
+                                padding: '10px 12px',
+                                marginBottom: '16px',
+                                border: '1px solid #fbbf24'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    marginBottom: '8px'
+                                }}>
+                                    <span style={{ fontSize: '14px' }}>📋</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '11px',
+                                        color: '#92400e',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Current Selection
+                                    </span>
+                                </div>
 
-                {/* Footer with Close Button */}
-                <div style={{
-                    padding: '12px 20px',
-                    background: '#f9fafb',
-                    borderBottomLeftRadius: '16px',
-                    borderBottomRightRadius: '16px',
-                    borderTop: '1px solid #e5e7eb',
-                    display: 'flex',
-                    justifyContent: 'flex-end'
-                }}>
-                    <button
-                        onClick={handleClose}
-                        style={{
-                            padding: '6px 16px',
-                            background: 'transparent',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '6px',
-                            color: '#6b7280',
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            fontWeight: '500'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.target.style.background = '#f3f4f6';
-                            e.target.style.borderColor = '#d1d5db';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.target.style.background = 'transparent';
-                            e.target.style.borderColor = '#e5e7eb';
-                        }}
-                    >
-                        Cancel (ESC)
-                    </button>
+                                <div style={{ display: 'grid', gap: '6px' }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        background: 'white',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Customer:</span>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '12px',
+                                            color: '#92400e',
+                                            fontFamily: 'monospace'
+                                        }}>
+                                            {selectionCriteria.customer_code}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        background: 'white',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '12px',
+                                            color: '#92400e',
+                                            fontFamily: 'monospace'
+                                        }}>
+                                            {selectionCriteria.item_code}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        background: '#10b981',
+                                        borderRadius: '6px',
+                                        color: 'white'
+                                    }}>
+                                        <span style={{ fontSize: '11px' }}>Selected:</span>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '14px'
+                                        }}>
+                                            {selectedCount || 0}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Input Field */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{
+                                display: 'block',
+                                marginBottom: '6px',
+                                fontWeight: '600',
+                                fontSize: '12px',
+                                color: '#374151'
+                            }}>
+                                ✏️ New Customer Code
+                            </label>
+                            <input
+                                type="text"
+                                value={localCustomerCode}
+                                onChange={handleInputChange}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleUpdate();
+                                    }
+                                }}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    border: '2px solid #e5e7eb',
+                                    borderRadius: '10px',
+                                    fontSize: '13px',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    fontFamily: 'monospace'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = '#667eea';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#e5e7eb';
+                                    e.target.style.boxShadow = 'none';
+                                }}
+                                autoFocus
+                                placeholder="e.g., CUST001"
+                            />
+                        </div>
+
+                        {/* Primary Action Button */}
+                        <button
+                            onClick={handleUpdate}
+                            className="modal-button"
+                            style={{
+                                width: '100%',
+                                padding: '12px',
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                fontSize: '14px',
+                                marginBottom: '0'
+                            }}
+                        >
+                            🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
+                        </button>
+                    </div>
+
+                    {/* Footer with Close Button */}
+                    <div style={{
+                        padding: '12px 20px',
+                        background: '#f9fafb',
+                        borderBottomLeftRadius: '16px',
+                        borderBottomRightRadius: '16px',
+                        borderTop: '1px solid #e5e7eb',
+                        display: 'flex',
+                        justifyContent: 'flex-end'
+                    }}>
+                        <button
+                            onClick={handleClose}
+                            style={{
+                                padding: '6px 16px',
+                                background: 'transparent',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '6px',
+                                color: '#6b7280',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                fontWeight: '500'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.background = '#f3f4f6';
+                                e.target.style.borderColor = '#d1d5db';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.background = 'transparent';
+                                e.target.style.borderColor = '#e5e7eb';
+                            }}
+                        >
+                            Cancel (ESC)
+                        </button>
+                    </div>
                 </div>
-            </div>
-        </>
-    );
-});
+            </>
+        );
+    });
     return (
 
         <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
@@ -2171,7 +2171,7 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
                                                         openMenuOnFocus={false}
                                                         isSearchable
                                                         tabSelectsValue={false}
-                                                        closeMenuOnSelect
+                                                        closeMenuOnSelect={true}
                                                         blurInputOnSelect={true}
                                                         inputValue={state.itemSearchInput}
                                                         options={currentFilteredOptions}
@@ -2209,6 +2209,7 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
                                                             // 🔥 "+" shortcut for last sale
                                                             if (e.key === "Enter" && state.itemSearchInput === "+") {
                                                                 e.preventDefault();
+                                                                e.stopPropagation();
                                                                 const lastSale = displayedSales[0];
 
                                                                 if (lastSale) {
@@ -2233,67 +2234,54 @@ const handleBulkUpdateCustomer = async (newCustomerCode) => {
                                                                 return;
                                                             }
 
-                                                            // 🔥 FIXED: Only auto-select when there's text input AND it's a complete match
+                                                            // 🔥 For Enter key, let react-select handle it naturally
+                                                            // We just need to prevent our custom logic from interfering
                                                             if (e.key === "Enter") {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
+                                                                // Don't prevent default or stop propagation
+                                                                // Let react-select do its default behavior
 
-                                                                // Don't auto-select if there's no input
-                                                                if (!state.itemSearchInput) {
-                                                                    // If no input, just move to next field without selecting
-                                                                    setTimeout(() => {
-                                                                        refs.weight.current?.focus();
-                                                                        refs.weight.current?.select();
-                                                                    }, 50);
-                                                                    return;
-                                                                }
+                                                                // Small delay to allow react-select to process the selection
+                                                                setTimeout(() => {
+                                                                    // Check if we have a selected value after react-select's onChange
+                                                                    if (formData.item_code) {
+                                                                        // Clear search input
+                                                                        updateState({ itemSearchInput: "" });
 
-                                                                // Check if we have an exact match with the typed input
-                                                                const exactMatch = currentFilteredOptions.find(option =>
-                                                                    option.value.toUpperCase() === state.itemSearchInput.toUpperCase() ||
-                                                                    option.label.toUpperCase().startsWith(state.itemSearchInput.toUpperCase())
-                                                                );
+                                                                        // Focus next field
+                                                                        setTimeout(() => {
+                                                                            refs.weight.current?.focus();
+                                                                            refs.weight.current?.select();
+                                                                        }, 50);
+                                                                    }
+                                                                }, 10);
 
-                                                                // Only auto-select if we have an exact match
-                                                                if (exactMatch) {
-                                                                    handleItemSelect(exactMatch);
-                                                                    updateState({ itemSearchInput: "" });
-
-                                                                    setTimeout(() => {
-                                                                        refs.weight.current?.focus();
-                                                                        refs.weight.current?.select();
-                                                                    }, 50);
-                                                                } else if (state.itemSearchInput && currentFilteredOptions.length === 1) {
-                                                                    // If there's exactly one match, select it
-                                                                    const firstOption = currentFilteredOptions[0];
-                                                                    handleItemSelect(firstOption);
-                                                                    updateState({ itemSearchInput: "" });
-
-                                                                    setTimeout(() => {
-                                                                        refs.weight.current?.focus();
-                                                                        refs.weight.current?.select();
-                                                                    }, 50);
-                                                                }
-                                                                // If no input or multiple options, do nothing - let user choose from dropdown
+                                                                // Don't call preventDefault - let react-select handle it
+                                                                return;
                                                             }
                                                         }}
 
                                                         onMenuOpen={() => {
-                                                            // When menu opens, ensure no option is pre-highlighted
-                                                            setTimeout(() => {
-                                                                const menu = document.querySelector('.react-select__menu');
-                                                                if (menu) {
-                                                                    const firstOption = menu.querySelector('.react-select__option');
-                                                                    if (firstOption) {
-                                                                        firstOption.classList.remove('react-select__option--is-focused');
-                                                                    }
-                                                                }
-                                                            }, 0);
+                                                            // Don't force-clear highlighting, let react-select manage it naturally
+                                                            // Just ensure the menu opens with default behavior
                                                         }}
 
                                                         className="react-select-container font-bold text-sm w-full"
 
-                                                        styles={{ control: base => ({ ...base, height: "44px", minHeight: "44px", fontSize: "1.25rem", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }), valueContainer: base => ({ ...base, padding: "0 1rem", height: "44px" }), input: base => ({ ...base, color: "black", fontSize: "1.25rem" }), singleValue: base => ({ ...base, color: "black", fontWeight: "bold", fontSize: "1.25rem" }), option: (base, state) => ({ ...base, fontWeight: "bold", color: "black", backgroundColor: state.isFocused ? "#e5e7eb" : "white", fontSize: "1rem", ...(state.isSelected && { backgroundColor: "#e5e7eb" }) }), menu: base => ({ ...base, marginTop: "4px" }) }}
+                                                        styles={{
+                                                            control: base => ({ ...base, height: "44px", minHeight: "44px", fontSize: "1.25rem", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }),
+                                                            valueContainer: base => ({ ...base, padding: "0 1rem", height: "44px" }),
+                                                            input: base => ({ ...base, color: "black", fontSize: "1.25rem" }),
+                                                            singleValue: base => ({ ...base, color: "black", fontWeight: "bold", fontSize: "1.25rem" }),
+                                                            option: (base, state) => ({
+                                                                ...base,
+                                                                fontWeight: "bold",
+                                                                color: "black",
+                                                                backgroundColor: state.isFocused ? "#e5e7eb" : "white",
+                                                                fontSize: "1rem",
+                                                                ...(state.isSelected && { backgroundColor: "#e5e7eb" })
+                                                            }),
+                                                            menu: base => ({ ...base, marginTop: "4px" })
+                                                        }}
 
                                                         openMenuOnClick={true}
                                                         menuPlacement="auto"
