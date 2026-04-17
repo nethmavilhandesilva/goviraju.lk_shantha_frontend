@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import api from "../../api";
 import { useNavigate } from 'react-router-dom';
 
@@ -8,6 +8,7 @@ const SupplierReport = () => {
     // State for all data
     const [summary, setSummary] = useState({ printed: [], unprinted: [] });
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false); // New state for auto-refresh indicator
 
     // 🚀 NEW STATE: Bill size selector (3mm or 4mm)
     const [billSize, setBillSize] = useState('3mm');
@@ -54,9 +55,25 @@ const SupplierReport = () => {
     // 🚀 BULK EDIT STATE
     const [applyToAllSameItems, setApplyToAllSameItems] = useState(true);
 
+    // 🚀 AUTO-REFRESH: Store interval reference
+    const refreshIntervalRef = useRef(null);
+    const isPrintingOrUpdatingRef = useRef(false);
+
     // --- Function to fetch the summary data ---
-    const fetchSummary = useCallback(async () => {
-        setIsLoading(true);
+    const fetchSummary = useCallback(async (isAutoRefresh = false) => {
+        // Don't fetch if we're in the middle of printing or updating
+        if (isPrintingOrUpdatingRef.current) {
+            console.log("⏸️ Skipping refresh - printing or updating in progress");
+            return;
+        }
+        
+        // Set refreshing state for auto-refresh, but not for initial load
+        if (isAutoRefresh) {
+            setIsRefreshing(true);
+        } else {
+            setIsLoading(true);
+        }
+        
         setCurrentView('summary');
         console.log("➡️ Attempting to fetch supplier summary data from backend...");
         try {
@@ -77,9 +94,77 @@ const SupplierReport = () => {
             console.error('❌ Error fetching summary data:', error.message, error.response?.data);
             setSummary({ printed: [], unprinted: [] });
         } finally {
-            setIsLoading(false);
+            if (isAutoRefresh) {
+                setIsRefreshing(false);
+            } else {
+                setIsLoading(false);
+            }
         }
     }, []);
+
+    // 🚀 NEW: Function to refresh supplier profile data
+    const fetchSupplierProfile = useCallback(async (supplierCode) => {
+        if (!supplierCode || isPrintingOrUpdatingRef.current) return;
+        
+        try {
+            const supRes = await api.get(`/suppliers/search-by-code/${supplierCode}`);
+            if (supRes.data) {
+                setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
+                setProfilePic(supRes.data.profile_pic);
+                setPhoneNo(supRes.data.telephone_no || '');
+                setSupplierDocs({
+                    title: supRes.data.name || supplierCode,
+                    profile: supRes.data.profile_pic,
+                    nic_front: supRes.data.nic_front,
+                    nic_back: supRes.data.nic_back
+                });
+            }
+        } catch (error) {
+            console.error("Error refreshing supplier profile:", error);
+        }
+    }, []);
+
+    // 🚀 NEW: Function to refresh bill details
+    const refreshBillDetails = useCallback(async () => {
+        if (!selectedSupplier || isPrintingOrUpdatingRef.current) return;
+        
+        try {
+            if (isUnprintedBill) {
+                const response = await api.get(`/suppliers/${selectedSupplier}/unprinted-details`);
+                setSupplierDetails(response.data);
+            } else if (selectedBillNo) {
+                const response = await api.get(`/suppliers/bill/${selectedBillNo}/details`);
+                setSupplierDetails(response.data);
+            }
+        } catch (error) {
+            console.error("Error refreshing bill details:", error);
+        }
+    }, [selectedSupplier, selectedBillNo, isUnprintedBill]);
+
+    // 🚀 AUTO-REFRESH: Setup interval to refresh all data every 3 seconds
+    useEffect(() => {
+        // Start auto-refresh
+        refreshIntervalRef.current = setInterval(async () => {
+            console.log("🔄 Auto-refreshing data...");
+            
+            // Refresh summary (pass true to indicate auto-refresh)
+            await fetchSummary(true);
+            
+            // Refresh current bill details if a supplier is selected
+            if (selectedSupplier) {
+                await refreshBillDetails();
+                await fetchSupplierProfile(selectedSupplier);
+            }
+        }, 3000); // 3 seconds
+
+        // Cleanup on component unmount
+        return () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+                refreshIntervalRef.current = null;
+            }
+        };
+    }, [fetchSummary, refreshBillDetails, fetchSupplierProfile, selectedSupplier]);
 
     // --- Initial Fetch ---
     useEffect(() => {
@@ -96,6 +181,9 @@ const SupplierReport = () => {
         e.preventDefault();
         setAdvanceLoading(true);
         setAdvanceStatus({ type: '', text: '' });
+        
+        // Pause auto-refresh during update
+        isPrintingOrUpdatingRef.current = true;
 
         try {
             const response = await api.post('/suppliers/advance', advancePayload);
@@ -104,11 +192,20 @@ const SupplierReport = () => {
             // Immediately update the display advance amount
             setAdvanceAmount(parseFloat(response.data.data.advance_amount) || 0);
             setAdvancePayload({ ...advancePayload, advance_amount: '' });
+            
+            // Refresh data after update
+            await fetchSummary();
+            if (selectedSupplier) {
+                await fetchSupplierProfile(selectedSupplier);
+            }
         } catch (error) {
             console.error("Advance Update Error:", error);
             setAdvanceStatus({ type: 'error', text: 'යාවත්කාලීන කිරීම අසාර්ථක විය.' });
         } finally {
             setAdvanceLoading(false);
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
         }
     };
 
@@ -124,6 +221,9 @@ const SupplierReport = () => {
                 .filter(item => item.item_name === editingRecord.item_name)
                 .map(item => item.id);
         }
+
+        // Pause auto-refresh during update
+        isPrintingOrUpdatingRef.current = true;
 
         try {
             setIsDetailsLoading(true);
@@ -146,13 +246,16 @@ const SupplierReport = () => {
                 } else {
                     await handlePrintedBillClick(selectedSupplier, selectedBillNo);
                 }
-                fetchSummary();
+                await fetchSummary();
             }
         } catch (error) {
             console.error("Update failed:", error);
             alert("Failed to update records.");
         } finally {
             setIsDetailsLoading(false);
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
         }
     };
 
@@ -177,6 +280,9 @@ const SupplierReport = () => {
     // --- Handle Unprinted Bill Click ---
     // --- Handle Printed Bill Click ---
     const handlePrintedBillClick = async (supplierCode, billNo) => {
+        // Pause auto-refresh while loading new data
+        isPrintingOrUpdatingRef.current = true;
+        
         setSelectedSupplier(supplierCode);
         setSelectedBillNo(billNo);
         setIsUnprintedBill(false);
@@ -211,11 +317,17 @@ const SupplierReport = () => {
             console.error(`❌ Error fetching printed details:`, error.message);
         } finally {
             setIsDetailsLoading(false);
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
         }
     };
 
     // --- Updated: Handle Unprinted Bill Click ---
     const handleUnprintedBillClick = async (supplierCode, billNo) => {
+        // Pause auto-refresh while loading new data
+        isPrintingOrUpdatingRef.current = true;
+        
         setSelectedSupplier(supplierCode);
         setSelectedBillNo(billNo);
         setIsUnprintedBill(true);
@@ -250,8 +362,12 @@ const SupplierReport = () => {
             console.error(`❌ Error fetching unprinted details:`, error.message);
         } finally {
             setIsDetailsLoading(false);
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
         }
     };
+    
     // --- Function to reset details ---
     const resetDetails = () => {
         setSelectedSupplier(null);
@@ -274,6 +390,10 @@ const SupplierReport = () => {
     const handlePhoneSubmit = async (e) => {
         if (e.key === 'Enter') {
             if (!selectedSupplier) return;
+            
+            // Pause auto-refresh during update
+            isPrintingOrUpdatingRef.current = true;
+            
             setPhoneStatus('Updating...');
             try {
                 await api.post('/suppliers/update-phone', {
@@ -282,9 +402,16 @@ const SupplierReport = () => {
                 });
                 setPhoneStatus('✅ Saved');
                 setTimeout(() => setPhoneStatus(''), 2000);
+                
+                // Refresh supplier profile after update
+                await fetchSupplierProfile(selectedSupplier);
             } catch (error) {
                 console.error("Phone Update Error:", error);
                 setPhoneStatus('❌ Error');
+            } finally {
+                setTimeout(() => {
+                    isPrintingOrUpdatingRef.current = false;
+                }, 500);
             }
         }
     };
@@ -298,6 +425,8 @@ const SupplierReport = () => {
                 return;
             }
 
+            // Pause auto-refresh during loan processing
+            isPrintingOrUpdatingRef.current = true;
             setLoanStatus('Processing...');
 
             try {
@@ -333,10 +462,13 @@ const SupplierReport = () => {
                 }
 
                 setTimeout(() => setLoanStatus(''), 2000);
+            } finally {
+                setTimeout(() => {
+                    isPrintingOrUpdatingRef.current = false;
+                }, 1000);
             }
         }
     };
-
 
     const getRowStyle = (index) => index % 2 === 0 ? { backgroundColor: '#f8f9fa' } : { backgroundColor: '#ffffff' };
 
@@ -509,7 +641,7 @@ const SupplierReport = () => {
                 <div style="font-size:25px; white-space:nowrap;">${customerCode}</div>
                 <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
             </td>
-        </tr>`;
+         </tr>`;
         }).join("");
 
         const summaryEntries = Object.entries(itemSummaryData);
@@ -579,16 +711,16 @@ const SupplierReport = () => {
                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
                  <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
-            </tr>
+             </tr>
         </thead>
         <tbody>${detailedItemsHtml}</tbody>
         <tfoot>
             <tr style="border-top:2.5px solid #000; font-weight:bold;">
                 <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
                 <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${(totalsupplierSales.toFixed(2))}</div></td>
-            </tr>
+             </tr>
         </tfoot>
-    </table>
+     </table>
 
     <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
         <tr>
@@ -601,14 +733,14 @@ const SupplierReport = () => {
             <td style="font-size:15px; padding-top:10px;">ගෙවූ මුදල (Paid):</td>
             <td style="text-align:right; padding-top:10px; color:#000;">
                 - ${paidAmountValue.toFixed(2)}
-            </td>
-        </tr>
+             </td>
+         </tr>
         <tr style="font-size:18px;">
             <td style="font-size:15px; padding-top:5px;">ඉතිරි මුදල (Remaining):</td>
             <td style="text-align:right; padding-top:5px; color:#000;">
                 ${remainingAfterPayment.toFixed(2)}
-            </td>
-        </tr>
+             </td>
+         </tr>
         <tr><td colspan="2" style="border-top:1px dashed #000; padding: 5px 0;"></td></tr>
         ` : ''}
 
@@ -616,8 +748,8 @@ const SupplierReport = () => {
           <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
           <td style="text-align:right; padding-top:5px; color:#000;">
             - ${advanceAmount.toFixed(2)}
-          </td>
-        </tr>
+           </td>
+         </tr>
 
         <tr style="font-weight:900;">
           <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
@@ -625,20 +757,22 @@ const SupplierReport = () => {
             <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
               ${netPayable.toFixed(2)}
             </span>
-          </td>
+           </td>
         </tr>
     </table>
 
-    <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;"><table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}<tr></div>
+    <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;"><table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}</table></div>
 </div>
 </body>
 </html>`;
     }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount]);
 
-    // --- Print function ---
-    // --- Print function ---
+    // --- Print function with page reload after print ---
     const handlePrint = useCallback(async () => {
         if (!supplierDetails || supplierDetails.length === 0) return;
+
+        // Pause auto-refresh during print process
+        isPrintingOrUpdatingRef.current = true;
 
         let finalBillNo = selectedBillNo;
 
@@ -662,6 +796,8 @@ const SupplierReport = () => {
             } catch (err) {
                 console.error('Finalize/SMS Error:', err);
                 alert('Finalize failed. SMS could not be sent.');
+                setIsDetailsLoading(false);
+                isPrintingOrUpdatingRef.current = false;
                 return;
             } finally {
                 setIsDetailsLoading(false);
@@ -732,39 +868,49 @@ const SupplierReport = () => {
             printWindow.document.close();
             printWindow.focus();
 
-            // 🚀 Auto-close the print preview window and refresh main page when print dialog is closed
+            // 🚀 Auto-close the print preview window and RELOAD THE MAIN PAGE when print dialog is closed
             printWindow.onafterprint = function () {
                 printWindow.close();
-                // Refresh the main page after print dialog closes
+                // Reload the entire page after print dialog closes
                 window.location.reload();
             };
 
             // Fallback for browsers that don't support onafterprint
             setTimeout(() => {
-                printWindow.onafterprint = null;
-                // Try to detect if print dialog was closed by checking if window is still open
+                if (printWindow.onafterprint) {
+                    // onafterprint is supported, no need for fallback
+                    return;
+                }
+                
+                // Fallback: Try to detect if print dialog was closed by checking if window is still open
                 const checkClosed = setInterval(() => {
                     if (printWindow.closed) {
                         clearInterval(checkClosed);
-                        // Refresh the main page
+                        // Reload the main page
                         window.location.reload();
-                    } else {
-                        // Try to close it after a delay as fallback
-                        clearInterval(checkClosed);
-                        setTimeout(() => {
-                            if (!printWindow.closed) {
-                                printWindow.close();
-                                window.location.reload();
-                            }
-                        }, 500);
                     }
                 }, 500);
-            }, 5000); // Check for 5 seconds
+                
+                // Stop checking after 10 seconds
+                setTimeout(() => {
+                    clearInterval(checkClosed);
+                    if (!printWindow.closed) {
+                        printWindow.close();
+                        window.location.reload();
+                    }
+                }, 10000);
+            }, 1000);
 
             // Delay print slightly for content load
             setTimeout(() => {
                 printWindow.print();
+                // Re-enable auto-refresh after print dialog opens (but page will reload anyway)
+                setTimeout(() => {
+                    isPrintingOrUpdatingRef.current = false;
+                }, 1000);
             }, 300);
+        } else {
+            isPrintingOrUpdatingRef.current = false;
         }
     }, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
 
@@ -1149,6 +1295,7 @@ const SupplierReport = () => {
     const navBarStyle = { backgroundColor: '#343a40', padding: '15px 50px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1030, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' };
     const reportContainerStyle = { minHeight: '100vh', padding: '90px 50px 50px 50px', fontFamily: 'Roboto, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#1ec139ff', marginTop: '-25px' };
 
+    // Only show full page loading on initial load, not on auto-refresh
     if (isLoading) return <div style={loadingStyle}>Loading Supplier Report...</div>;
 
     return (
@@ -1156,6 +1303,19 @@ const SupplierReport = () => {
             <nav style={navBarStyle}>
                 <h1 style={{ color: 'white', fontSize: '1.5rem', margin: 0 }}>සැපයුම්කරු වාර්තාව</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    {/* Auto-refresh indicator with animation when refreshing */}
+                    <div style={{ 
+                        backgroundColor: isRefreshing ? '#28a745' : '#6c757d', 
+                        padding: '5px 10px', 
+                        borderRadius: '5px', 
+                        fontSize: '0.8rem',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        transition: 'background-color 0.3s ease',
+                        animation: isRefreshing ? 'pulse 1s infinite' : 'none'
+                    }}>
+                        🔄 {isRefreshing ? 'Refreshing...' : 'Auto-refresh (3s)'}
+                    </div>
 
                     {/* 🚀 NEW: Print Format Selector */}
                     <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#495057', padding: '5px 10px', borderRadius: '5px', gap: '10px' }}>
@@ -1206,6 +1366,17 @@ const SupplierReport = () => {
         </>
     );
 };
+
+// Add CSS animation for the refresh indicator
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
 
 // --- STYLES ---
 const headerContainerStyle = { padding: '40px 0 30px 0', borderBottom: '1px solid #E0E0E0', marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', backgroundColor: '#1ec139ff' };
