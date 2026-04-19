@@ -514,92 +514,93 @@ const SupplierReport = () => {
     }, [supplierDetails]);
 
     // 🚀 NEW: A4 Format Content
-    const getA4Content = useCallback((currentBillNo) => {
-        const date = new Date().toLocaleDateString('si-LK');
-        const paidAmountValue = parseFloat(payingAmount) || 0;
-        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
+const getA4Content = useCallback((currentBillNo) => {
+    const date = new Date().toLocaleDateString('si-LK');
+    const paidAmountValue = parseFloat(payingAmount) || 0;
+    const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
 
-        return `
-        <div style="width: 210mm; padding: 10mm; font-family: sans-serif; background: white;">
-            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px;">
-                <h1 style="margin: 0; font-size: 28px;">මහතුන් වෙළඳසැල</h1>
-                <p style="margin: 5px 0;">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</p>
-                <p style="margin: 5px 0;">දුරකථන: 0777672838 / 0714371115</p>
-            </div>
-            
-            <div style="display: flex; justify-content: space-between; margin-top: 20px; font-size: 18px;">
-                <div>සැපයුම්කරු කේතය: <strong>${selectedSupplier}</strong></div>
-                <div>බිල්පත් අංකය: <strong>${currentBillNo}</strong></div>
-                <div>දිනය: <strong>${date}</strong></div>
-            </div>
+    return `
+    <div style="width: 105mm; padding: 4mm; font-family: sans-serif; background: white; font-size: 9px;">
+        <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 4px;">
+            <h3 style="margin: 0; font-size: 12px;">මහතුන් වෙළඳසැල</h3>
+            <p style="margin: 2px 0; font-size: 7px;">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</p>
+            <p style="margin: 2px 0; font-size: 7px;">දු: 0777672838 / 0714371115</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 7px; flex-wrap: wrap;">
+            <div>කේතය: <strong>${selectedSupplier}</strong></div>
+            <div>බිල්පත්: <strong>${currentBillNo}</strong></div>
+            <div>දිනය: <strong>${date}</strong></div>
+        </div>
 
-            <table style="width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 16px;">
-                <thead>
-                    <tr style="background: #f2f2f2;">
-                        <th style="border: 1px solid #000; padding: 10px;">වර්ගය</th>
-                        <th style="border: 1px solid #000; padding: 10px;">මලු</th>
-                        <th style="border: 1px solid #000; padding: 10px;">බර (kg)</th>
-                        <th style="border: 1px solid #000; padding: 10px;">සැපයුම් මිල</th>
-                        <th style="border: 1px solid #000; padding: 10px;">ගනුදෙනුකරු</th>
-                        <th style="border: 1px solid #000; padding: 10px; text-align: right;">එකතුව (රු:)</th>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 7px;">
+            <thead>
+                <tr style="background: #f2f2f2;">
+                    <th style="border: 1px solid #000; padding: 3px;">වර්ගය</th>
+                    <th style="border: 1px solid #000; padding: 3px;">මලු</th>
+                    <th style="border: 1px solid #000; padding: 3px;">බර(kg)</th>
+                    <th style="border: 1px solid #000; padding: 3px;">මිල</th>
+                    <th style="border: 1px solid #000; padding: 3px;">ගනුදෙනු</th>
+                    <th style="border: 1px solid #000; padding: 3px; text-align: right;">එකතුව</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${supplierDetails.slice(0, 6).map(record => `
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 3px;">${record.item_name}</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${record.packs}</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${parseFloat(record.weight).toFixed(1)}</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${parseFloat(record.SupplierPricePerKg).toFixed(1)}</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${record.customer_code}</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: right;">${parseFloat(record.SupplierTotal).toFixed(0)}</td>
                     </tr>
-                </thead>
-                <tbody>
-                    ${supplierDetails.map(record => `
-                        <tr>
-                            <td style="border: 1px solid #000; padding: 8px;">${record.item_name}</td>
-                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${record.packs}</td>
-                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${parseFloat(record.weight).toFixed(2)}</td>
-                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${parseFloat(record.SupplierPricePerKg).toFixed(2)}</td>
-                            <td style="border: 1px solid #000; padding: 8px; text-align: center;">${record.customer_code}</td>
-                            <td style="border: 1px solid #000; padding: 8px; text-align: right;">${parseFloat(record.SupplierTotal).toFixed(2)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-                <tfoot>
-                    <tr style="font-weight: bold; background: #f9f9f9;">
-                        <td style="border: 1px solid #000; padding: 10px;">මුළු එකතුව</td>
-                        <td style="border: 1px solid #000; padding: 10px; text-align: center;">${totalPacksSum}</td>
-                        <td style="border: 1px solid #000; padding: 10px; text-align: center;">${totalWeight.toFixed(2)}</td>
-                        <td colspan="2" style="border: 1px solid #000;"></td>
-                        <td style="border: 1px solid #000; padding: 10px; text-align: right;">${totalsupplierSales.toFixed(2)}</td>
-                    </tr>
-                </tfoot>
-            </table>
+                `).join('')}
+                ${supplierDetails.length > 6 ? `<tr><td colspan="6" style="border: 1px solid #000; padding: 3px; text-align: center;">+ ${supplierDetails.length - 6} තවත්...</td></tr>` : ''}
+            </tbody>
+            <tfoot>
+                <tr style="font-weight: bold; background: #f9f9f9;">
+                    <td style="border: 1px solid #000; padding: 3px;">මුළු</td>
+                    <td style="border: 1px solid #000; padding: 3px; text-align: center;">${totalPacksSum}</td>
+                    <td style="border: 1px solid #000; padding: 3px; text-align: center;">${totalWeight.toFixed(1)}</td>
+                    <td colspan="2" style="border: 1px solid #000;"></td>
+                    <td style="border: 1px solid #000; padding: 3px; text-align: right;">${totalsupplierSales.toFixed(0)}</td>
+                </tr>
+            </tfoot>
+        </table>
 
-            <div style="margin-top: 30px; width: 300px; float: right; font-size: 18px;">
-                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-                    <span>බිල්පත් වටිනාකම:</span>
-                    <span>${totalsupplierSales.toFixed(2)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-                    <span>අත්තිකාරම් මුදල්:</span>
-                    <span>- ${advanceAmount.toFixed(2)}</span>
-                </div>
-                ${paidAmountValue > 0 ? `
-                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-                    <span>ගෙවූ මුදල:</span>
-                    <span>- ${paidAmountValue.toFixed(2)}</span>
-                </div>` : ''}
-                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #000; font-weight: bold; font-size: 22px;">
-                    <span>ශුද්ධ ඉතිරිය:</span>
-                    <span>${netPayable.toFixed(2)}</span>
-                </div>
+        <div style="margin-top: 6px; width: 100%; font-size: 8px;">
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                <span>බිල්පත් වටිනාකම:</span>
+                <span>${totalsupplierSales.toFixed(0)}</span>
             </div>
-            
-            <div style="margin-top: 150px; text-align: center; font-size: 14px; border-top: 1px dashed #ccc; padding-top: 20px;">
-                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                <span>අත්තිකාරම්:</span>
+                <span>- ${advanceAmount.toFixed(0)}</span>
             </div>
-        </div>`;
-    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
+            ${paidAmountValue > 0 ? `
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                <span>ගෙවූ මුදල:</span>
+                <span>- ${paidAmountValue.toFixed(0)}</span>
+            </div>` : ''}
+            <div style="display: flex; justify-content: space-between; padding: 3px 0; border-top: 1px solid #000; font-weight: bold; font-size: 10px;">
+                <span>ශුද්ධ ඉතිරිය:</span>
+                <span>${netPayable.toFixed(0)}</span>
+            </div>
+        </div>
+        
+        <div style="margin-top: 8px; text-align: center; font-size: 6px; border-top: 0.5px dashed #ccc; padding-top: 4px;">
+            *** ස්තුතියි! ***
+        </div>
+    </div>`;
+}, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
 
     const getBillContent = useCallback((currentBillNo) => {
         const date = new Date().toLocaleDateString('si-LK');
         const mobile = '0777672838/071437115';
         const is4Inch = billSize === '4inch';
         const receiptMaxWidth = is4Inch ? '4in' : '350px';
-        const fontSizeBody = '25px';
-        const fontSizeHeader = '23px';
+        const fontSizeBody = '18px';
+        const fontSizeHeader = '18px';
         const fontSizeTotal = '28px';
 
         // 🚀 NEW: Calculation for Loan/Partial Payment
