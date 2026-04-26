@@ -369,46 +369,73 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         return Object.values(groups);
     }, [allSales]);
     // Add this function to combine sales records for bulk printing
-    const combineSalesForPrinting = (salesData) => {
-        const combinedMap = new Map();
+   // Add this function to combine sales records for bulk printing
+const combineSalesForPrinting = (salesData) => {
+    const combinedMap = new Map();
 
-        salesData.forEach(sale => {
-            // Create a unique key based on supplier_code, item_code, and price_per_kg
-            const key = `${sale.supplier_code}|${sale.item_code}|${sale.price_per_kg}`;
+    salesData.forEach(sale => {
+        // Create a unique key based on supplier_code, item_code, and price_per_kg
+        const key = `${sale.supplier_code}|${sale.item_code}|${sale.price_per_kg}`;
 
-            if (combinedMap.has(key)) {
-                // Combine existing record with new one
-                const existing = combinedMap.get(key);
-                const newWeight = (parseFloat(existing.weight) || 0) + (parseFloat(sale.weight) || 0);
-                const newPacks = (parseInt(existing.packs) || 0) + (parseInt(sale.packs) || 0);
-                const newTotal = newWeight * (parseFloat(sale.price_per_kg) || 0);
-
-                // Aggregate Kuliya and Pack Cost values
-                const newKuliya = (parseFloat(existing.Kuliya) || 0) + (parseFloat(sale.Kuliya) || 0);
-                const newPackCost = (parseFloat(existing.CustomerPackCost) || 0) + (parseFloat(sale.CustomerPackCost) || 0);
-
-                combinedMap.set(key, {
-                    ...existing,
-                    weight: newWeight,
-                    packs: newPacks,
-                    total: newTotal,
-                    Kuliya: newKuliya,
-                    CustomerPackCost: newPackCost,
-                    // Keep track of original IDs for marking as printed
-                    original_ids: [...(existing.original_ids || [existing.id]), sale.id]
-                });
-            } else {
-                // Add new record
-                combinedMap.set(key, {
-                    ...sale,
-                    original_ids: [sale.id]
-                });
+        if (combinedMap.has(key)) {
+            // Combine existing record with new one
+            const existing = combinedMap.get(key);
+            
+            // Check if CustomerPackCost and Kuliya are the same
+            const existingPackCost = parseFloat(existing.CustomerPackCost) || 0;
+            const newPackCost = parseFloat(sale.CustomerPackCost) || 0;
+            const existingKuliya = parseFloat(existing.Kuliya) || 0;
+            const newKuliyaValue = parseFloat(sale.Kuliya) || 0;
+            
+            // If pack costs are different, we should NOT combine
+            if (existingPackCost !== newPackCost) {
+                console.warn(`Different CustomerPackCost for key ${key}: ${existingPackCost} vs ${newPackCost}`);
+                // Add a new entry with a modified key including pack cost
+                const newKey = `${key}|${newPackCost}|${newKuliyaValue}`;
+                if (!combinedMap.has(newKey)) {
+                    combinedMap.set(newKey, {
+                        ...sale,
+                        original_ids: [sale.id]
+                    });
+                } else {
+                    const existingAlt = combinedMap.get(newKey);
+                    existingAlt.weight = (parseFloat(existingAlt.weight) || 0) + (parseFloat(sale.weight) || 0);
+                    existingAlt.packs = (parseInt(existingAlt.packs) || 0) + (parseInt(sale.packs) || 0);
+                    existingAlt.total = existingAlt.weight * (parseFloat(sale.price_per_kg) || 0);
+                    existingAlt.Kuliya = (parseFloat(existingAlt.Kuliya) || 0) + newKuliyaValue;
+                    existingAlt.CustomerPackCost = newPackCost;
+                    existingAlt.original_ids.push(sale.id);
+                }
+                return;
             }
-        });
+            
+            // If pack costs are the same, combine weights, packs, and kuliya
+            const newWeight = (parseFloat(existing.weight) || 0) + (parseFloat(sale.weight) || 0);
+            const newPacks = (parseInt(existing.packs) || 0) + (parseInt(sale.packs) || 0);
+            const newTotal = newWeight * (parseFloat(sale.price_per_kg) || 0);
+            const combinedKuliya = existingKuliya + newKuliyaValue;
 
-        // Convert map back to array
-        return Array.from(combinedMap.values());
-    };
+            combinedMap.set(key, {
+                ...existing,
+                weight: newWeight,
+                packs: newPacks,
+                total: newTotal,
+                Kuliya: combinedKuliya,
+                CustomerPackCost: existingPackCost,
+                original_ids: [...(existing.original_ids || [existing.id]), sale.id]
+            });
+        } else {
+            // Add new record
+            combinedMap.set(key, {
+                ...sale,
+                original_ids: [sale.id]
+            });
+        }
+    });
+
+    // Convert map back to array
+    return Array.from(combinedMap.values());
+};
     //functions related to multiselect and bulk update
    const toggleSaleSelection = (saleId, e) => {
     if (e) {

@@ -19,6 +19,32 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     const date = new Date().toLocaleDateString();
     const time = new Date().toLocaleTimeString();
 
+    // Group by id to avoid duplicate CustomerPackCost
+    const groupedById = new Map();
+    
+    salesData.forEach(s => {
+        const id = s.id;
+        if (!groupedById.has(id)) {
+            groupedById.set(id, {
+                ...s,
+                weight: parseFloat(s.weight) || 0,
+                price_per_kg: parseFloat(s.price_per_kg) || 0,
+                packs: parseInt(s.packs) || 0,
+                CustomerPackCost: parseFloat(s.CustomerPackCost) || 0,
+                Kuliya: parseFloat(s.Kuliya) || 0
+            });
+        } else {
+            // If same ID exists, aggregate only weight, packs, and kuliya (not pack cost)
+            const existing = groupedById.get(id);
+            existing.weight += parseFloat(s.weight) || 0;
+            existing.packs += parseInt(s.packs) || 0;
+            existing.Kuliya += parseFloat(s.Kuliya) || 0;
+            // Do NOT add CustomerPackCost again - keep the original
+        }
+    });
+    
+    const uniqueSalesData = Array.from(groupedById.values());
+
     // Calculate aggregated totals
     let totalSales = 0;
     let totalPacks = 0;
@@ -26,16 +52,13 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     let totalKuliyaSum = 0;
     const consolidatedSummary = {};
 
-    salesData.forEach(s => {
+    uniqueSalesData.forEach(s => {
         const itemName = s.item_name || 'Unknown';
-        const weight = parseFloat(s.weight) || 0;
-        const price = parseFloat(s.price_per_kg) || 0;
-        const packs = parseInt(s.packs) || 0;
-        
-        // 🔧 FIXED: CustomerPackCost is already the TOTAL cost for this item
-        // No need to multiply by packs again!
-        const packCost = parseFloat(s.CustomerPackCost) || 0;
-        const kuliya = parseFloat(s.Kuliya) || 0;
+        const weight = s.weight;
+        const price = s.price_per_kg;
+        const packs = s.packs;
+        const packCost = s.CustomerPackCost;
+        const kuliya = s.Kuliya;
 
         if (!consolidatedSummary[itemName]) consolidatedSummary[itemName] = { totalWeight: 0, totalPacks: 0 };
         consolidatedSummary[itemName].totalWeight += weight;
@@ -43,9 +66,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
 
         totalSales += (weight * price);
         totalPacks += packs;
-        
-        // 🔧 FIXED: Use packCost directly, don't multiply by packs again
-        totalPackCost += packCost;
+        totalPackCost += (packs * packCost);
         totalKuliyaSum += kuliya;
     });
 
@@ -67,10 +88,10 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
         <col style="width:26%;">
     </colgroup>`;
 
-    const itemsHtml = salesData.map(s => {
-        const packs = parseInt(s.packs) || 0;
-        const weight = parseFloat(s.weight) || 0;
-        const price = parseFloat(s.price_per_kg) || 0;
+    const itemsHtml = uniqueSalesData.map(s => {
+        const packs = s.packs;
+        const weight = s.weight;
+        const price = s.price_per_kg;
         const value = (weight * price).toFixed(2);
 
         return `
@@ -169,14 +190,21 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
             <div class="info-section">
                 <div style="font-weight: bold;">දුර: 0777672838 / 0714371115</div>
                <div class="info-row" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                  <div class="left" style="display:flex; gap:15px;">
-                      <span>බිල් අංකය: ${billNo}</span>
-                  </div>
-                  <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto;">
-                      <span style="white-space:nowrap;">දිනය: ${date}</span>
-                      <span class="time">${time}</span>
-                  </div>
-                </div>
+  
+  <!-- Left side -->
+  <div class="left" style="display:flex; gap:15px;">
+  <span>බිල් අංකය: ${billNo}</span>
+</div>
+  <!-- Right side, pushed further right -->
+  <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto;">
+  <!-- Date on single line -->
+  <span style="white-space:nowrap;">දිනය: ${date}</span>
+  
+  <!-- Time below -->
+  <span class="time">${time}</span>
+</div>
+
+</div>
             </div>
             <hr />
             <table>
@@ -190,14 +218,18 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>
-                <tfoot>
-                    <tr style="border-top:2.5px solid #000; font-weight:bold;">
-                        <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
-                        <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};">
-                            <div style="text-align:right; white-space:nowrap;">${Number(totalSales).toFixed(2)}</div>
-                        </td>
-                    </tr>
-                </tfoot>
+               <tfoot>
+    <tr style="border-top:2.5px solid #000;">
+        <td colspan="4" style="padding-top:12px; font-size:${fontSizeTotal}; font-weight:bold; color:#000;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>${formatNumber(totalPacksSum)}</span>
+                <span>${Number(totalSales).toFixed(2)}</span>
+            </div>
+
+        </td>
+    </tr>
+</tfoot>
             </table>
             <table class="total-table">
                 ${totalPackCost > 0 ? `
@@ -227,7 +259,6 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     </html>`;
 };
 
-// Also fix the A4BillHTML template
 export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0 }) => {
     const formatNumber = (num) => {
         if (typeof num !== 'number' && typeof num !== 'string') return '0';
@@ -239,25 +270,47 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
     const date = new Date().toLocaleDateString('si-LK');
     const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit' });
 
+    // Group by id to avoid duplicate CustomerPackCost
+    const groupedById = new Map();
+    
+    salesData.forEach(s => {
+        const id = s.id;
+        if (!groupedById.has(id)) {
+            groupedById.set(id, {
+                ...s,
+                weight: parseFloat(s.weight) || 0,
+                price_per_kg: parseFloat(s.price_per_kg) || 0,
+                packs: parseInt(s.packs) || 0,
+                CustomerPackCost: parseFloat(s.CustomerPackCost) || 0,
+                Kuliya: parseFloat(s.Kuliya) || 0
+            });
+        } else {
+            // If same ID exists, aggregate only weight and packs (not pack cost)
+            const existing = groupedById.get(id);
+            existing.weight += parseFloat(s.weight) || 0;
+            existing.packs += parseInt(s.packs) || 0;
+            existing.Kuliya += parseFloat(s.Kuliya) || 0;
+            // Do NOT add CustomerPackCost again
+        }
+    });
+    
+    const uniqueSalesData = Array.from(groupedById.values());
+
     let totalSales = 0;
     let totalPacks = 0;
     let totalPackCost = 0;
     const itemsList = [];
 
-    salesData.forEach((s, index) => {
-        const weight = parseFloat(s.weight) || 0;
-        const price = parseFloat(s.price_per_kg) || 0;
-        const packs = parseInt(s.packs) || 0;
-        
-        // 🔧 FIXED: CustomerPackCost is already the TOTAL cost
-        const packCost = parseFloat(s.CustomerPackCost) || 0;
+    uniqueSalesData.forEach((s, index) => {
+        const weight = s.weight;
+        const price = s.price_per_kg;
+        const packs = s.packs;
+        const packCost = s.CustomerPackCost;
         const itemTotal = weight * price;
 
         totalSales += itemTotal;
         totalPacks += packs;
-        
-        // 🔧 FIXED: Use packCost directly
-        totalPackCost += packCost;
+        totalPackCost += packs * packCost;
 
         itemsList.push({
             id: index + 1,
@@ -291,7 +344,6 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         </tr>
     `).join('');
 
-    // Rest of the A4 template remains the same...
     return `<!DOCTYPE html>
 <html>
 <head>

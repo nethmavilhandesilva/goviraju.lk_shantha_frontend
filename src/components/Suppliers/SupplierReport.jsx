@@ -472,7 +472,7 @@ const SupplierReport = () => {
 
     const getRowStyle = (index) => index % 2 === 0 ? { backgroundColor: '#f8f9fa' } : { backgroundColor: '#ffffff' };
 
-    // --- CALCULATIONS ---
+    // --- CALCULATIONS (Updated to include CustomerPackCost) ---
     const {
         totalWeight,
         totalCommission,
@@ -482,8 +482,9 @@ const SupplierReport = () => {
         totalsupplierSales,
         totalSupplierPackCost,
         totalCusGross,
+        totalCustomerPackCost, // <-- NEW: Sum of CustomerPackCost
     } = useMemo(() => {
-        let totalWeight = 0, totalsupplierSales = 0, totalCommission = 0, totalPacksSum = 0, totalSupplierPackCost = 0, totalCusGross = 0;
+        let totalWeight = 0, totalsupplierSales = 0, totalCommission = 0, totalPacksSum = 0, totalSupplierPackCost = 0, totalCusGross = 0, totalCustomerPackCost = 0;
         const itemSummary = {};
 
         supplierDetails.forEach(record => {
@@ -493,12 +494,14 @@ const SupplierReport = () => {
             const SupplierTotal = parseFloat(record.SupplierTotal) || 0;
             const itemName = record.item_name || 'Unknown Item';
             const rowCusGross = (parseFloat(record?.total) || 0) - (parseFloat(record?.CustomerPackLabour) || 0);
+            const packCost = parseFloat(record?.CustomerPackCost) || 0; // <-- NEW: Get pack cost
 
             totalWeight += weight;
             totalsupplierSales += SupplierTotal;
             totalCommission += commission;
             totalPacksSum += packs;
             totalCusGross += rowCusGross;
+            totalCustomerPackCost += packCost; // <-- NEW: Add to total
 
             if (!itemSummary[itemName]) {
                 itemSummary[itemName] = { totalWeight: 0, totalPacks: 0 };
@@ -510,89 +513,94 @@ const SupplierReport = () => {
         return {
             totalWeight, totalCommission, amountPayable: totalsupplierSales, itemSummaryData: itemSummary,
             totalPacksSum, totalsupplierSales, totalSupplierPackCost, totalCusGross,
+            totalCustomerPackCost, // <-- NEW: Return the total
         };
     }, [supplierDetails]);
 
-    // 🚀 NEW: A4 Format Content
-const getA4Content = useCallback((currentBillNo) => {
-    const date = new Date().toLocaleDateString('si-LK');
-    const paidAmountValue = parseFloat(payingAmount) || 0;
-    const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
+    // 🚀 NEW: A4 Format Content (Updated to include CustomerPackCost)
+    const getA4Content = useCallback((currentBillNo) => {
+        const date = new Date().toLocaleDateString('si-LK');
+        const paidAmountValue = parseFloat(payingAmount) || 0;
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
 
-    return `
-    <div style="width: 105mm; padding: 4mm; font-family: sans-serif; background: white; font-size: 9px;">
-        <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 4px;">
-            <h3 style="margin: 0; font-size: 12px;">මහතුන් වෙළඳසැල</h3>
-            <p style="margin: 2px 0; font-size: 7px;">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</p>
-            <p style="margin: 2px 0; font-size: 7px;">දු: 0777672838 / 0714371115</p>
-        </div>
-        
-        <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 7px; flex-wrap: wrap;">
-            <div>කේතය: <strong>${selectedSupplier}</strong></div>
-            <div>බිල්පත්: <strong>${currentBillNo}</strong></div>
-            <div>දිනය: <strong>${date}</strong></div>
-        </div>
+        return `
+        <div style="width: 105mm; padding: 4mm; font-family: sans-serif; background: white; font-size: 9px;">
+            <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 4px;">
+                <h3 style="margin: 0; font-size: 12px;">මහතුන් වෙළඳසැල</h3>
+                <p style="margin: 2px 0; font-size: 7px;">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</p>
+                <p style="margin: 2px 0; font-size: 7px;">දු: 0777672838 / 0714371115</p>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 7px; flex-wrap: wrap;">
+                <div>කේතය: <strong>${selectedSupplier}</strong></div>
+                <div>බිල්පත්: <strong>${currentBillNo}</strong></div>
+                <div>දිනය: <strong>${date}</strong></div>
+            </div>
 
-        <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 7px;">
-            <thead>
-                <tr style="background: #f2f2f2;">
-                    <th style="border: 1px solid #000; padding: 3px;">වර්ගය</th>
-                    <th style="border: 1px solid #000; padding: 3px;">මලු</th>
-                    <th style="border: 1px solid #000; padding: 3px;">බර(kg)</th>
-                    <th style="border: 1px solid #000; padding: 3px;">මිල</th>
-                    <th style="border: 1px solid #000; padding: 3px;">ගනුදෙනු</th>
-                    <th style="border: 1px solid #000; padding: 3px; text-align: right;">එකතුව</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${supplierDetails.slice(0, 6).map(record => `
-                    <tr>
-                        <td style="border: 1px solid #000; padding: 3px;">${record.item_name}</td>
-                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${record.packs}</td>
-                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${parseFloat(record.weight).toFixed(1)}</td>
-                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${parseFloat(record.SupplierPricePerKg).toFixed(1)}</td>
-                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${record.customer_code}</td>
-                        <td style="border: 1px solid #000; padding: 3px; text-align: right;">${parseFloat(record.SupplierTotal).toFixed(0)}</td>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 7px;">
+                <thead>
+                    <tr style="background: #f2f2f2;">
+                        <th style="border: 1px solid #000; padding: 3px;">වර්ගය</th>
+                        <th style="border: 1px solid #000; padding: 3px;">මලු</th>
+                        <th style="border: 1px solid #000; padding: 3px;">බර(kg)</th>
+                        <th style="border: 1px solid #000; padding: 3px;">මිල</th>
+                        <th style="border: 1px solid #000; padding: 3px;">ගනුදෙනු</th>
+                        <th style="border: 1px solid #000; padding: 3px; text-align: right;">එකතුව</th>
                     </tr>
-                `).join('')}
-                ${supplierDetails.length > 6 ? `<tr><td colspan="6" style="border: 1px solid #000; padding: 3px; text-align: center;">+ ${supplierDetails.length - 6} තවත්...</td></tr>` : ''}
-            </tbody>
-            <tfoot>
-                <tr style="font-weight: bold; background: #f9f9f9;">
-                    <td style="border: 1px solid #000; padding: 3px;">මුළු</td>
-                    <td style="border: 1px solid #000; padding: 3px; text-align: center;">${totalPacksSum}</td>
-                    <td style="border: 1px solid #000; padding: 3px; text-align: center;">${totalWeight.toFixed(1)}</td>
-                    <td colspan="2" style="border: 1px solid #000;"></td>
-                    <td style="border: 1px solid #000; padding: 3px; text-align: right;">${totalsupplierSales.toFixed(0)}</td>
-                </tr>
-            </tfoot>
-        </table>
+                </thead>
+                <tbody>
+                    ${supplierDetails.slice(0, 6).map(record => `
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 3px;">${record.item_name}</td>
+                            <td style="border: 1px solid #000; padding: 3px; text-align: center;">${record.packs}</td>
+                            <td style="border: 1px solid #000; padding: 3px; text-align: center;">${parseFloat(record.weight).toFixed(1)}</td>
+                            <td style="border: 1px solid #000; padding: 3px; text-align: center;">${parseFloat(record.SupplierPricePerKg).toFixed(1)}</td>
+                            <td style="border: 1px solid #000; padding: 3px; text-align: center;">${record.customer_code}</td>
+                            <td style="border: 1px solid #000; padding: 3px; text-align: right;">${parseFloat(record.SupplierTotal).toFixed(0)}</td>
+                        </tr>
+                    `).join('')}
+                    ${supplierDetails.length > 6 ? `<tr><td colspan="6" style="border: 1px solid #000; padding: 3px; text-align: center;">+ ${supplierDetails.length - 6} තවත්...</td></tr>` : ''}
+                </tbody>
+                <tfoot>
+                    <tr style="font-weight: bold; background: #f9f9f9;">
+                        <td style="border: 1px solid #000; padding: 3px;">මුළු</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${totalPacksSum}</td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: center;">${totalWeight.toFixed(1)}</td>
+                        <td colspan="2" style="border: 1px solid #000;"></td>
+                        <td style="border: 1px solid #000; padding: 3px; text-align: right;">${totalsupplierSales.toFixed(0)}</td>
+                    </tr>
+                </tfoot>
+            </table>
 
-        <div style="margin-top: 6px; width: 100%; font-size: 8px;">
-            <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                <span>බිල්පත් වටිනාකම:</span>
-                <span>${totalsupplierSales.toFixed(0)}</span>
+            <div style="margin-top: 6px; width: 100%; font-size: 8px;">
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span>බිල්පත් වටිනාකම:</span>
+                    <span>${totalsupplierSales.toFixed(0)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span>මලු වියදම (CustomerPackCost):</span> <!-- 🚀 NEW FIELD -->
+                    <span>- ${totalCustomerPackCost.toFixed(0)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span>අත්තිකාරම්:</span>
+                    <span>- ${advanceAmount.toFixed(0)}</span>
+                </div>
+                ${paidAmountValue > 0 ? `
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span>ගෙවූ මුදල:</span>
+                    <span>- ${paidAmountValue.toFixed(0)}</span>
+                </div>` : ''}
+                <div style="display: flex; justify-content: space-between; padding: 3px 0; border-top: 1px solid #000; font-weight: bold; font-size: 10px;">
+                    <span>ශුද්ධ ඉතිරිය:</span>
+                    <span>${netPayable.toFixed(0)}</span>
+                </div>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                <span>අත්තිකාරම්:</span>
-                <span>- ${advanceAmount.toFixed(0)}</span>
+            
+            <div style="margin-top: 8px; text-align: center; font-size: 6px; border-top: 0.5px dashed #ccc; padding-top: 4px;">
+                *** ස්තුතියි! ***
             </div>
-            ${paidAmountValue > 0 ? `
-            <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                <span>ගෙවූ මුදල:</span>
-                <span>- ${paidAmountValue.toFixed(0)}</span>
-            </div>` : ''}
-            <div style="display: flex; justify-content: space-between; padding: 3px 0; border-top: 1px solid #000; font-weight: bold; font-size: 10px;">
-                <span>ශුද්ධ ඉතිරිය:</span>
-                <span>${netPayable.toFixed(0)}</span>
-            </div>
-        </div>
-        
-        <div style="margin-top: 8px; text-align: center; font-size: 6px; border-top: 0.5px dashed #ccc; padding-top: 4px;">
-            *** ස්තුතියි! ***
-        </div>
-    </div>`;
-}, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight]);
+        </div>`;
+    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
 
     const getBillContent = useCallback((currentBillNo) => {
         const date = new Date().toLocaleDateString('si-LK');
@@ -642,7 +650,7 @@ const getA4Content = useCallback((currentBillNo) => {
                 <div style="font-size:25px; white-space:nowrap;">${customerCode}</div>
                 <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
             </td>
-         </tr>`;
+          </tr>`;
         }).join("");
 
         const summaryEntries = Object.entries(itemSummaryData);
@@ -657,7 +665,7 @@ const getA4Content = useCallback((currentBillNo) => {
 
         // 🚀 CALCULATION FOR FINAL NET AMOUNT
         // We subtract both Advance and any current payment made
-        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue;
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
 
         return `
 <!DOCTYPE html>
@@ -712,21 +720,25 @@ const getA4Content = useCallback((currentBillNo) => {
                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
                  <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
-             </tr>
+              </tr>
         </thead>
         <tbody>${detailedItemsHtml}</tbody>
         <tfoot>
             <tr style="border-top:2.5px solid #000; font-weight:bold;">
                 <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
                 <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${(totalsupplierSales.toFixed(2))}</div></td>
-             </tr>
+              </tr>
         </tfoot>
-     </table>
+      </table>
 
     <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
-        <tr>
+         <tr>
           <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
           <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
+         </tr>
+        <tr>
+          <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මලු වියදම:</td>
+          <td style="text-align:right;"><span style="font-size:${fontSizeTotal}; padding:5px 10px;">${totalCustomerPackCost.toFixed(2)}</span></td>
         </tr>
         
         ${paidAmountValue > 0 ? `
@@ -734,14 +746,14 @@ const getA4Content = useCallback((currentBillNo) => {
             <td style="font-size:15px; padding-top:10px;">ගෙවූ මුදල (Paid):</td>
             <td style="text-align:right; padding-top:10px; color:#000;">
                 - ${paidAmountValue.toFixed(2)}
-             </td>
-         </tr>
+              </td>
+          </tr>
         <tr style="font-size:18px;">
             <td style="font-size:15px; padding-top:5px;">ඉතිරි මුදල (Remaining):</td>
             <td style="text-align:right; padding-top:5px; color:#000;">
                 ${remainingAfterPayment.toFixed(2)}
-             </td>
-         </tr>
+              </td>
+          </tr>
         <tr><td colspan="2" style="border-top:1px dashed #000; padding: 5px 0;"></td></tr>
         ` : ''}
 
@@ -750,7 +762,7 @@ const getA4Content = useCallback((currentBillNo) => {
           <td style="text-align:right; padding-top:5px; color:#000;">
             - ${advanceAmount.toFixed(2)}
            </td>
-         </tr>
+          </tr>
 
         <tr style="font-weight:900;">
           <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
@@ -766,7 +778,7 @@ const getA4Content = useCallback((currentBillNo) => {
 </div>
 </body>
 </html>`;
-    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount]);
+    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount, totalCustomerPackCost]);
 
     // --- Print function with page reload after print ---
     const handlePrint = useCallback(async () => {
@@ -1128,16 +1140,19 @@ const getA4Content = useCallback((currentBillNo) => {
                         <td style={tdStyle}>{formatDecimal((record?.total || 0) - (record?.CustomerPackLabour || 0))}</td>
                         <td style={tdStyle}>{record.SupplierTotal}</td>
                         <td style={tdStyle}>{record.commission_amount}</td>
+                        <td style={tdStyle}>{record.CustomerPackCost}</td> {/* 🚀 NEW COLUMN */}
                     </tr>
                 ))}
                 <tr style={{ ...getRowStyle(supplierDetails.length), fontWeight: 'bold', borderTop: '2px solid #000' }}>
                     <td style={tdStyle} colSpan="3"><strong>TOTALS</strong></td>
                     <td style={tdStyle}>{totalPacksSum}</td>
                     <td style={tdStyle}>{totalWeight.toFixed(3)}</td>
-                    <td style={tdStyle}>-</td><td style={tdStyle}>-</td>
+                    <td style={tdStyle}>-</td>
+                    <td style={tdStyle}>-</td>
                     <td style={tdStyle}>{totalCusGross.toFixed(2)}</td>
                     <td style={tdStyle}>{totalsupplierSales.toFixed(2)}</td>
                     <td style={tdStyle}>-</td>
+                    <td style={tdStyle}>{totalCustomerPackCost.toFixed(2)}</td> {/* 🚀 NEW TOTAL ROW */}
                 </tr>
             </tbody>
         );
@@ -1210,10 +1225,10 @@ const getA4Content = useCallback((currentBillNo) => {
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '250px', fontSize: '0.9rem', marginBottom: '30px' }}>
                         <thead>
                             <tr>
-                                <th style={thStyle}>බිල් අං:</th><th style={thStyle}>ගනුදෙ</th><th style={thStyle}>අයිත</th><th style={thStyle}>අසුරුම්</th><th style={thStyle}>බර</th><th style={thStyle}>ගනුදෙ මිල</th><th style={thStyle}>සැපයුම් මිල</th><th style={thStyle}>ගනුදෙ එක</th><th style={thStyle}>සැපයුම් එක</th><th style={thStyle}>කොමි</th>
+                                <th style={thStyle}>බිල් අං:</th><th style={thStyle}>ගනුදෙ</th><th style={thStyle}>අයිත</th><th style={thStyle}>අසුරුම්</th><th style={thStyle}>බර</th><th style={thStyle}>ගනුදෙ මිල</th><th style={thStyle}>සැපයුම් මිල</th><th style={thStyle}>ගනුදෙ එක</th><th style={thStyle}>සැපයුම් එක</th><th style={thStyle}>කොමි</th><th style={thStyle}>මලු විය</th> {/* 🚀 NEW HEADER */}
                             </tr>
                         </thead>
-                        {selectedSupplier && supplierDetails.length > 0 ? renderDataRows() : <tbody><tr><td colSpan="11" style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', padding: '50px 0' }}>Select a bill to view details</td></tr></tbody>}
+                        {selectedSupplier && supplierDetails.length > 0 ? renderDataRows() : <tbody><tr><td colSpan="12" style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', padding: '50px 0' }}>Select a bill to view details</td></tr></tbody>}
                     </table>
                 </div>
 
