@@ -31,6 +31,9 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
         const weight = parseFloat(s.weight) || 0;
         const price = parseFloat(s.price_per_kg) || 0;
         const packs = parseInt(s.packs) || 0;
+        
+        // 🔧 FIXED: CustomerPackCost is already the TOTAL cost for this item
+        // No need to multiply by packs again!
         const packCost = parseFloat(s.CustomerPackCost) || 0;
         const kuliya = parseFloat(s.Kuliya) || 0;
 
@@ -40,7 +43,9 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
 
         totalSales += (weight * price);
         totalPacks += packs;
-        totalPackCost += (packs * packCost);
+        
+        // 🔧 FIXED: Use packCost directly, don't multiply by packs again
+        totalPackCost += packCost;
         totalKuliyaSum += kuliya;
     });
 
@@ -164,21 +169,14 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
             <div class="info-section">
                 <div style="font-weight: bold;">දුර: 0777672838 / 0714371115</div>
                <div class="info-row" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-  
-  <!-- Left side -->
-  <div class="left" style="display:flex; gap:15px;">
-  <span>බිල් අංකය: ${billNo}</span>
-</div>
-  <!-- Right side, pushed further right -->
-  <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto;">
-  <!-- Date on single line -->
-  <span style="white-space:nowrap;">දිනය: ${date}</span>
-  
-  <!-- Time below -->
-  <span class="time">${time}</span>
-</div>
-
-</div>
+                  <div class="left" style="display:flex; gap:15px;">
+                      <span>බිල් අංකය: ${billNo}</span>
+                  </div>
+                  <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto;">
+                      <span style="white-space:nowrap;">දිනය: ${date}</span>
+                      <span class="time">${time}</span>
+                  </div>
+                </div>
             </div>
             <hr />
             <table>
@@ -229,6 +227,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     </html>`;
 };
 
+// Also fix the A4BillHTML template
 export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0 }) => {
     const formatNumber = (num) => {
         if (typeof num !== 'number' && typeof num !== 'string') return '0';
@@ -249,12 +248,16 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         const weight = parseFloat(s.weight) || 0;
         const price = parseFloat(s.price_per_kg) || 0;
         const packs = parseInt(s.packs) || 0;
+        
+        // 🔧 FIXED: CustomerPackCost is already the TOTAL cost
         const packCost = parseFloat(s.CustomerPackCost) || 0;
         const itemTotal = weight * price;
 
         totalSales += itemTotal;
         totalPacks += packs;
-        totalPackCost += packs * packCost;
+        
+        // 🔧 FIXED: Use packCost directly
+        totalPackCost += packCost;
 
         itemsList.push({
             id: index + 1,
@@ -288,6 +291,7 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         </tr>
     `).join('');
 
+    // Rest of the A4 template remains the same...
     return `<!DOCTYPE html>
 <html>
 <head>
