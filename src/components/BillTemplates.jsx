@@ -1,6 +1,5 @@
 // src/components/BillTemplates.jsx
 
-// Thermal Bill Template (3-inch)
 export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billSize = '3inch' }) => {
     const formatNumber = (num) => {
         if (typeof num !== 'number' && typeof num !== 'string') return '0';
@@ -19,9 +18,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     const date = new Date().toLocaleDateString();
     const time = new Date().toLocaleTimeString();
 
-    // Group by id to avoid duplicate CustomerPackCost
     const groupedById = new Map();
-    
     salesData.forEach(s => {
         const id = s.id;
         if (!groupedById.has(id)) {
@@ -34,20 +31,16 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
                 Kuliya: parseFloat(s.Kuliya) || 0
             });
         } else {
-            // If same ID exists, aggregate only weight, packs, and kuliya (not pack cost)
             const existing = groupedById.get(id);
             existing.weight += parseFloat(s.weight) || 0;
             existing.packs += parseInt(s.packs) || 0;
             existing.Kuliya += parseFloat(s.Kuliya) || 0;
-            // Do NOT add CustomerPackCost again - keep the original
         }
     });
-    
+
     const uniqueSalesData = Array.from(groupedById.values());
 
-    // Calculate aggregated totals
     let totalSales = 0;
-    let totalPacks = 0;
     let totalPackCost = 0;
     let totalKuliyaSum = 0;
     const consolidatedSummary = {};
@@ -65,7 +58,6 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
         consolidatedSummary[itemName].totalPacks += packs;
 
         totalSales += (weight * price);
-        totalPacks += packs;
         totalPackCost += (packs * packCost);
         totalKuliyaSum += kuliya;
     });
@@ -73,72 +65,41 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     const totalPacksSum = Object.values(consolidatedSummary).reduce((sum, item) => sum + item.totalPacks, 0);
     const finalGrandTotal = totalSales + totalPackCost + totalKuliyaSum;
 
-    const is4Inch = billSize === '4inch';
-    const receiptMaxWidth = is4Inch ? '4in' : '350px';
-
-    const fontSizeBody = '18px';
-    const fontSizeHeader ='18px';
-    const fontSizeTotal = '28px';
-
-    const colGroups = `
-    <colgroup>
-        <col style="width:32%;"> 
-        <col style="width:21%;">
-        <col style="width:21%;">
-        <col style="width:26%;">
-    </colgroup>`;
+    // Optimized for Epson TM-T81III (80mm width)
+    const receiptMaxWidth = '280px'; // Slightly narrower than 350px to ensure no cutoff
 
     const itemsHtml = uniqueSalesData.map(s => {
-        const packs = s.packs;
         const weight = s.weight;
         const price = s.price_per_kg;
         const value = (weight * price).toFixed(2);
 
         return `
-      <tr style="font-size:${fontSizeBody}; font-weight: 900; vertical-align: bottom; color: #000000; font-weight: bold; -webkit-text-stroke: 0.5px #000000;">
-            <td style="font-size:20px; text-align:left; padding:10px 0; white-space: nowrap;">
-                ${s.item_name || ""}<br>${formatNumber(packs)}
+        <tr style="font-size:16px; font-weight: bold; color: #000;">
+            <td style="text-align:left; padding:8px 0;">
+                ${s.item_name || ""}<br>${formatNumber(s.packs)}
             </td>
-            <td style="text-align:right; padding:10px 2px; position: relative; left: -70px;">
+            <td style="text-align:right; padding:8px 2px;">
                 ${formatNumber(weight.toFixed(2))}
             </td>
-            <td style="text-align:right; padding:10px 2px; position: relative; left: -55px;">
+            <td style="text-align:right; padding:8px 2px;">
                 ${formatNumber(price.toFixed(2))}
             </td>
-            <td style="padding:10px 0; display:flex; flex-direction:column; align-items:flex-end;">
-                <div style="font-size:25px; white-space:nowrap;">${s.supplier_code || "ASW"}</div>
-                <div style="font-weight:900; white-space:nowrap;">${formatNumber(value)}</div>
+            <td style="text-align:right; padding:8px 0;">
+                <div style="font-size:20px;">${s.supplier_code || "ASW"}</div>
+                <div>${formatNumber(value)}</div>
             </td>
         </tr>`;
     }).join("");
 
-    const kuliyaRow = totalKuliyaSum > 0 ? `
-    <tr>
-        <td style="font-size:20px;">කුලිය:</td>
-        <td style="text-align:right; font-weight:bold;">${formatNumber(totalKuliyaSum.toFixed(2))}</td>
-    </tr>
-    ` : '';
-
-    const loanRow = globalLoanAmount !== 0 ? `
-    <tr>
-        <td style="font-size:20px; padding-top:8px;">පෙර ණය:</td>
-        <td style="text-align:right; font-size:22px; font-weight:bold; padding-top:8px;">
-            Rs. ${formatNumber(Math.abs(globalLoanAmount).toFixed(2))}
-        </td>
-    </tr>
-    ` : '';
-
     const summaryEntries = Object.entries(consolidatedSummary);
     let summaryHtmlContent = '';
     for (let i = 0; i < summaryEntries.length; i += 2) {
-        const [name1, d1] = summaryEntries[i];
-        const [name2, d2] = summaryEntries[i + 1] || [null, null];
-        const text1 = `${name1}:${formatNumber(d1.totalWeight)}/${formatNumber(d1.totalPacks)}`;
-        const text2 = d2 ? `${name2}:${formatNumber(d2.totalWeight)}/${formatNumber(d2.totalPacks)}` : '';
+        const [n1, d1] = summaryEntries[i];
+        const [n2, d2] = summaryEntries[i + 1] || [null, null];
         summaryHtmlContent += `
         <tr>
-            <td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap;">${text1}</td>
-            <td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap;">${text2}</td>
+            <td style="padding:4px; font-weight:bold;">${n1}:${formatNumber(d1.totalWeight)}/${d1.totalPacks}</td>
+            <td style="padding:4px; font-weight:bold;">${d2 ? `${n2}:${formatNumber(d2.totalWeight)}/${d2.totalPacks}` : ''}</td>
         </tr>`;
     }
 
@@ -147,110 +108,98 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     <html>
     <head>
         <meta charset="UTF-8">
-        <title>Invoice - ${billNo}</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { margin: 0; padding: 0; font-family: 'Courier New', monospace; background: white; }
-            .receipt-main { width: ${receiptMaxWidth}; margin: 0 auto; padding: 10px; background: #fff; color: #000; }
+            body { font-family: 'Arial', sans-serif; background: white; }
+            .receipt-main { width: ${receiptMaxWidth}; margin: 0 auto; padding: 5px; }
             @media print {
-                @page { margin: 0; size: auto; }
-                body { margin: 0 !important; padding: 0 !important; background: white !important; }
-                .receipt-main { margin: 0 !important; padding: 8px !important; }
+                @page { margin: 0; size: 80mm auto; }
+                body { width: 80mm; }
             }
-            @media screen { body { background: #e5e7eb; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; } }
-            .header { text-align: center; font-weight: bold; }
-            .business-name { font-size: 24px; }
-            .business-sub { font-size: 12px; margin-bottom: 5px; }
-            .customer-badge { display: flex; justify-content: center; align-items: center; gap: 15px; margin: 12px 0; }
-            .badge { border: 2.5px solid #000; padding: 5px 12px; font-size: 22px; }
-            .time-row { display: flex; justify-content: space-between; font-size: 14px; margin-top: 6px; padding: 0 5px; }
-            .info-section { font-size: 19px; margin-top: -12px; padding: 0 5px; }
-            .info-row { display: flex; justify-content: space-between; margin-top: 3px; }
-            hr { border: none; border-top: 2.5px solid #000; margin: 10px 0; }
-            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            th { text-align: left; padding-bottom: 8px; font-size: ${fontSizeHeader}; }
-            .total-table { width: 100%; margin-top: 20px; font-weight: bold; font-size: 22px; padding: 0 5px; }
-            .summary-grid { margin-top: 25px; border-top: 1px dashed #000; padding-top: 10px; }
-            .right { display: flex; flex-direction: column; align-items: flex-end; }
-            .info-row .time { font-size: 14px; margin-top: 2px; }
+            .header { text-align: center; }
+            .badge { border: 2px solid #000; padding: 4px 8px; font-size: 18px; font-weight: bold; }
+            .info-section { font-size: 16px; margin-top: 10px; }
+            hr { border: none; border-top: 2px solid #000; margin: 8px 0; }
+            table { width: 100%; border-collapse: collapse; }
+            .total-table { margin-top: 15px; font-weight: bold; font-size: 20px; }
         </style>
     </head>
     <body>
         <div class="receipt-main">
             <div class="header">
-                <div class="business-name">මහතුන් වෙළඳසැල</div>
-                <div class="customer-badge">
+                <div style="font-size: 22px; font-weight: bold;">මහතුන් වෙළඳසැල</div>
+                <div style="margin: 10px 0;">
                     <span class="badge">F2-1</span>
                     <span class="badge">${customerName.toUpperCase()}</span>
                 </div>
-                <div class="time-row">
-                    <div class="business-sub" style="font-size: 16px; font-weight: bold;">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
+                <div style="font-size: 14px; font-weight: bold;">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
+            </div>
+
+            <div class="info-section">
+                <div style="font-weight: bold; font-size: 14px;">Tel: 0777672838 / 0714371115</div>
+                <div style="display:flex; justify-content:space-between; font-size: 13px; margin-top: 5px;">
+                    <span>බිල් අංකය: ${billNo}</span>
+                    <div style="text-align:right;">
+                        <span style="white-space:nowrap;">දිනය: ${date}</span><br>
+                        <span>${time}</span>
+                    </div>
                 </div>
             </div>
-            <div class="info-section">
-                <div style="font-weight: bold;">දුර: 0777672838 / 0714371115</div>
-               <div class="info-row" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-  
-  <!-- Left side -->
-  <div class="left" style="display:flex; gap:15px;">
-  <span>බිල් අංකය: ${billNo}</span>
-</div>
-  <!-- Right side, pushed further right -->
-  <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto;">
-  <!-- Date on single line -->
-  <span style="white-space:nowrap;">දිනය: ${date}</span>
-  
-  <!-- Time below -->
-  <span class="time">${time}</span>
-</div>
 
-</div>
-            </div>
             <hr />
+
             <table>
-                ${colGroups}
+                <colgroup>
+                    <col style="width:30%;">
+                    <col style="width:20%;">
+                    <col style="width:20%;">
+                    <col style="width:30%;">
+                </colgroup>
                 <thead>
-                    <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
-                        <th style="text-align:left; font-size:${fontSizeHeader};">වර්ගය<br />මලු</th>
-                        <th style="text-align:left; font-size:${fontSizeHeader}; position: relative; left: -35px;">කිලෝ</th>
-                        <th style="text-align:right; font-size:${fontSizeHeader};position: relative; left: -34px;">මිල</th>
-                        <th style="text-align:right; font-size:${fontSizeHeader};">අයිතිය<br />අගය</th>
+                    <tr style="border-bottom:2px solid #000; font-weight:bold; font-size:14px;">
+                      <th style="text-align:left;">
+                       වර්ගය<br>මලු
+                       </th>
+                        <th style="text-align:right;">කිලෝ</th>
+                        <th style="text-align:right;">මිල</th>
+                        <th style="text-align:right;">අගය</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>
-               <tfoot>
-    <tr style="border-top:2.5px solid #000;">
-        <td colspan="4" style="padding-top:12px; font-size:${fontSizeTotal}; font-weight:bold; color:#000;">
-            
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span>${formatNumber(totalPacksSum)}</span>
-                <span>${Number(totalSales).toFixed(2)}</span>
-            </div>
-
-        </td>
-    </tr>
-</tfoot>
+                <tfoot>
+                    <tr style="border-top:2px solid #000;">
+                        <td colspan="4" style="padding-top:10px;">
+                            <div style="display:flex; justify-content:space-between; font-size:24px; font-weight:bold;">
+                                <span>${formatNumber(totalPacksSum)}</span>
+                                <span>${Number(totalSales).toFixed(2)}</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tfoot>
             </table>
+
             <table class="total-table">
-                ${totalPackCost > 0 ? `
+                ${totalPackCost > 0 ? `<tr><td>මලු:</td><td style="text-align:right;">${formatNumber(totalPackCost.toFixed(2))}</td></tr>` : ''}
+                ${totalKuliyaSum > 0 ? `<tr><td>කුලිය:</td><td style="text-align:right;">${formatNumber(totalKuliyaSum.toFixed(2))}</td></tr>` : ''}
                 <tr>
-                    <td style="font-size:20px;">මලු:</td>
-                    <td style="text-align:right; font-weight:bold;">${formatNumber(totalPackCost.toFixed(2))}</td>
-                </tr>
-                ` : ''}
-                ${kuliyaRow}
-                <tr>
-                    <td style="font-size:20px; padding-top:8px;">එකතුව:</td>
-                    <td style="text-align:right; padding-top:8px;">
-                        <span style="border-bottom:5px double #000; border-top:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">
+                    <td style="padding-top:10px;">එකතුව:</td>
+                    <td style="text-align:right; padding-top:10px;">
+                        <span style="border-bottom:4px double #000; border-top:1px solid #000; font-size:26px;">
                             ${Number(finalGrandTotal).toFixed(2)}
                         </span>
                     </td>
                 </tr>
-                ${loanRow}
+                ${globalLoanAmount !== 0 ? `
+                <tr>
+                    <td style="font-size:18px; padding-top:10px;">පෙර ණය:</td>
+                    <td style="text-align:right; font-size:20px; padding-top:10px;">
+                        Rs. ${formatNumber(Math.abs(globalLoanAmount).toFixed(2))}
+                    </td>
+                </tr>` : ''}
             </table>
-            <div class="summary-grid">
-                <table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">
+
+            <div style="margin-top:20px; border-top:1px dashed #000; padding-top:10px;">
+                <table style="font-size:12px;">
                     <tbody>${summaryHtmlContent}</tbody>
                 </table>
             </div>
@@ -258,6 +207,8 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     </body>
     </html>`;
 };
+
+// src/components/BillTemplates.jsx
 
 export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0 }) => {
     const formatNumber = (num) => {
@@ -272,7 +223,7 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 
     // Group by id to avoid duplicate CustomerPackCost
     const groupedById = new Map();
-    
+
     salesData.forEach(s => {
         const id = s.id;
         if (!groupedById.has(id)) {
@@ -285,20 +236,19 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
                 Kuliya: parseFloat(s.Kuliya) || 0
             });
         } else {
-            // If same ID exists, aggregate only weight and packs (not pack cost)
             const existing = groupedById.get(id);
             existing.weight += parseFloat(s.weight) || 0;
             existing.packs += parseInt(s.packs) || 0;
             existing.Kuliya += parseFloat(s.Kuliya) || 0;
-            // Do NOT add CustomerPackCost again
         }
     });
-    
+
     const uniqueSalesData = Array.from(groupedById.values());
 
     let totalSales = 0;
     let totalPacks = 0;
     let totalPackCost = 0;
+    let totalKuliya = 0;
     const itemsList = [];
 
     uniqueSalesData.forEach((s, index) => {
@@ -306,11 +256,13 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         const price = s.price_per_kg;
         const packs = s.packs;
         const packCost = s.CustomerPackCost;
+        const kuliya = s.Kuliya;
         const itemTotal = weight * price;
 
         totalSales += itemTotal;
         totalPacks += packs;
         totalPackCost += packs * packCost;
+        totalKuliya += kuliya;
 
         itemsList.push({
             id: index + 1,
@@ -324,23 +276,20 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         });
     });
 
-    const finalGrandTotal = totalSales + totalPackCost;
+    const finalGrandTotal = totalSales + totalPackCost + totalKuliya + globalLoanAmount;
 
-    // Limit to first 4 items for quarter page
-    const displayItems = itemsList.slice(0, 4);
-    const remainingCount = itemsList.length - 4;
-
-    const itemsRows = displayItems.map(item => `
-        <tr style="border-bottom: 1px solid #000;">
-            <td style="padding: 3px 2px; text-align: center; font-size: 7px; font-weight: bold; color: #000; border: 0.5px solid #000;">${item.id}</td>
-            <td style="padding: 3px 2px; font-weight: bold; color: #000; border: 0.5px solid #000;">
-                <span style="font-size: 8px; color: #000; font-weight: bold;">${item.name}</span><br>
-                <span style="color: #000; font-size: 6px; font-weight: bold;">${item.code}</span>
+    // Show all items
+    const itemsRows = itemsList.map(item => `
+        <tr>
+            <td style="padding: 3px 2px; text-align: center; font-size: 7px; border: 0.5px solid #000;">${item.id}</td>
+            <td style="padding: 3px 2px; font-size: 7px; border: 0.5px solid #000;">
+                ${item.name}<br>
+                <span style="font-size: 6px;">${item.code}</span>
             </td>
-            <td style="padding: 3px 2px; text-align: right; font-size: 7px; font-weight: bold; color: #000; border: 0.5px solid #000;">${formatNumber(item.weight)}</td>
-            <td style="padding: 3px 2px; text-align: right; font-size: 7px; font-weight: bold; color: #000; border: 0.5px solid #000;">${formatNumber(item.price)}</td>
-            <td style="padding: 3px 2px; text-align: center; font-size: 7px; font-weight: bold; color: #000; border: 0.5px solid #000;">${item.packs}</td>
-            <td style="padding: 3px 2px; text-align: right; font-size: 7px; font-weight: bold; color: #000; border: 0.5px solid #000;">${formatNumber(item.total)}</td>
+            <td style="padding: 3px 2px; text-align: right; font-size: 7px; border: 0.5px solid #000;">${formatNumber(item.weight)}</td>
+            <td style="padding: 3px 2px; text-align: right; font-size: 7px; border: 0.5px solid #000;">${formatNumber(item.price)}</td>
+            <td style="padding: 3px 2px; text-align: center; font-size: 7px; border: 0.5px solid #000;">${item.packs}</td>
+            <td style="padding: 3px 2px; text-align: right; font-size: 7px; border: 0.5px solid #000;">${formatNumber(item.total)}</td>
         </tr>
     `).join('');
 
@@ -354,282 +303,219 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             margin: 0; 
             padding: 0; 
             box-sizing: border-box; 
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
         }
         body { 
-            font-family: 'Courier New', 'Segoe UI', monospace; 
-            background: #fff; 
-            padding: 0;
+            font-family: 'Iskoola Pota', 'Courier New', monospace; 
+            background: white; 
             margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            min-height: 100vh;
         }
         @media print { 
             body { 
-                padding: 0; 
-                margin: 0;
+                margin: 0; 
+                padding: 0;
             } 
             @page { 
-                size: 105mm 74mm; 
-                margin: 1mm; 
+                size: A4;
+                margin: 0.5cm;
             } 
-            .no-print { 
-                display: none; 
-            }
         }
-        .receipt { 
+        /* Receipt style - fits in quarter of A4 but centered on page */
+        .receipt-container { 
             width: 100%;
             max-width: 105mm;
-            margin: 0 auto; 
+            margin: 0;
+            padding: 4mm;
             background: white;
-            padding: 2mm;
+            /* Remove absolute positioning */
+            position: relative;
+            top: auto;
+            left: auto;
+            font-size: 9px;
+        }
+        /* For print, ensure it starts at top-left */
+        @media print {
+            body {
+                display: block;
+            }
+            .receipt-container {
+                margin: 0;
+                padding: 4mm;
+                width: 100%;
+                max-width: 105mm;
+            }
         }
         /* ALL TEXT IS BLACK AND BOLD */
-        div, span, p, td, th, strong, b, .shop-name, .address, .contact, .bill-number-section,
-        .customer-label-small, .customer-name-large, .mobile-text, .total-line, .grand-total,
-        .summary-title, .summary-item, .footer p {
+        div, span, p, td, th, strong, b {
             color: #000000 !important;
             font-weight: bold !important;
         }
-        .top-header {
-            position: relative;
+        .header {
             text-align: center;
-            margin-bottom: 4px;
+            border-bottom: 2px solid #000;
             padding-bottom: 4px;
-            border-bottom: 1.5px solid #000;
+            margin-bottom: 5px;
         }
-        .f2-badge {
-            position: absolute;
-            left: 0;
-            top: 0;
-            font-size: 9px;
+        .shop-name {
+            font-size: 12px;
             font-weight: bold;
-            font-family: monospace;
-            background: #000;
-            color: white !important;
-            padding: 2px 5px;
-            letter-spacing: 1px;
-            border: 1px solid #000;
+            margin-bottom: 3px;
         }
-        .shop-name { 
-            font-size: 11px; 
-            font-weight: bold; 
-            color: #000; 
-            margin-bottom: 2px; 
-            letter-spacing: 0.5px;
-            display: inline-block;
+        .shop-address {
+            font-size: 7px;
+            margin: 2px 0;
         }
-        .address { 
-            font-size: 6px; 
-            font-weight: bold;
-            color: #000; 
-            margin-bottom: 1px; 
-            text-align: center;
-        }
-        .contact { 
-            font-size: 5.5px; 
-            font-weight: bold;
-            color: #000; 
-            margin-bottom: 3px; 
-            text-align: center;
+        .shop-phone {
+            font-size: 7px;
+            margin: 2px 0;
         }
         .info-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin: 4px 0 5px 0;
-            padding: 3px 4px;
-            background: #fff;
-            border: 1px solid #000;
-        }
-        .bill-number-section {
-            font-size: 6px;
-            font-weight: bold;
-            color: #000;
-        }
-        .bill-number-section strong {
-            color: #000;
-            font-size: 7px;
-            font-weight: bold;
-        }
-        .customer-info-section {
-            text-align: right;
-        }
-        .customer-label-small {
-            font-size: 5px;
-            color: #000;
-            font-weight: bold;
-            margin-bottom: 1px;
-        }
-        .customer-name-box {
-            background: #000;
-            color: white !important;
-            padding: 2px 6px;
-            display: inline-block;
-            margin: 1px 0;
-        }
-        .customer-name-large {
+            margin: 5px 0;
             font-size: 8px;
-            font-weight: bold;
-            color: white !important;
-            letter-spacing: 0.5px;
-        }
-        .mobile-text {
-            font-size: 5px;
-            font-weight: bold;
-            color: #000;
-            margin-top: 1px;
-        }
-        .items-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 5px; 
-            font-size: 6px; 
-        }
-        .items-table th { 
-            background: #000 !important;
-            color: white !important;
-            padding: 3px 2px; 
-            text-align: center; 
-            font-weight: bold; 
-            font-size: 6px;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 3px;
             border: 0.5px solid #000;
         }
-        .items-table td { 
-            padding: 3px 2px; 
-            border: 0.5px solid #000; 
+        .info-item {
+            font-size: 8px;
         }
-        .totals-box { 
-            background: #fff; 
-            padding: 4px; 
-            margin-bottom: 5px; 
-            border: 1px solid #000; 
-        }
-        .total-line { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 2px 0; 
-            font-size: 7px; 
+        .info-item strong {
             font-weight: bold;
-            color: #000;
         }
-        .grand-total { 
-            border-top: 2px double #000; 
-            margin-top: 4px; 
-            padding-top: 4px; 
-            font-size: 9px; 
-            font-weight: bold; 
-            color: #000; 
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 5px 0;
+            font-size: 7px;
         }
-        .summary-box { 
-            background: #fff; 
-            padding: 4px; 
-            margin-bottom: 4px; 
-            border: 1px solid #000; 
-        }
-        .summary-title { 
-            font-weight: bold; 
-            margin-bottom: 3px; 
-            font-size: 7px; 
-            text-align: center; 
-            color: #000;
-        }
-        .summary-grid { 
-            display: flex; 
-            flex-wrap: wrap; 
-            gap: 3px; 
-            justify-content: center; 
-        }
-        .summary-item { 
-            background: #fff; 
-            padding: 2px 4px; 
-            border: 0.5px solid #000; 
-            font-size: 5.5px; 
+        th {
+            border: 0.5px solid #000;
+            padding: 3px 2px;
+            background: #f0f0f0;
             font-weight: bold;
-            color: #000;
+            text-align: center;
+            font-size: 7px;
         }
-        .footer { 
-            text-align: center; 
-            margin-top: 4px; 
-            padding-top: 3px; 
-            border-top: 1px solid #000; 
-            font-size: 5px; 
+        td {
+            border: 0.5px solid #000;
+            padding: 3px 2px;
+            text-align: left;
+            font-size: 7px;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .totals-section {
+            margin-top: 5px;
+            width: 100%;
+            border-top: 0.5px solid #ccc;
+            padding-top: 4px;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            font-size: 8px;
+        }
+        .net-total {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
             font-weight: bold;
-            color: #000; 
+            font-size: 9px;
+            margin-top: 2px;
+            background: #f9f9f9;
         }
-        .footer p:first-child {
-            color: #000;
+        .footer {
+            margin-top: 6px;
+            text-align: center;
             font-size: 6px;
-            margin-bottom: 2px;
+            border-top: 0.5px dashed #999;
+            padding-top: 4px;
+            color: #666;
         }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .font-bold { font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="receipt">
-        <div class="top-header">
-            <div class="f2-badge">F2-1</div>
+    <div class="receipt-container">
+        <div class="header">
             <div class="shop-name">මහතුන් වෙළඳසැල</div>
+            <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+            <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
         </div>
-        
-        <div class="address">එළවළු හා පලතුරු කොමිස් පීටි</div>
-        <div class="address">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
-        <div class="contact">දු: 0777672838 / 0714371115</div>
         
         <div class="info-row">
-            <div class="bill-number-section">
-                බිල් අංකය: <strong>${billNo}</strong>
-            </div>
-            <div class="customer-info-section">
-                <div class="customer-label-small">ගනුදෙනුකරු</div>
-                <div class="customer-name-box">
-                    <div class="customer-name-large">${customerName.toUpperCase()}</div>
-                </div>
-                <div class="mobile-text">දු: ${mobile}</div>
-            </div>
+            <div class="info-item">කේතය: <strong>${customerName.toUpperCase()}</strong></div>
+            <div class="info-item">බිල්පත් අංකය: <strong>${billNo}</strong></div>
+            <div class="info-item">දිනය: <strong>${date}</strong></div>
         </div>
-        
-        <table class="items-table">
+
+        <table>
             <thead>
                 <tr>
-                    <th style="width: 8%">#</th>
-                    <th style="width: 32%">අයිතමය</th>
-                    <th style="width: 15%">බර(kg)</th>
-                    <th style="width: 15%">මිල</th>
-                    <th style="width: 12%">මලු</th>
-                    <th style="width: 18%">එකතුව</th>
+                    <th>#</th>
+                    <th>අයිතමය</th>
+                    <th>බර(kg)</th>
+                    <th>මිල</th>
+                    <th>මලු</th>
+                    <th>එකතුව</th>
                 </tr>
             </thead>
-            <tbody>${itemsRows}</tbody>
+            <tbody>
+                ${itemsRows}
+            </tbody>
+            <tfoot>
+                <tr style="font-weight: bold; background: #f9f9f9;">
+                    <td colspan="2"><strong>මුළු එකතුව</strong></td>
+                    <td class="text-center"><strong>${formatNumber(totalSales)}</strong></td>
+                    <td class="text-center"><strong>${totalPacks}</strong> මලු</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
         </table>
-        ${remainingCount > 0 ? `<div style="text-align: center; font-size: 6px; font-weight: bold; color: #000; margin-bottom: 4px; border: 0.5px solid #000; padding: 2px;">+ ${remainingCount} තවත් අයිතම</div>` : ''}
-        
-        <div class="totals-box">
-            <div class="total-line">
+
+        <div class="totals-section">
+            <div class="total-row">
                 <span>භාණ්ඩ එකතුව:</span>
                 <span>රු. ${formatNumber(totalSales)}</span>
             </div>
-            <div class="total-line">
-                <span>මලු ගාස්තු (${totalPacks}):</span>
+            <div class="total-row">
+                <span>මලු වියදම (Pack Cost):</span>
                 <span>රු. ${formatNumber(totalPackCost)}</span>
             </div>
+            ${totalKuliya > 0 ? `
+            <div class="total-row">
+                <span>කුලිය:</span>
+                <span>රු. ${formatNumber(totalKuliya)}</span>
+            </div>
+            ` : ''}
             ${globalLoanAmount !== 0 ? `
-            <div class="total-line">
+            <div class="total-row">
                 <span>පෙර ණය:</span>
                 <span>රු. ${formatNumber(Math.abs(globalLoanAmount))}</span>
             </div>
             ` : ''}
-            <div class="grand-total">
-                <span>මුළු එකතුව:</span>
-                <span>රු. ${formatNumber(finalGrandTotal)}</span>
+            <div class="net-total">
+                <span><strong>මුළු ගෙවිය යුතු මුදල:</strong></span>
+                <span><strong>රු. ${formatNumber(finalGrandTotal)}</strong></span>
             </div>
         </div>
         
         <div class="footer">
-            <p>*** ස්තුතියි! නැවත පැමිණෙන්න ***</p>
-            <p>${date} | ${time}</p>
+            *** ස්තුතියි! නැවත පැමිණීමට සාදරයෙන් පිළිගනිමු ***
+            <div>${date} | ${time}</div>
         </div>
     </div>
 </body>
