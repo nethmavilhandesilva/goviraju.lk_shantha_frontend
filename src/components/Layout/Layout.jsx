@@ -10,6 +10,7 @@ import GrnSalesOverviewReport from '../GrnSalesOverview/GrnSalesOverviewReport';
 import GrnSalesOverviewReport2 from '../GrnSalesOverview/GrnSalesOverviewReport2';
 import SalesReportModal from '../SalesReport/SalesReportModal';
 import DayProcessModal from '../Modals/DayProcessModal';
+import TodaysKuliyaModal from '../Kuliya/TodaysKuliyaModal';
 
 const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintMode }) => {
     const location = useLocation();
@@ -51,6 +52,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const [isSalesReportModalOpen, setIsSalesReportModalOpen] = useState(false);
     const [isGrnReportModalOpen, setIsGrnReportModalOpen] = useState(false);
     const [isDayProcessModalOpen, setIsDayProcessModalOpen] = useState(false);
+    const [isTodaysKuliyaModalOpen, setIsTodaysKuliyaModalOpen] = useState(false);
 
     // === User & Settings State ===
     const [user, setUser] = useState(null);
@@ -59,6 +61,14 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     // === Bottom Password States ===
     const [bottomPassword, setBottomPassword] = useState('');
     const [isBottomUnlocked, setIsBottomUnlocked] = useState(true);
+
+    // === Local Print Mode State with localStorage persistence ===
+    const [localPrintMode, setLocalPrintMode] = useState(() => {
+        // Try to get saved print mode from localStorage
+        const savedPrintMode = localStorage.getItem('printMode');
+        // Return saved value if exists, otherwise default to 'thermal'
+        return savedPrintMode || 'thermal';
+    });
 
     useEffect(() => {
         // 1. Handle User Session
@@ -84,6 +94,13 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
 
         fetchSettings();
     }, [BASE_URL]);
+
+    // Sync local print mode with parent component if setPrintMode is provided
+    useEffect(() => {
+        if (setPrintMode && typeof setPrintMode === 'function') {
+            setPrintMode(localPrintMode);
+        }
+    }, [localPrintMode, setPrintMode]);
 
     const handleLogout = () => {
         localStorage.removeItem('user');
@@ -111,6 +128,8 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const closeGrnReportModal = () => setIsGrnReportModalOpen(false);
     const openDayProcessModal = () => setIsDayProcessModalOpen(true);
     const closeDayProcessModal = () => setIsDayProcessModalOpen(false);
+    const openTodaysKuliyaModal = () => setIsTodaysKuliyaModalOpen(true);
+    const closeTodaysKuliyaModal = () => setIsTodaysKuliyaModalOpen(false);
 
     const handleProfitReportClick = () => {
         window.location.href = `${BASE_URL}/supplier-profit`;
@@ -136,13 +155,16 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
         setBottomPassword(e.target.value);
     };
 
-    // Handle print mode change with safety check
+    // Handle print mode change with persistence
     const handlePrintModeChange = (e) => {
         const newMode = e.target.value;
-        if (typeof setPrintMode === 'function') {
+        setLocalPrintMode(newMode);
+        // Save to localStorage
+        localStorage.setItem('printMode', newMode);
+        
+        // Also update parent component if setPrintMode is provided
+        if (setPrintMode && typeof setPrintMode === 'function') {
             setPrintMode(newMode);
-        } else {
-            console.error('setPrintMode is not a function', setPrintMode);
         }
     };
 
@@ -187,6 +209,12 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
                                                 <i className="material-icons align-middle me-1 text-warning">account_balance</i> ණය වාර්තාව
                                             </button>
                                         </li>
+                                        <li><hr className="dropdown-divider" /></li>
+                                        <li>
+                                            <button type="button" className="dropdown-item text-success" onClick={openTodaysKuliyaModal}>
+                                                <i className="material-icons align-middle me-1 text-success">account_balance_wallet</i> අද කුලිය (Today's Kuliya)
+                                            </button>
+                                        </li>
                                     </ul>
                                 </div>
 
@@ -204,7 +232,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
                                 <div className="d-flex align-items-center me-3" style={{ marginLeft: '20px' }}>
                                     <label className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Print Mode:</label>
                                     <select
-                                        value={printMode || 'thermal'}
+                                        value={localPrintMode}
                                         onChange={handlePrintModeChange}
                                         className="form-select form-select-sm me-2"
                                         style={{ width: '100px', backgroundColor: '#006400', color: 'white', border: '1px solid #4a5568' }}
@@ -316,6 +344,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
             <SalesReportModal isOpen={isSalesReportModalOpen} onClose={closeSalesReportModal} />
             <GrnReportModal isOpen={isGrnReportModalOpen} onClose={closeGrnReportModal} />
             <DayProcessModal isOpen={isDayProcessModalOpen} onClose={closeDayProcessModal} />
+            <TodaysKuliyaModal isOpen={isTodaysKuliyaModalOpen} onClose={closeTodaysKuliyaModal} />
         </div>
     );
 };

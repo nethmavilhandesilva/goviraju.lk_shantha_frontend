@@ -520,6 +520,7 @@ const SupplierReport = () => {
   // 🚀 FIXED: A4 Format Content - Simple and reliable layout (LEFT ALIGNED for printing)
 const getA4Content = useCallback((currentBillNo) => {
     const date = new Date().toLocaleDateString('si-LK');
+    const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit' });
     const paidAmountValue = parseFloat(payingAmount) || 0;
     const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
 
@@ -539,57 +540,81 @@ const getA4Content = useCallback((currentBillNo) => {
             body {
                 font-family: 'Iskoola Pota', 'Courier New', monospace, sans-serif;
                 background: white;
-                padding: 0;
+                padding: 20px;
                 margin: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
             }
             
+            /* A4 print settings - ensures nothing cuts off */
+            @media print {
+                body {
+                    padding: 0;
+                    margin: 0;
+                    background: white;
+                    display: block;
+                }
+                @page {
+                    size: A4;
+                    margin: 1.2cm; /* Safe margins on all sides */
+                }
+            }
+            
+            /* Container uses FULL A4 width with margins */
             .receipt-container {
-                width: 105mm; /* Fixed width for receipt (quarter A4) */
-                margin: 0; /* Remove auto margin - align to LEFT */
-                padding: 4mm;
+                width: 100%;
+                max-width: 100%;
+                margin: 0 auto;
+                padding: 15px;
                 background: white;
-                font-size: 9px;
-                position: relative;
-                top: 0;
-                left: 0;
+                font-size: 11px;
+            }
+            
+            /* ALL TEXT IS BLACK AND BOLD */
+            div, span, p, td, th, strong, b {
+                color: #000000 !important;
+                font-weight: bold !important;
             }
             
             .header {
                 text-align: center;
                 border-bottom: 2px solid #000;
-                padding-bottom: 4px;
-                margin-bottom: 8px;
+                padding-bottom: 12px;
+                margin-bottom: 15px;
             }
             
             .shop-name {
-                font-size: 12px;
+                font-size: 18px;
                 font-weight: bold;
-                margin-bottom: 3px;
+                margin-bottom: 5px;
             }
             
             .shop-address {
-                font-size: 7px;
-                margin: 2px 0;
+                font-size: 11px;
+                margin: 3px 0;
             }
             
             .shop-phone {
-                font-size: 7px;
-                margin: 2px 0;
+                font-size: 11px;
+                margin: 3px 0;
             }
             
             .info-row {
                 display: flex;
                 justify-content: space-between;
-                margin: 8px 0;
-                font-size: 8px;
+                margin: 15px 0;
+                font-size: 12px;
                 flex-wrap: wrap;
-                gap: 5px;
-                padding: 3px;
-                border: 0.5px solid #000;
+                gap: 10px;
+                padding: 12px;
+                border: 1px solid #000;
+                background: #f9f9f9;
             }
             
             .info-item {
-                font-size: 8px;
+                font-size: 12px;
             }
             
             .info-item strong {
@@ -599,24 +624,24 @@ const getA4Content = useCallback((currentBillNo) => {
             table {
                 width: 100%;
                 border-collapse: collapse;
-                margin: 6px 0;
-                font-size: 7px;
+                margin: 12px 0;
+                font-size: 11px;
             }
             
             th {
-                border: 0.5px solid #000;
-                padding: 3px 2px;
+                border: 1px solid #000;
+                padding: 10px 6px;
                 background: #f0f0f0;
                 font-weight: bold;
                 text-align: center;
-                font-size: 7px;
+                font-size: 11px;
             }
             
             td {
-                border: 0.5px solid #000;
-                padding: 3px 2px;
+                border: 1px solid #000;
+                padding: 8px 6px;
                 text-align: left;
-                font-size: 7px;
+                font-size: 11px;
             }
             
             .text-center {
@@ -628,57 +653,74 @@ const getA4Content = useCallback((currentBillNo) => {
             }
             
             .totals-section {
-                margin-top: 6px;
+                margin-top: 15px;
                 width: 100%;
-                border-top: 0.5px solid #ccc;
-                padding-top: 4px;
+                border-top: 1px solid #000;
+                padding-top: 12px;
             }
             
             .total-row {
                 display: flex;
                 justify-content: space-between;
-                padding: 2px 0;
-                font-size: 8px;
+                padding: 6px 0;
+                font-size: 12px;
             }
             
             .net-total {
                 display: flex;
                 justify-content: space-between;
-                padding: 4px 0;
-                border-top: 1.5px solid #000;
-                border-bottom: 1.5px solid #000;
+                padding: 12px 0;
+                margin: 10px 0;
+                border-top: 2px solid #000;
+                border-bottom: 2px solid #000;
                 font-weight: bold;
-                font-size: 9px;
-                margin-top: 3px;
+                font-size: 14px;
                 background: #f9f9f9;
             }
             
             .footer {
-                margin-top: 8px;
+                margin-top: 15px;
                 text-align: center;
-                font-size: 6px;
-                border-top: 0.5px dashed #999;
-                padding-top: 4px;
-                color: #666;
+                font-size: 10px;
+                border-top: 1px dashed #999;
+                padding-top: 10px;
             }
             
+            /* Print optimization */
             @media print {
-                body {
-                    padding: 0;
-                    margin: 0;
-                }
                 .receipt-container {
-                    width: 105mm;
+                    width: 100%;
                     margin: 0;
-                    padding: 4mm;
-                    border: none;
-                    position: absolute;
-                    top: 0;
-                    left: 0;
+                    padding: 0;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }
-                @page {
-                    size: A4;
-                    margin: 0;
+                
+                .info-row, .net-total, th, tfoot tr {
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+                
+                /* Prevent any overflow */
+                body, .receipt-container, table, .totals-section {
+                    overflow: visible !important;
+                }
+                
+                /* Keep rows together */
+                tbody tr {
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+            }
+            
+            /* Handle many items - allow natural page break */
+            @media print {
+                tbody {
+                    page-break-inside: auto;
+                }
+                tr {
+                    page-break-inside: avoid;
+                    page-break-after: auto;
                 }
             }
         </style>
@@ -709,29 +751,24 @@ const getA4Content = useCallback((currentBillNo) => {
                     </tr>
                 </thead>
                 <tbody>
-                    ${supplierDetails.slice(0, 10).map(record => `
+                    ${supplierDetails.map(record => `
                         <tr>
-                            <td style="font-size: 7px;">${record.item_name || ''}</td>
-                            <td class="text-center" style="font-size: 7px;">${record.packs || 0}</td>
-                            <td class="text-right" style="font-size: 7px;">${parseFloat(record.weight || 0).toFixed(1)}</td>
-                            <td class="text-right" style="font-size: 7px;">${parseFloat(record.SupplierPricePerKg || 0).toFixed(1)}</td>
-                            <td class="text-center" style="font-size: 7px;">${(record.customer_code || '').toUpperCase()}</td>
-                            <td class="text-right" style="font-size: 7px;">${parseFloat(record.SupplierTotal || 0).toFixed(0)}</td>
+                            <td style="font-size: 11px;">${record.item_name || ''}</td>
+                            <td class="text-center" style="font-size: 11px;">${record.packs || 0}</td>
+                            <td class="text-right" style="font-size: 11px;">${parseFloat(record.weight || 0).toFixed(2)}</td>
+                            <td class="text-right" style="font-size: 11px;">${parseFloat(record.SupplierPricePerKg || 0).toFixed(2)}</td>
+                            <td class="text-center" style="font-size: 11px;">${(record.customer_code || '').toUpperCase()}</td>
+                            <td class="text-right" style="font-size: 11px;">${parseFloat(record.SupplierTotal || 0).toFixed(2)}</td>
                         </tr>
                     `).join('')}
-                    ${supplierDetails.length > 10 ? `
-                        <tr>
-                            <td colspan="6" class="text-center" style="font-style: italic; background: #f9f9f9; font-size: 7px;">+ ${supplierDetails.length - 10} තවත් අයිතම...</td>
-                        </tr>
-                    ` : ''}
                 </tbody>
                 <tfoot>
                     <tr style="font-weight: bold; background: #f9f9f9;">
-                        <td style="font-size: 8px;"><strong>මුළු එකතුව</strong></td>
-                        <td class="text-center" style="font-size: 8px;"><strong>${totalPacksSum || 0}</strong></td>
-                        <td class="text-right" style="font-size: 8px;"><strong>${(totalWeight || 0).toFixed(1)}</strong></td>
+                        <td style="font-size: 12px;"><strong>මුළු එකතුව</strong></td>
+                        <td class="text-center" style="font-size: 12px;"><strong>${totalPacksSum || 0}</strong></td>
+                        <td class="text-right" style="font-size: 12px;"><strong>${(totalWeight || 0).toFixed(2)}</strong></td>
                         <td colspan="2"></td>
-                        <td class="text-right" style="font-size: 8px;"><strong>${(totalsupplierSales || 0).toFixed(0)}</strong></td>
+                        <td class="text-right" style="font-size: 12px;"><strong>${(totalsupplierSales || 0).toFixed(2)}</strong></td>
                     </tr>
                 </tfoot>
             </table>
@@ -739,29 +776,30 @@ const getA4Content = useCallback((currentBillNo) => {
             <div class="totals-section">
                 <div class="total-row">
                     <span>බිල්පත් වටිනාකම:</span>
-                    <span>රු. ${(totalsupplierSales || 0).toFixed(0)}</span>
+                    <span>රු. ${(totalsupplierSales || 0).toFixed(2)}</span>
                 </div>
                 <div class="total-row">
                     <span>මලු වියදම (Pack Cost):</span>
-                    <span>රු. - ${(totalCustomerPackCost || 0).toFixed(0)}</span>
+                    <span>රු. ${(totalCustomerPackCost || 0).toFixed(2)}</span>
                 </div>
                 <div class="total-row">
                     <span>අත්තිකාරම් (Advance):</span>
-                    <span>රු. - ${(advanceAmount || 0).toFixed(0)}</span>
+                    <span>රු. ${(advanceAmount || 0).toFixed(2)}</span>
                 </div>
                 ${paidAmountValue > 0 ? `
                 <div class="total-row">
                     <span>ගෙවූ මුදල (Paid):</span>
-                    <span>රු. - ${paidAmountValue.toFixed(0)}</span>
+                    <span>රු. ${paidAmountValue.toFixed(2)}</span>
                 </div>` : ''}
                 <div class="net-total">
                     <span><strong>ශුද්ධ ඉතිරි ගෙවිය යුතු මුදල:</strong></span>
-                    <span><strong>රු. ${netPayable.toFixed(0)}</strong></span>
+                    <span><strong>රු. ${netPayable.toFixed(2)}</strong></span>
                 </div>
             </div>
             
             <div class="footer">
                 *** ස්තුතියි! නැවත පැමිණීමට සාදරයෙන් පිළිගනිමු ***
+                <div>${date} | ${time}</div>
             </div>
         </div>
     </body>
