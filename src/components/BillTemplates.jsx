@@ -210,20 +210,18 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
 
 // src/components/BillTemplates.jsx
 
-export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0 }) => {
+export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billWidth = '150mm', topMargin = '15mm' }) => {
     const formatNumber = (num) => {
-        if (typeof num !== 'number' && typeof num !== 'string') return '0';
+        if (typeof num !== 'number' && typeof num !== 'string') return '0.00';
         const number = parseFloat(num);
-        if (isNaN(number)) return '0';
+        if (isNaN(number)) return '0.00';
         return number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const date = new Date().toLocaleDateString('si-LK');
     const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit' });
 
-    // Group by id to avoid duplicate CustomerPackCost
     const groupedById = new Map();
-
     salesData.forEach(s => {
         const id = s.id;
         if (!groupedById.has(id)) {
@@ -271,253 +269,360 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             weight: weight,
             price: price,
             packs: packs,
-            total: itemTotal,
-            supplier: s.supplier_code || ''
+            total: itemTotal
         });
     });
 
     const finalGrandTotal = totalSales + totalPackCost + totalKuliya + globalLoanAmount;
 
-    // Show all items
-    const itemsRows = itemsList.map(item => `
-        <tr>
-            <td style="padding: 3px 2px; text-align: center; font-size: 7px; border: 0.5px solid #000;">${item.id}</td>
-            <td style="padding: 3px 2px; font-size: 7px; border: 0.5px solid #000;">
-                ${item.name}<br>
-                <span style="font-size: 6px;">${item.code}</span>
-            </td>
-            <td style="padding: 3px 2px; text-align: right; font-size: 7px; border: 0.5px solid #000;">${formatNumber(item.weight)}</td>
-            <td style="padding: 3px 2px; text-align: right; font-size: 7px; border: 0.5px solid #000;">${formatNumber(item.price)}</td>
-            <td style="padding: 3px 2px; text-align: center; font-size: 7px; border: 0.5px solid #000;">${item.packs}</td>
-            <td style="padding: 3px 2px; text-align: right; font-size: 7px; border: 0.5px solid #000;">${formatNumber(item.total)}</td>
-        </tr>
-    `).join('');
+    // Calculate font sizes and padding based on bill width
+    const getStyles = (width) => {
+        const widthNum = parseInt(width);
+        
+        let headerFontSize, shopFontSize, normalFontSize, smallFontSize, tinyFontSize;
+        
+        if (widthNum <= 58) {
+            headerFontSize = '18px';
+            shopFontSize = '13px';
+            normalFontSize = '13px';
+            smallFontSize = '12px';
+            tinyFontSize = '11px';
+        } else if (widthNum <= 80) {
+            headerFontSize = '22px';
+            shopFontSize = '15px';
+            normalFontSize = '15px';
+            smallFontSize = '14px';
+            tinyFontSize = '13px';
+        } else {
+            headerFontSize = '28px';
+            shopFontSize = '18px';
+            normalFontSize = '16px';
+            smallFontSize = '15px';
+            tinyFontSize = '14px';
+        }
+        
+        return {
+            containerWidth: width,
+            headerFontSize,
+            shopFontSize,
+            normalFontSize,
+            smallFontSize,
+            tinyFontSize,
+            padding: widthNum <= 58 ? '4mm' : '5mm'
+        };
+    };
+    
+    const styles = getStyles(billWidth);
+
+    // Split items into pages with 9 items per page
+    const ITEMS_PER_PAGE = 9;
+    
+    const splitItemsIntoPages = (items, itemsPerPage = 9) => {
+        const pages = [];
+        for (let i = 0; i < items.length; i += itemsPerPage) {
+            pages.push(items.slice(i, i + itemsPerPage));
+        }
+        return pages;
+    };
+    
+    const itemPages = splitItemsIntoPages(itemsList, ITEMS_PER_PAGE);
+
+    // Generate HTML for each page
+    const generatePage = (pageItems, pageNumber, isLastPage) => {
+        const pageItemsRows = pageItems.map((item) => {
+            return `
+                <tr style="page-break-inside: avoid;">
+                    <td style="text-align: center; padding: 8px 4px; font-size: 20px;">${item.id}</td>
+                    <td style="padding: 8px 4px; font-size: 16px;">${item.name}<br><span style="font-size: 20px;">${item.code}</span></td>
+                    <td class="text-right" style="padding: 8px 4px; font-size: 20px;">${formatNumber(item.weight)}</td>
+                    <td class="text-right" style="padding: 8px 4px; font-size: 20px;">${formatNumber(item.price)}</td>
+                    <td class="text-center" style="padding: 8px 4px; font-size: 20px;">${item.packs}</td>
+                    <td class="text-right" style="padding: 8px 4px; font-size: 20px;">${formatNumber(item.total)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        // Calculate page-specific totals
+        let pageTotalSales = 0;
+        let pageTotalPacks = 0;
+        pageItems.forEach(item => {
+            pageTotalSales += item.total;
+            pageTotalPacks += item.packs;
+        });
+
+        return `
+            <div class="receipt-container" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
+                ${pageNumber === 1 ? `
+                <div class="header">
+                    <div class="shop-name">මහතුන් වෙළඳසැල</div>
+                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
+                </div>
+                
+                <div class="info-row">
+                    <div>කේතය: ${(customerName || '').toUpperCase()}</div>
+                    <div>අංකය: ${billNo}</div>
+                    <div>දිනය: ${date}</div>
+                </div>
+                ` : `
+                <div class="header-continued">
+                    <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
+                </div>
+                `}
+
+                ${itemPages.length > 1 ? `
+                <div style="margin-bottom: 5px; font-size: 12px; text-align: center; font-weight: bold;">
+                    පිටුව ${pageNumber} / ${itemPages.length}
+                </div>
+                ` : ''}
+
+                <table>
+                    <colgroup>
+                        <col style="width: 8%">
+                        <col style="width: 32%">
+                        <col style="width: 15%">
+                        <col style="width: 15%">
+                        <col style="width: 10%">
+                        <col style="width: 20%">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>අයිතමය</th>
+                            <th>බර(kg)</th>
+                            <th>මිල</th>
+                            <th>මලු</th>
+                            <th>එකතුව</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pageItemsRows || ''}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f0f0f0;">
+                            <td colspan="2" style="font-size: ${styles.normalFontSize}; font-weight: bold;">මෙම පිටුවේ එකතුව</td>
+                            <td class="text-right" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${formatNumber(pageTotalSales)}</td>
+                            <td style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
+                            <td class="text-center" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${pageTotalPacks}</td>
+                            <td style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                ${isLastPage ? `
+                <div class="totals-section">
+                    <div class="total-row"><span>භාණ්ඩ එකතුව:</span><span>රු. ${formatNumber(totalSales)}</span></div>
+                    <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(totalPackCost)}</span></div>
+                    ${totalKuliya > 0 ? `<div class="total-row"><span>කුලිය:</span><span>රු. ${formatNumber(totalKuliya)}</span></div>` : ''}
+                    ${globalLoanAmount !== 0 ? `<div class="total-row"><span>පෙර ණය:</span><span>රු. ${formatNumber(Math.abs(globalLoanAmount))}</span></div>` : ''}
+                    <div class="net-total">
+                        <span>මුළු ගෙවිය යුතු මුදල:</span>
+                        <span>රු. ${formatNumber(finalGrandTotal)}</span>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+                </div>
+                ` : `
+                <div class="footer" style="margin-top: 15px; text-align: center; font-size: ${styles.smallFontSize}; border-top: 2px dashed #000; padding-top: 10px;">
+                    *** කරුණාකර පහත පිටුවට හැරෙන්න ***
+                </div>
+                `}
+            </div>
+        `;
+    };
+
+    // Generate all pages
+    let allPagesHTML = '';
+    if (itemsList.length === 0) {
+        // Single page with no items
+        allPagesHTML = `
+            <div class="receipt-container">
+                <div class="header">
+                    <div class="shop-name">මහතුන් වෙළඳසැල</div>
+                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
+                </div>
+                
+                <div class="info-row">
+                    <div>කේතය: ${(customerName || '').toUpperCase()}</div>
+                    <div>අංකය: ${billNo}</div>
+                    <div>දිනය: ${date}</div>
+                </div>
+                
+                <div style="text-align: center; padding: 40px; font-size: 20px; font-weight: bold;">
+                    අයිතම නොමැත
+                </div>
+                
+                <div class="footer">
+                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+                </div>
+            </div>
+        `;
+    } else {
+        itemPages.forEach((page, idx) => {
+            allPagesHTML += generatePage(page, idx + 1, idx === itemPages.length - 1);
+        });
+    }
 
     return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Invoice - ${billNo}</title>
     <style>
-        * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
+        
         body { 
-            font-family: 'Iskoola Pota', 'Courier New', monospace; 
-            background: white; 
-            margin: 0;
+            font-family: 'Iskoola Pota', Arial, sans-serif; 
+            background: #f0f0f0; 
             padding: 0;
-            display: flex;
-            justify-content: flex-start;
-            align-items: flex-start;
-            min-height: 100vh;
-        }
-        @media print { 
-            body { 
-                margin: 0; 
-                padding: 0;
-            } 
-            @page { 
-                size: A4;
-                margin: 0.5cm;
-            } 
-        }
-        /* Receipt style - fits in quarter of A4 but centered on page */
-        .receipt-container { 
-            width: 100%;
-            max-width: 105mm;
             margin: 0;
-            padding: 4mm;
+        }
+
+        .receipt-container { 
+            width: ${styles.containerWidth}; 
+            max-width: 100%;
             background: white;
-            /* Remove absolute positioning */
-            position: relative;
-            top: auto;
-            left: auto;
-            font-size: 9px;
+            padding: ${styles.padding};
+            margin: ${topMargin} auto 0 auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            page-break-after: always;
+            page-break-inside: avoid;
         }
-        /* For print, ensure it starts at top-left */
+
         @media print {
-            body {
-                display: block;
-            }
-            .receipt-container {
+            body { 
+                background: white; 
+                padding: 0; 
                 margin: 0;
-                padding: 4mm;
-                width: 100%;
-                max-width: 105mm;
+            }
+            .receipt-container { 
+                box-shadow: none; 
+                margin: ${topMargin} auto 0 auto !important;
+                page-break-after: always;
+                page-break-inside: avoid;
+            }
+            @page { 
+                size: ${styles.containerWidth} auto;
+                margin: 0;
             }
         }
-        /* ALL TEXT IS BLACK AND BOLD */
-        div, span, p, td, th, strong, b {
-            color: #000000 !important;
-            font-weight: bold !important;
+
+        div, span, p, td, th, strong, .shop-name, .shop-address, .shop-phone, 
+        .info-row, .total-row, .net-total, .footer, .header-continued { 
+            color: #000 !important; 
+            font-weight: bold !important; 
         }
-        .header {
+
+        .header { 
+            text-align: center; 
+            border-bottom: 3px solid #000; 
+            padding-bottom: 10px; 
+            margin-bottom: 10px; 
+        }
+        
+        .header-continued {
             text-align: center;
             border-bottom: 2px solid #000;
-            padding-bottom: 4px;
-            margin-bottom: 5px;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
         }
-        .shop-name {
-            font-size: 12px;
+        
+        .continued-label {
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 3px;
+            color: #333;
         }
-        .shop-address {
-            font-size: 7px;
-            margin: 2px 0;
-        }
-        .shop-phone {
-            font-size: 7px;
-            margin: 2px 0;
-        }
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 5px 0;
-            font-size: 8px;
-            flex-wrap: wrap;
-            gap: 5px;
-            padding: 3px;
-            border: 0.5px solid #000;
-        }
-        .info-item {
-            font-size: 8px;
-        }
-        .info-item strong {
+        
+        .shop-name { 
+            font-size: ${styles.headerFontSize}; 
+            margin-bottom: 5px; 
             font-weight: bold;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 5px 0;
-            font-size: 7px;
-        }
-        th {
-            border: 0.5px solid #000;
-            padding: 3px 2px;
-            background: #f0f0f0;
+        .shop-address, .shop-phone { 
+            font-size: ${styles.shopFontSize}; 
+            margin: 3px 0; 
             font-weight: bold;
-            text-align: center;
-            font-size: 7px;
         }
-        td {
-            border: 0.5px solid #000;
-            padding: 3px 2px;
-            text-align: left;
-            font-size: 7px;
-        }
-        .text-center {
-            text-align: center;
-        }
-        .text-right {
-            text-align: right;
-        }
-        .totals-section {
-            margin-top: 5px;
-            width: 100%;
-            border-top: 0.5px solid #ccc;
-            padding-top: 4px;
-        }
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 2px 0;
-            font-size: 8px;
-        }
-        .net-total {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-            border-top: 2px solid #000;
-            border-bottom: 2px solid #000;
+
+        .info-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 10px; 
+            padding: 8px; 
+            border: 2px solid #000; 
+            font-size: ${styles.normalFontSize};
             font-weight: bold;
-            font-size: 9px;
-            margin-top: 2px;
+        }
+
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 10px;
+            table-layout: fixed;
+        }
+        
+        th { 
+            border: 2px solid #000; 
+            padding: 8px 4px; 
+            background: #eee; 
+            font-size: ${styles.smallFontSize};
+            font-weight: bold;
+        }
+        
+        td { 
+            border: 1px solid #000; 
+            padding: 8px 4px; 
+            font-size: ${styles.normalFontSize};
+            vertical-align: top;
+            font-weight: bold;
+        }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        .totals-section { 
+            margin-top: 10px; 
+            border-top: 2px solid #000; 
+            padding-top: 10px;
+        }
+        
+        .total-row { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 6px 0; 
+            font-size: ${parseInt(styles.normalFontSize) + 2}px;
+            font-weight: bold;
+        }
+        
+        .net-total { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 10px 5px; 
+            border-top: 3px solid #000; 
+            border-bottom: 3px solid #000;
+            font-size: ${parseInt(styles.normalFontSize) + 6}px;
+            margin-top: 8px; 
             background: #f9f9f9;
+            font-weight: bold;
         }
-        .footer {
-            margin-top: 6px;
-            text-align: center;
-            font-size: 6px;
-            border-top: 0.5px dashed #999;
-            padding-top: 4px;
-            color: #666;
+
+        .footer { 
+            margin-top: 15px; 
+            text-align: center; 
+            font-size: ${styles.smallFontSize}; 
+            border-top: 2px dashed #000; 
+            padding-top: 10px; 
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <div class="receipt-container">
-        <div class="header">
-            <div class="shop-name">මහතුන් වෙළඳසැල</div>
-            <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-            <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-        </div>
-        
-        <div class="info-row">
-            <div class="info-item">කේතය: <strong>${customerName.toUpperCase()}</strong></div>
-            <div class="info-item">බිල්පත් අංකය: <strong>${billNo}</strong></div>
-            <div class="info-item">දිනය: <strong>${date}</strong></div>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>අයිතමය</th>
-                    <th>බර(kg)</th>
-                    <th>මිල</th>
-                    <th>මලු</th>
-                    <th>එකතුව</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${itemsRows}
-            </tbody>
-            <tfoot>
-                <tr style="font-weight: bold; background: #f9f9f9;">
-                    <td colspan="2"><strong>මුළු එකතුව</strong></td>
-                    <td class="text-center"><strong>${formatNumber(totalSales)}</strong></td>
-                    <td class="text-center"><strong>${totalPacks}</strong> මලු</td>
-                    <td colspan="2"></td>
-                </tr>
-            </tfoot>
-        </table>
-
-        <div class="totals-section">
-            <div class="total-row">
-                <span>භාණ්ඩ එකතුව:</span>
-                <span>රු. ${formatNumber(totalSales)}</span>
-            </div>
-            <div class="total-row">
-                <span>මලු වියදම (Pack Cost):</span>
-                <span>රු. ${formatNumber(totalPackCost)}</span>
-            </div>
-            ${totalKuliya > 0 ? `
-            <div class="total-row">
-                <span>කුලිය:</span>
-                <span>රු. ${formatNumber(totalKuliya)}</span>
-            </div>
-            ` : ''}
-            ${globalLoanAmount !== 0 ? `
-            <div class="total-row">
-                <span>පෙර ණය:</span>
-                <span>රු. ${formatNumber(Math.abs(globalLoanAmount))}</span>
-            </div>
-            ` : ''}
-            <div class="net-total">
-                <span><strong>මුළු ගෙවිය යුතු මුදල:</strong></span>
-                <span><strong>රු. ${formatNumber(finalGrandTotal)}</strong></span>
-            </div>
-        </div>
-        
-        <div class="footer">
-            *** ස්තුතියි! නැවත පැමිණීමට සාදරයෙන් පිළිගනිමු ***
-            <div>${date} | ${time}</div>
-        </div>
-    </div>
+    ${allPagesHTML}
 </body>
 </html>`;
 };
+

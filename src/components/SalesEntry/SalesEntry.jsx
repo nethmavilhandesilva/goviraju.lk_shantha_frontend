@@ -321,9 +321,9 @@ const SalesSummaryFooter = ({ sales, formatDecimal }) => {
 };
 
 // --- Main Export Component ---
-const initialFormData = { customer_code: "", customer_name: "", supplier_code: "", code: "", item_code: "", item_name: "", weight: "", price_per_kg: "", pack_due: "", total: "", packs: "", given_amount: "", pack_cost: "", telephone_no: "", };
-const fieldOrder = ["telephone_no", "customer_code_input", "customer_code_select", "supplier_code", "item_code_select", "weight", "price_per_kg_grid_item", "packs", "total"];
-const skipMap = { telephone_no: "customer_code_input", customer_code_input: "supplier_code", customer_code_select: "supplier_code", given_amount: "supplier_code", supplier_code: "item_code_select", item_code_select: "weight", price_per_kg: "packs", price_per_kg_grid_item: "packs" };
+const initialFormData = { customer_code: "", customer_name: "", supplier_code: "", code: "", item_code: "", item_name: "", weight: "", price_per_kg: "", pack_due: "", total: "", packs: "", given_amount: "", pack_cost: "", telephone_no: "", kuliya: "", };
+const fieldOrder = ["telephone_no", "customer_code_input", "customer_code_select", "supplier_code", "item_code_select", "weight", "price_per_kg_grid_item", "packs", "kuliya"];
+const skipMap = { telephone_no: "customer_code_input", customer_code_input: "supplier_code", customer_code_select: "supplier_code", given_amount: "supplier_code", supplier_code: "item_code_select", item_code_select: "weight", price_per_kg: "packs", price_per_kg_grid_item: "packs", packs: "kuliya",kuliya: null };
 
 export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPrintMode: propSetPrintMode }) {
     const [localPrintMode, setLocalPrintMode] = useState(propPrintMode || 'thermal');
@@ -336,7 +336,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         telephone_no: useRef(null), customer_code_input: useRef(null), customer_code_select: useRef(null), given_amount: useRef(null),
         supplier_code: useRef(null), item_code_select: useRef(null), item_name: useRef(null),
         weight: useRef(null), price_per_kg: useRef(null), packs: useRef(null), total: useRef(null),
-        price_per_kg_grid_item: useRef(null),
+        price_per_kg_grid_item: useRef(null), kuliya: useRef(null),
     };
     const adminViewRef = useRef(null);
 
@@ -348,7 +348,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         forceUpdate: null, windowFocused: null, isPrinting: false, billSize: '3inch', priceManuallyChanged: false,
         gridPricePerKg: "", selectedSaleForBreakdown: null, showSavePhoneButton: false, isTelephoneValid: false,
         currentUser: null, bulkUpdateCustomerCode: "",
-        isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" }, selectedSalesIds: [], selectionCriteria: null, isBulkUpdateModalOpen: false, bulkUpdateSupplierCode: "", bulkUpdateContextMenu: { x: 0, y: 0, show: false }, isBulkPrintEnabled: true,
+        isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" }, selectedSalesIds: [], selectionCriteria: null, isBulkUpdateModalOpen: false, bulkUpdateSupplierCode: "", bulkUpdateContextMenu: { x: 0, y: 0, show: false }, isBulkPrintEnabled: true, isKuliyaManuallyChanged: false,
     });
 
     const setFormData = (updater) => setState(prev => ({ ...prev, formData: typeof updater === 'function' ? updater(prev.formData) : updater }));
@@ -435,6 +435,79 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
         // Convert map back to array
         return Array.from(combinedMap.values());
+    };
+    // Auto-calculate Kuliya when weight, packs, or item changes
+    useEffect(() => {
+        const fetchKuliya = async () => {
+            // Don't calculate if required fields are missing
+            if (!formData.item_code || !formData.weight || !formData.packs) {
+                return;
+            }
+
+            // Don't override if user manually changed the value
+            if (state.isKuliyaManuallyChanged) {
+                return;
+            }
+
+            try {
+                // Find the selected item to get bag_real_weight
+                const selectedItem = items.find(i => i.no === formData.item_code);
+                const bagRealWeight = selectedItem?.bag_real_price || 0;
+
+                const response = await api.post('/sales/calculate-kuliya', {
+                    item_code: formData.item_code,
+                    item_name: formData.item_name,
+                    weight: parseFloat(formData.weight) || 0,
+                    packs: parseInt(formData.packs) || 0,
+                    bag_real_weight: bagRealWeight
+                });
+
+                if (response.data.kuliya !== undefined) {
+                    setFormData(prev => ({ ...prev, kuliya: response.data.kuliya }));
+                }
+            } catch (error) {
+                console.error("Failed to calculate Kuliya:", error);
+                // Fallback to manual calculation if API fails
+                const calculatedKuliya = calculateKuliyaLocally(
+                    formData.item_code,
+                    formData.item_name,
+                    parseFloat(formData.weight) || 0,
+                    parseInt(formData.packs) || 0,
+                    items
+                );
+                if (calculatedKuliya !== undefined) {
+                    setFormData(prev => ({ ...prev, kuliya: calculatedKuliya }));
+                }
+            }
+        };
+
+        fetchKuliya();
+    }, [formData.item_code, formData.item_name, formData.weight, formData.packs, items, state.isKuliyaManuallyChanged]);
+    const calculateKuliyaLocally = (itemCode, itemName, weight, packs, items) => {
+        // Find item to get bag_real_weight
+        const selectedItem = items.find(i => i.no === itemCode);
+        const bagWeightPerUnit = selectedItem?.bag_real_price || 0;
+        const totalBagWeight = bagWeightPerUnit * packs;
+        const incomingNetWeight = weight - totalBagWeight;
+
+        if (itemCode && itemCode.startsWith('/')) {
+            return 50;
+        } else if (itemName && itemName.includes('කෙසෙල්')) {
+            return 1.50;
+        } else {
+            if (incomingNetWeight >= 1 && incomingNetWeight <= 9) return 0;
+            if (incomingNetWeight >= 10 && incomingNetWeight <= 19) return 20;
+            if (incomingNetWeight >= 20 && incomingNetWeight <= 49) return 40;
+            if (incomingNetWeight >= 50) return 50;
+            return 0;
+        }
+    };
+    const handleKuliyaChange = (value) => {
+        // Allow only numbers and decimal point
+        if (/^\d*\.?\d*$/.test(value) || value === "") {
+            setFormData(prev => ({ ...prev, kuliya: value }));
+            updateState({ isKuliyaManuallyChanged: true });
+        }
     };
     //functions related to multiselect and bulk update
     const toggleSaleSelection = (saleId, e) => {
@@ -857,131 +930,133 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
     useEffect(() => { fetchInitialData(); refs.customer_code_input.current?.focus(); }, []);
 
-    const handleKeyDown = async (e, currentFieldName) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
+   const handleKeyDown = async (e, currentFieldName) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
 
-            // 1. Handle Given Amount
-            if (currentFieldName === "given_amount") {
-                const success = await handleSubmitGivenAmount(e);
-                if (success) {
-                    handlePrintAndClear();
-                }
-                return;
+        // 1. Handle Given Amount
+        if (currentFieldName === "given_amount") {
+            const success = await handleSubmitGivenAmount(e);
+            if (success) {
+                handlePrintAndClear();
             }
+            return;
+        }
 
-            // 2. Handle Item Packs
-            if (currentFieldName === "packs") return handleSubmit(e);
+        // 2. Handle KULIYA field - Submit form when Enter pressed on kuliya
+        if (currentFieldName === "kuliya") {
+            await handleSubmit(e);
+            return;
+        }
 
-            // 3. Logic for TELEPHONE input (Reverse Lookup)
-            if (currentFieldName === "telephone_no") {
-                updateState({ showSavePhoneButton: false });
-                refs.customer_code_input.current?.focus();
-                return;
-            }
+        // 3. Logic for TELEPHONE input (Reverse Lookup)
+        if (currentFieldName === "telephone_no") {
+            updateState({ showSavePhoneButton: false });
+            refs.customer_code_input.current?.focus();
+            return;
+        }
 
-            // 4. Logic for CUSTOMER CODE input
-            if (currentFieldName === "customer_code_input") {
-                const code = (formData.customer_code || autoCustomerCode).trim().toUpperCase();
+        // 4. Logic for CUSTOMER CODE input
+        if (currentFieldName === "customer_code_input") {
+            const code = (formData.customer_code || autoCustomerCode).trim().toUpperCase();
 
-                if (code) {
-                    const match = customers.find(c => String(c.short_name).toUpperCase() === code);
+            if (code) {
+                const match = customers.find(c => String(c.short_name).toUpperCase() === code);
 
-                    if (match) {
-                        setFormData(prev => ({
-                            ...prev,
-                            customer_name: match.name || ""
-                        }));
-                        fetchLoanAmount(code);
-                    } else {
-                        console.log("Customer not found in local data");
-                    }
-                }
-
-                refs.supplier_code.current?.focus();
-                return;
-            }
-
-            // MODIFIED: Logic for WEIGHT field
-            if (currentFieldName === "weight") {
-                // FIRST: Check if required fields are empty (customer_code, supplier_code, item_code)
-                const customerCode = (formData.customer_code || autoCustomerCode).trim();
-                const supplierCode = formData.supplier_code?.trim();
-                const itemCode = formData.item_code?.trim();
-
-                const areRequiredFieldsEmpty = !customerCode || !supplierCode || !itemCode;
-
-                // Get the weight value
-                const weightValue = formData.weight?.trim();
-
-                // If required fields are empty
-                if (areRequiredFieldsEmpty) {
-                    // ONLY move to next field if weight has a value
-                    if (weightValue && weightValue !== "") {
-                        setTimeout(() => {
-                            refs.price_per_kg_grid_item.current?.focus();
-                            refs.price_per_kg_grid_item.current?.select();
-                        }, 50);
-                    }
-                    // If weight is empty, DO NOTHING - stay on weight field
-                    // No else clause - cursor stays on weight field
-                    return; // Exit early to prevent any navigation
-                }
-
-                // ONLY RUN VALIDATION IF REQUIRED FIELDS ARE NOT EMPTY
-                const requiredBeforeWeight = [
-                    { key: "customer_code", ref: "customer_code_input", label: "Customer Code" },
-                    { key: "supplier_code", ref: "supplier_code", label: "Supplier Code" },
-                    { key: "item_code", ref: "item_code_select", label: "Item" }
-                ];
-
-                let isValid = true;
-                for (const field of requiredBeforeWeight) {
-                    const value = field.key === "customer_code"
-                        ? (formData.customer_code || autoCustomerCode)
-                        : formData[field.key];
-
-                    if (value === null || value === undefined || value.toString().trim() === "") {
-                        updateState({ errors: { form: `කරුණාකර ${field.label} ඇතුළත් කරන්න` } });
-                        const targetRef = refs[field.ref];
-                        if (targetRef?.current) {
-                            targetRef.current.focus();
-                            if (!field.ref.includes("select")) targetRef.current.select();
-                        }
-                        isValid = false;
-                        break;
-                    }
-                }
-
-                // If validation fails, stay on weight field
-                if (!isValid) {
-                    return;
+                if (match) {
+                    setFormData(prev => ({
+                        ...prev,
+                        customer_name: match.name || ""
+                    }));
+                    fetchLoanAmount(code);
+                } else {
+                    console.log("Customer not found in local data");
                 }
             }
 
-            // 6. General Navigation Logic (only if validation passes or field is not weight)
-            let nextFieldName = skipMap[currentFieldName];
-            if (!nextFieldName) {
-                const currentIndex = fieldOrder.indexOf(currentFieldName);
-                let nextIndex = currentIndex + 1;
-                while (nextIndex < fieldOrder.length &&
-                    ["customer_code_select", "item_name", "total"].includes(fieldOrder[nextIndex])) {
-                    nextIndex++;
-                }
-                nextFieldName = nextIndex < fieldOrder.length ? fieldOrder[nextIndex] : "customer_code_input";
-            }
+            refs.supplier_code.current?.focus();
+            return;
+        }
 
-            const nextRef = refs[nextFieldName];
-            if (nextRef?.current) {
-                requestAnimationFrame(() => {
+        // 5. Logic for WEIGHT field with validation
+        if (currentFieldName === "weight") {
+            const customerCode = (formData.customer_code || autoCustomerCode).trim();
+            const supplierCode = formData.supplier_code?.trim();
+            const itemCode = formData.item_code?.trim();
+            const areRequiredFieldsEmpty = !customerCode || !supplierCode || !itemCode;
+            const weightValue = formData.weight?.trim();
+
+            if (areRequiredFieldsEmpty) {
+                if (weightValue && weightValue !== "") {
                     setTimeout(() => {
-                        nextRef.current.focus();
-                        if (!nextFieldName.includes("select")) nextRef.current.select();
-                    }, 0);
-                });
+                        refs.price_per_kg_grid_item.current?.focus();
+                        refs.price_per_kg_grid_item.current?.select();
+                    }, 50);
+                }
+                return;
+            }
+
+            const requiredBeforeWeight = [
+                { key: "customer_code", ref: "customer_code_input", label: "Customer Code" },
+                { key: "supplier_code", ref: "supplier_code", label: "Supplier Code" },
+                { key: "item_code", ref: "item_code_select", label: "Item" }
+            ];
+
+            let isValid = true;
+            for (const field of requiredBeforeWeight) {
+                const value = field.key === "customer_code"
+                    ? (formData.customer_code || autoCustomerCode)
+                    : formData[field.key];
+
+                if (value === null || value === undefined || value.toString().trim() === "") {
+                    updateState({ errors: { form: `කරුණාකර ${field.label} ඇතුළත් කරන්න` } });
+                    const targetRef = refs[field.ref];
+                    if (targetRef?.current) {
+                        targetRef.current.focus();
+                        if (!field.ref.includes("select")) targetRef.current.select();
+                    }
+                    isValid = false;
+                    break;
+                }
+            }
+
+            if (!isValid) {
+                return;
             }
         }
-    };
+
+        // 6. Navigation Logic - Get next field from skipMap
+        let nextFieldName = skipMap[currentFieldName];
+
+        // If no next field defined in skipMap, try fieldOrder
+        if (!nextFieldName && currentFieldName !== "kuliya") {
+            const currentIndex = fieldOrder.indexOf(currentFieldName);
+            let nextIndex = currentIndex + 1;
+            while (nextIndex < fieldOrder.length &&
+                ["customer_code_select", "item_name"].includes(fieldOrder[nextIndex])) {
+                nextIndex++;
+            }
+            nextFieldName = nextIndex < fieldOrder.length ? fieldOrder[nextIndex] : null;
+        }
+
+        // 7. If we're at kuliya or no next field, submit the form
+        if (currentFieldName === "kuliya" || !nextFieldName) {
+            await handleSubmit(e);
+            return;
+        }
+
+        // 8. Focus on next field
+        const nextRef = refs[nextFieldName];
+        if (nextRef?.current) {
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    nextRef.current.focus();
+                    if (!nextFieldName.includes("select")) nextRef.current.select();
+                }, 0);
+            });
+        }
+    }
+};
 
     const salesTotal = displayedSales.reduce((sum, s) => sum + ((parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0)), 0);
     const packCostTotal = displayedSales.reduce((sum, s) => sum + ((parseFloat(s.CustomerPackCost) || 0) * (parseFloat(s.packs) || 0)), 0);
@@ -1114,7 +1189,6 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 ...prev,
                 customer_code: sale.customer_code || "",
                 customer_name: sale.customer_name || "",
-                // PRESERVE TELEPHONE:
                 telephone_no: prev.telephone_no || "",
                 supplier_code: "",
                 item_code: "",
@@ -1123,7 +1197,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 price_per_kg: "",
                 pack_due: "",
                 total: "",
-                packs: ""
+                packs: "",
+                kuliya: ""  // ← ADD THIS
             }));
 
             updateState({
@@ -1150,22 +1225,20 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }
 
         setFormData((prev) => ({
-            ...sale,
-            // Ensure we explicitly map these so they don't get lost
-            item_name: sale.item_name || "",
-            customer_code: sale.customer_code || "",
-            customer_name: sale.customer_name || "",
-            // PRESERVE TELEPHONE from the current form state or the sale object
-            telephone_no: sale.telephone_no || prev.telephone_no || "",
-            supplier_code: sale.supplier_code || "",
-            item_code: sale.item_code || "",
-            weight: sale.weight || "",
-            price_per_kg: sale.price_per_kg || "",
-            pack_due: fetchedPackDue,
-            total: sale.total || "",
-            packs: sale.packs || ""
-        }));
-
+    ...sale,
+    item_name: sale.item_name || "",
+    customer_code: sale.customer_code || "",
+    customer_name: sale.customer_name || "",
+    telephone_no: sale.telephone_no || prev.telephone_no || "",
+    supplier_code: sale.supplier_code || "",
+    item_code: sale.item_code || "",
+    weight: sale.weight || "",
+    price_per_kg: sale.price_per_kg || "",
+    pack_due: fetchedPackDue,
+    total: sale.total || "",
+    packs: sale.packs || "",
+    kuliya: sale.Kuliya || ""  // ← ADD THIS
+}));
         updateState({
             editingSaleId: sale.id,
             isManualClear: false,
@@ -1203,11 +1276,10 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }, 0);
     };
 
-    const handleClearForm = (clearBillNo = false) => {
-        setFormData(initialFormData);
-        updateState({ editingSaleId: null, loanAmount: 0, isManualClear: false, packCost: 0, customerSearchInput: "", itemSearchInput: "", supplierSearchInput: "", priceManuallyChanged: false, gridPricePerKg: "", isGivenAmountManuallyTouched: false, selectedSaleForBreakdown: null, ...(clearBillNo && { currentBillNo: null }) });
-    };
-
+  const handleClearForm = (clearBillNo = false) => {
+    setFormData(initialFormData);
+    updateState({ editingSaleId: null, loanAmount: 0, isManualClear: false, packCost: 0, customerSearchInput: "", itemSearchInput: "", supplierSearchInput: "", priceManuallyChanged: false, isKuliyaManuallyChanged: false, gridPricePerKg: "", isGivenAmountManuallyTouched: false, selectedSaleForBreakdown: null, ...(clearBillNo && { currentBillNo: null }) });
+};
     const handleDeleteRecord = async (saleId) => {
         if (!saleId || !window.confirm("Are you sure you want to delete this sales record?")) return;
         try {
@@ -1329,7 +1401,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 }
             }
 
-            const payload = { supplier_code: currentSupplierCode.toUpperCase(), customer_code: customerCode, customer_name: currentCustomerName, item_code: formData.item_code, item_name: formData.item_name, weight: parseFloat(formData.weight) || 0, price_per_kg: parseFloat(formData.price_per_kg) || 0, pack_due: parseFloat(formData.pack_due) || 0, total: parseFloat(formData.total) || 0, packs: parseFloat(formData.packs) || 0, given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null, ...(billPrintedStatus && { bill_printed: billPrintedStatus }), ...(billNoToUse && { bill_no: billNoToUse }), update_related_price: shouldUpdateRelatedPrice };
+          const payload = { supplier_code: currentSupplierCode.toUpperCase(), customer_code: customerCode, customer_name: currentCustomerName, item_code: formData.item_code, item_name: formData.item_name, weight: parseFloat(formData.weight) || 0, price_per_kg: parseFloat(formData.price_per_kg) || 0, pack_due: parseFloat(formData.pack_due) || 0, total: parseFloat(formData.total) || 0, packs: parseFloat(formData.packs) || 0, given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null, kuliya: formData.kuliya ? parseFloat(formData.kuliya) : null, ...(billPrintedStatus && { bill_printed: billPrintedStatus }), ...(billNoToUse && { bill_no: billNoToUse }), update_related_price: shouldUpdateRelatedPrice };
             const url = isEditing ? `${routes.sales}/${editingSaleId}` : routes.sales;
             const method = isEditing ? "put" : "post";
 
@@ -2351,14 +2423,93 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                             })()}
                                         </div>
 
-                                        {[{ id: 'weight', placeholder: "බර", fieldRef: refs.weight },
-                                        { id: 'price_per_kg_grid_item', placeholder: "මිල", fieldRef: refs.price_per_kg_grid_item },
-                                        { id: 'packs', placeholder: "අසුරුම්", fieldRef: refs.packs },
-                                        { id: 'total', placeholder: "TOTAL", fieldRef: refs.total, isReadOnly: true }].map(({ id, placeholder, fieldRef, isReadOnly = false }) => (
-                                            <div key={id} style={{ ...(id === 'weight' && { gridColumnStart: 8, gridColumnEnd: 9, marginLeft: "-70px", width: "100px" }), ...(id === 'price_per_kg_grid_item' && { gridColumnStart: 9, gridColumnEnd: 10, marginLeft: "-30px", width: "105px" }), ...(id === 'packs' && { gridColumnStart: 10, gridColumnEnd: 11 }), ...(id === 'total' && { gridColumnStart: 11, gridColumnEnd: 14, marginLeft: "10px" }) }}>
-                                                <input id={id} ref={fieldRef} name={id} type="text" value={id === 'price_per_kg_grid_item' ? gridPricePerKg : formData[id]} onChange={(e) => id === 'price_per_kg_grid_item' ? handleInputChange(id, e.target.value) : (/^\d*\.?\d*$/.test(e.target.value) && handleInputChange(id, e.target.value))} onKeyDown={(e) => handleKeyDown(e, id)} placeholder={placeholder} readOnly={isReadOnly} className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 text-center" style={{ backgroundColor: isReadOnly ? '#e2e8f0' : 'white', borderRadius: '0.5rem', textAlign: 'right', fontSize: '1.125rem', height: '40px', boxSizing: 'border-box', width: '100%' }} />
-                                            </div>
-                                        ))}
+                                       {[
+    { id: 'weight', placeholder: "බර", fieldRef: refs.weight },
+    { id: 'price_per_kg_grid_item', placeholder: "මිල", fieldRef: refs.price_per_kg_grid_item },
+    { id: 'packs', placeholder: "අසුරුම්", fieldRef: refs.packs },
+    { id: 'kuliya', placeholder: "කුලිය", fieldRef: refs.kuliya, isReadOnly: false }
+].map(({ id, placeholder, fieldRef, isReadOnly = false }) => (
+    <div key={id} style={{
+        ...(id === 'weight' && { gridColumnStart: 8, gridColumnEnd: 9, marginLeft: "-70px", width: "100px" }),
+        ...(id === 'price_per_kg_grid_item' && { gridColumnStart: 9, gridColumnEnd: 10, marginLeft: "-30px", width: "105px" }),
+        ...(id === 'packs' && { gridColumnStart: 10, gridColumnEnd: 11 }),
+        ...(id === 'kuliya' && { gridColumnStart: 11, gridColumnEnd: 13, marginLeft: "10px" })
+    }}>
+        <input
+            id={id}
+            ref={fieldRef}
+            name={id}
+            type="text"
+            value={id === 'price_per_kg_grid_item' ? gridPricePerKg : formData[id]}
+            onChange={(e) => {
+                if (id === 'price_per_kg_grid_item') {
+                    handleInputChange(id, e.target.value);
+                } else if (id === 'kuliya') {
+                    // ONLY ALLOW '0' - no other numbers
+                    const newValue = e.target.value;
+                    // Allow empty string or single '0'
+                    if (newValue === '' || newValue === '0') {
+                        handleKuliyaChange(newValue);
+                        handleInputChange(id, newValue);
+                    }
+                    // Block any other input (1-9, decimals, etc.)
+                } else if (/^\d*\.?\d*$/.test(e.target.value)) {
+                    handleInputChange(id, e.target.value);
+                    if (id === 'weight' || id === 'packs') {
+                        updateState({ isKuliyaManuallyChanged: false });
+                    }
+                }
+            }}
+            onKeyDown={(e) => {
+                if (id === 'kuliya') {
+                    // Block all number keys except '0'
+                    const blockedKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', 'e', 'E', '+'];
+                    if (blockedKeys.includes(e.key)) {
+                        e.preventDefault();
+                    }
+                    // Allow '0' key to work normally
+                    if (e.key === '0') {
+                        // Allow it
+                    }
+                    // Allow backspace, delete, tab, enter, etc.
+                    const allowedControlKeys = ['Backspace', 'Delete', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                    if (allowedControlKeys.includes(e.key)) {
+                        // Allow these
+                    } else if (e.key === '0') {
+                        // Allow '0'
+                    } else if (e.key.length === 1 && !allowedControlKeys.includes(e.key)) {
+                        // Block all other single characters
+                        e.preventDefault();
+                    }
+                } else {
+                    handleKeyDown(e, id);
+                }
+            }}
+            onBlur={(e) => {
+                if (id === 'kuliya') {
+                    // If field is empty or has any value other than '0', set to '0'
+                    if (e.target.value !== '0') {
+                        const zeroValue = '0';
+                        handleKuliyaChange(zeroValue);
+                        handleInputChange(id, zeroValue);
+                    }
+                }
+            }}
+            placeholder={placeholder}
+            readOnly={isReadOnly}
+            className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 text-center"
+            style={{
+                backgroundColor: isReadOnly ? '#e2e8f0' : 'white',
+                borderRadius: '0.5rem',
+                textAlign: 'right',
+                fontSize: '1.125rem',
+                height: '40px',
+                boxSizing: 'border-box',
+                width: '100%'
+            }}
+        />
+    </div>
+))}
                                     </div>
                                     <button type="submit" style={{ display: "none" }}></button>
                                 </form>

@@ -10,14 +10,31 @@ const SupplierReport = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false); // New state for auto-refresh indicator
 
-    // 🚀 NEW STATE: Bill size selector (3mm or 4mm)
-    const [billSize, setBillSize] = useState('3mm');
-    // 🚀 NEW STATE: Print Format selector (Thermal or A4)
-    const [printFormat, setPrintFormat] = useState('thermal');
+    // 🚀 NEW STATE: Bill size selector (3mm or 4mm) - PERSISTED
+const [billSize, setBillSize] = useState(() => {
+    const saved = localStorage.getItem('supplier_bill_size');
+    return saved || '3mm';
+});
+
+// 🚀 NEW STATE: Print Format selector (Thermal or A4) - PERSISTED
+const [printFormat, setPrintFormat] = useState(() => {
+    const saved = localStorage.getItem('supplier_print_format');
+    return saved || 'thermal';
+});
+
+// Save billSize to localStorage whenever it changes
+useEffect(() => {
+    localStorage.setItem('supplier_bill_size', billSize);
+}, [billSize]);
+
+// Save printFormat to localStorage whenever it changes
+useEffect(() => {
+    localStorage.setItem('supplier_print_format', printFormat);
+}, [printFormat]);
 
     const [printedSearchTerm, setPrintedSearchTerm] = useState('');
     const [unprintedSearchTerm, setUnprintedSearchTerm] = useState('');
-
+    const [isPhoneManuallyChanged, setIsPhoneManuallyChanged] = useState(false);
     //new states  in adding telephone no
     const [phoneNo, setPhoneNo] = useState('');
     const [phoneStatus, setPhoneStatus] = useState(''); // For feedback
@@ -32,7 +49,31 @@ const SupplierReport = () => {
     // Add these with your other state variables
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [supplierDocs, setSupplierDocs] = useState({ title: '', profile: null, nic_front: null, nic_back: null });
+    //useeffects to store the option in local storage and retrieve it on component mount
+    // Add these after your existing useState declarations (around line 30-35)
 
+    // Load saved values from localStorage on component mount
+    useEffect(() => {
+        const savedBillSize = localStorage.getItem('supplier_bill_size');
+        if (savedBillSize) {
+            setBillSize(savedBillSize);
+        }
+
+        const savedPrintFormat = localStorage.getItem('supplier_print_format');
+        if (savedPrintFormat) {
+            setPrintFormat(savedPrintFormat);
+        }
+    }, []);
+
+    // Save billSize to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_bill_size', billSize);
+    }, [billSize]);
+
+    // Save printFormat to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_print_format', printFormat);
+    }, [printFormat]);
     // State for Details Panel
     const [selectedSupplier, setSelectedSupplier] = useState(null);
     const [selectedBillNo, setSelectedBillNo] = useState(null);
@@ -103,6 +144,7 @@ const SupplierReport = () => {
     }, []);
 
     // 🚀 NEW: Function to refresh supplier profile data
+    // 🚀 NEW: Function to refresh supplier profile data (preserves manual phone changes)
     const fetchSupplierProfile = useCallback(async (supplierCode) => {
         if (!supplierCode || isPrintingOrUpdatingRef.current) return;
 
@@ -111,7 +153,12 @@ const SupplierReport = () => {
             if (supRes.data) {
                 setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
                 setProfilePic(supRes.data.profile_pic);
-                setPhoneNo(supRes.data.telephone_no || '');
+
+                // Only update phone number if it hasn't been manually changed by user
+                if (!isPhoneManuallyChanged) {
+                    setPhoneNo(supRes.data.telephone_no || '');
+                }
+
                 setSupplierDocs({
                     title: supRes.data.name || supplierCode,
                     profile: supRes.data.profile_pic,
@@ -122,7 +169,7 @@ const SupplierReport = () => {
         } catch (error) {
             console.error("Error refreshing supplier profile:", error);
         }
-    }, []);
+    }, [isPhoneManuallyChanged]);
 
     // 🚀 NEW: Function to refresh bill details
     const refreshBillDetails = useCallback(async () => {
@@ -290,6 +337,7 @@ const SupplierReport = () => {
         setAdvanceAmount(0);
         setProfilePic(null);
         setPhoneNo(''); // Reset before fetch
+        setIsPhoneManuallyChanged(false); // 🔄 RESET manual change flag for new bill
         setPayingAmount(''); // Reset paying amount
         setAdvancePayload({ code: supplierCode, advance_amount: '' });
         setIsDetailsLoading(true);
@@ -335,6 +383,7 @@ const SupplierReport = () => {
         setAdvanceAmount(0);
         setProfilePic(null);
         setPhoneNo(''); // Reset before fetch
+        setIsPhoneManuallyChanged(false); // 🔄 RESET manual change flag for new bill
         setPayingAmount(''); // Reset paying amount
         setAdvancePayload({ code: supplierCode, advance_amount: '' });
         setIsDetailsLoading(true);
@@ -517,294 +566,391 @@ const SupplierReport = () => {
         };
     }, [supplierDetails]);
 
-  // 🚀 FIXED: A4 Format Content - Simple and reliable layout (LEFT ALIGNED for printing)
-const getA4Content = useCallback((currentBillNo) => {
-    const date = new Date().toLocaleDateString('si-LK');
-    const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit' });
-    const paidAmountValue = parseFloat(payingAmount) || 0;
-    const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
+    // 🚀 FIXED: Customizable width bill with center alignment and ultra-clear high-visibility styling
+    const getA4Content = useCallback((currentBillNo, billWidth = "155mm", topMargin = "20mm") => {
+        const date = new Date().toLocaleDateString('si-LK');
+        const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const paidAmountValue = parseFloat(payingAmount) || 0;
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
 
-    return `
+        // Format numbers WITHOUT unnecessary decimal places
+        const formatNumber = (num) => {
+            if (typeof num !== 'number' && typeof num !== 'string') return '0';
+            const number = parseFloat(num);
+            if (isNaN(number)) return '0';
+
+            if (Number.isInteger(number)) {
+                return number.toLocaleString('en-US');
+            }
+
+            const roundedToWhole = Math.round(number);
+            if (Math.abs(number - roundedToWhole) < 0.001) {
+                return roundedToWhole.toLocaleString('en-US');
+            }
+
+            return number.toLocaleString('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+            });
+        };
+
+        // Calculate font sizes based on bill width - EXACT SAME AS A4BillHTML
+        const getStyles = (width) => {
+            const widthNum = parseInt(width);
+
+            let headerFontSize, shopFontSize, normalFontSize, smallFontSize, tinyFontSize;
+
+            if (widthNum <= 58) {
+                headerFontSize = '18px';
+                shopFontSize = '13px';
+                normalFontSize = '13px';
+                smallFontSize = '12px';
+                tinyFontSize = '11px';
+            } else if (widthNum <= 80) {
+                headerFontSize = '22px';
+                shopFontSize = '15px';
+                normalFontSize = '15px';
+                smallFontSize = '14px';
+                tinyFontSize = '13px';
+            } else {
+                headerFontSize = '28px';
+                shopFontSize = '18px';
+                normalFontSize = '16px';
+                smallFontSize = '15px';
+                tinyFontSize = '14px';
+            }
+
+            return {
+                containerWidth: width,
+                headerFontSize,
+                shopFontSize,
+                normalFontSize,
+                smallFontSize,
+                tinyFontSize,
+                padding: widthNum <= 58 ? '4mm' : '5mm'
+            };
+        };
+
+        const styles = getStyles(billWidth);
+
+        // Split supplier details into pages with 9 items per page
+        const ITEMS_PER_PAGE = 9;
+
+        const splitItemsIntoPages = (items, itemsPerPage = 9) => {
+            const pages = [];
+            for (let i = 0; i < items.length; i += itemsPerPage) {
+                pages.push(items.slice(i, i + itemsPerPage));
+            }
+            return pages;
+        };
+
+        const itemPages = splitItemsIntoPages(supplierDetails, ITEMS_PER_PAGE);
+
+        // Calculate grand totals once for all pages
+        const grandTotalPacks = supplierDetails.reduce((sum, record) => sum + (parseInt(record.packs) || 0), 0);
+        const grandTotalSales = totalsupplierSales;
+        const grandTotalPackCost = totalCustomerPackCost;
+        const grandAdvanceAmount = advanceAmount;
+        const grandPaidAmount = paidAmountValue;
+        const grandNetPayable = netPayable;
+
+        // Generate HTML for each page
+        const generatePage = (pageItems, pageNumber, isLastPage) => {
+            // Calculate page-specific totals
+            let pageTotalSales = 0;
+            let pageTotalPacks = 0;
+
+            pageItems.forEach(record => {
+                pageTotalSales += parseFloat(record.SupplierTotal) || 0;
+                pageTotalPacks += parseInt(record.packs) || 0;
+            });
+
+            return `
+            <div class="bill-border" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
+                ${pageNumber === 1 ? `
+                <div class="header">
+                    <div class="shop-name">මහතුන් වෙළඳ සැල</div>
+                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
+                </div>
+                
+                <div class="info-row">
+                    <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
+                    <div>අංකය: ${currentBillNo || ''}</div>
+                    <div>දිනය: ${date}</div>
+                    <div>වේලාව: ${time}</div>
+                </div>
+                ` : `
+                <div class="header-continued">
+                    <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
+                </div>
+                `}
+
+                ${itemPages.length > 1 ? `
+                <div style="margin-bottom: 5px; font-size: 12px; text-align: center; font-weight: bold;">
+                    පිටුව ${pageNumber} / ${itemPages.length}
+                </div>
+                ` : ''}
+
+                <table>
+                    <colgroup>
+                        <col style="width: 30%">
+                        <col style="width: 10%">
+                        <col style="width: 15%">
+                        <col style="width: 15%">
+                        <col style="width: 15%">
+                        <col style="width: 15%">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">වර්ගය</th>
+                            <th>මලු</th>
+                            <th style="text-align: right;">බර</th>
+                            <th style="text-align: right;">මිල</th>
+                            <th style="text-align: center;">ගනු</th>
+                            <th style="text-align: right;">එකතුව</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pageItems.map(record => `
+                            <tr style="page-break-inside: avoid;">
+                                <td style="text-align: left; padding: 8px 4px; font-size: ${styles.normalFontSize};">${record.item_name || ''}</td>
+                                <td style="text-align: center; padding: 8px 4px; font-size: ${styles.normalFontSize};">${record.packs || 0}</td>
+                                <td class="text-right" style="padding: 8px 4px; font-size: ${styles.normalFontSize};">${formatNumber(record.weight)}</td>
+                                <td class="text-right" style="padding: 8px 4px; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierPricePerKg)}</td>
+                                <td style="text-align: center; padding: 8px 4px; font-size: ${styles.normalFontSize};">${(record.customer_code || '').toUpperCase()}</td>
+                                <td class="text-right" style="padding: 8px 4px; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierTotal)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f0f0f0;">
+                            <td colspan="2" style="font-size: ${styles.normalFontSize}; font-weight: bold;">මෙම පිටුවේ එකතුව</td>
+                            <td class="text-right" style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
+                            <td style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
+                            <td class="text-center" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${pageTotalPacks}</td>
+                            <td class="text-right" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${formatNumber(pageTotalSales)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                ${isLastPage ? `
+                <div class="totals-section">
+                    <div class="total-row"><span>මුළු එකතුව:</span><span>රු. ${formatNumber(grandTotalSales)}</span></div>
+                    <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(grandTotalPackCost)}</span></div>
+                    <div class="total-row"><span>අත්තිකාරම්:</span><span style="color: red !important;">රු. -${formatNumber(grandAdvanceAmount)}</span></div>
+                    ${grandPaidAmount > 0 ? `<div class="total-row"><span>ගෙවූ මුදල:</span><span>රු. -${formatNumber(grandPaidAmount)}</span></div>` : ''}
+                    <div class="net-total">
+                        <span>ශුද්ධ ඉතිරි ගෙවිය යුතු මුදල:</span>
+                        <span>රු. ${formatNumber(grandNetPayable)}</span>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+                </div>
+                ` : `
+                <div class="footer" style="margin-top: 15px; text-align: center; font-size: ${styles.smallFontSize}; border-top: 2px dashed #000; padding-top: 10px;">
+                    *** කරුණාකර පහත පිටුවට හැරෙන්න ***
+                </div>
+                `}
+            </div>
+        `;
+        };
+
+        // Generate all pages
+        let allPagesHTML = '';
+        if (supplierDetails.length === 0) {
+            allPagesHTML = `
+            <div class="bill-border">
+                <div class="header">
+                    <div class="shop-name">මහතුන් වෙළඳ සැල</div>
+                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
+                </div>
+                
+                <div class="info-row">
+                    <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
+                    <div>අංකය: ${currentBillNo || ''}</div>
+                    <div>දිනය: ${date}</div>
+                    <div>වේලාව: ${time}</div>
+                </div>
+                
+                <div style="text-align: center; padding: 40px; font-size: ${styles.headerFontSize}; font-weight: bold;">
+                    අයිතම නොමැත
+                </div>
+                
+                <div class="footer">
+                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+                </div>
+            </div>
+        `;
+        } else {
+            itemPages.forEach((page, idx) => {
+                allPagesHTML += generatePage(page, idx + 1, idx === itemPages.length - 1);
+            });
+        }
+
+        return `
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
-        <title>මහතුන් වෙළඳසැල - බිල්පත</title>
         <style>
-            * {
-                margin: 0;
+            * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
+            
+            body { 
+                font-family: 'Iskoola Pota', Arial, sans-serif; 
+                background: #f0f0f0; 
                 padding: 0;
-                box-sizing: border-box;
-            }
-            
-            body {
-                font-family: 'Iskoola Pota', 'Courier New', monospace, sans-serif;
-                background: white;
-                padding: 20px;
                 margin: 0;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
             }
-            
-            /* A4 print settings - ensures nothing cuts off */
-            @media print {
-                body {
-                    padding: 0;
-                    margin: 0;
-                    background: white;
-                    display: block;
-                }
-                @page {
-                    size: A4;
-                    margin: 1.2cm; /* Safe margins on all sides */
-                }
-            }
-            
-            /* Container uses FULL A4 width with margins */
-            .receipt-container {
-                width: 100%;
+
+            .bill-border { 
+                width: ${styles.containerWidth}; 
                 max-width: 100%;
-                margin: 0 auto;
-                padding: 15px;
                 background: white;
-                font-size: 11px;
+                padding: ${styles.padding};
+                margin: ${topMargin} auto 0 auto;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                page-break-after: always;
+                page-break-inside: avoid;
+            }
+
+            @media print {
+                body { 
+                    background: white; 
+                    padding: 0; 
+                    margin: 0;
+                }
+                .bill-border { 
+                    box-shadow: none; 
+                    margin: ${topMargin} auto 0 auto !important;
+                    page-break-after: always;
+                    page-break-inside: avoid;
+                }
+                @page { 
+                    size: ${styles.containerWidth} auto;
+                    margin: 0;
+                }
+            }
+
+            div, span, p, td, th, strong, .shop-name, .shop-address, .shop-phone, 
+            .info-row, .total-row, .net-total, .footer, .header-continued { 
+                color: #000 !important; 
+                font-weight: bold !important; 
+            }
+
+            .header { 
+                text-align: center; 
+                border-bottom: 3px solid #000; 
+                padding-bottom: 10px; 
+                margin-bottom: 10px; 
             }
             
-            /* ALL TEXT IS BLACK AND BOLD */
-            div, span, p, td, th, strong, b {
-                color: #000000 !important;
-                font-weight: bold !important;
-            }
-            
-            .header {
+            .header-continued {
                 text-align: center;
                 border-bottom: 2px solid #000;
-                padding-bottom: 12px;
-                margin-bottom: 15px;
+                padding-bottom: 8px;
+                margin-bottom: 10px;
             }
             
-            .shop-name {
-                font-size: 18px;
-                font-weight: bold;
-                margin-bottom: 5px;
-            }
-            
-            .shop-address {
-                font-size: 11px;
-                margin: 3px 0;
-            }
-            
-            .shop-phone {
-                font-size: 11px;
-                margin: 3px 0;
-            }
-            
-            .info-row {
-                display: flex;
-                justify-content: space-between;
-                margin: 15px 0;
-                font-size: 12px;
-                flex-wrap: wrap;
-                gap: 10px;
-                padding: 12px;
-                border: 1px solid #000;
-                background: #f9f9f9;
-            }
-            
-            .info-item {
-                font-size: 12px;
-            }
-            
-            .info-item strong {
-                font-weight: bold;
-            }
-            
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 12px 0;
-                font-size: 11px;
-            }
-            
-            th {
-                border: 1px solid #000;
-                padding: 10px 6px;
-                background: #f0f0f0;
-                font-weight: bold;
-                text-align: center;
-                font-size: 11px;
-            }
-            
-            td {
-                border: 1px solid #000;
-                padding: 8px 6px;
-                text-align: left;
-                font-size: 11px;
-            }
-            
-            .text-center {
-                text-align: center;
-            }
-            
-            .text-right {
-                text-align: right;
-            }
-            
-            .totals-section {
-                margin-top: 15px;
-                width: 100%;
-                border-top: 1px solid #000;
-                padding-top: 12px;
-            }
-            
-            .total-row {
-                display: flex;
-                justify-content: space-between;
-                padding: 6px 0;
-                font-size: 12px;
-            }
-            
-            .net-total {
-                display: flex;
-                justify-content: space-between;
-                padding: 12px 0;
-                margin: 10px 0;
-                border-top: 2px solid #000;
-                border-bottom: 2px solid #000;
-                font-weight: bold;
+            .continued-label {
                 font-size: 14px;
-                background: #f9f9f9;
+                font-weight: bold;
+                color: #333;
             }
             
-            .footer {
-                margin-top: 15px;
-                text-align: center;
-                font-size: 10px;
-                border-top: 1px dashed #999;
+            .shop-name { 
+                font-size: ${styles.headerFontSize}; 
+                margin-bottom: 5px; 
+                font-weight: bold;
+            }
+            .shop-address, .shop-phone { 
+                font-size: ${styles.shopFontSize}; 
+                margin: 3px 0; 
+                font-weight: bold;
+            }
+
+            .info-row { 
+                display: flex; 
+                justify-content: space-between; 
+                margin-bottom: 10px; 
+                padding: 8px; 
+                border: 2px solid #000; 
+                font-size: ${styles.normalFontSize};
+                font-weight: bold;
+            }
+
+            table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin-bottom: 10px;
+                table-layout: fixed;
+            }
+            
+            th { 
+                border: 2px solid #000; 
+                padding: 8px 4px; 
+                background: #eee; 
+                font-size: ${styles.smallFontSize};
+                font-weight: bold;
+            }
+            
+            td { 
+                border: 1px solid #000; 
+                padding: 8px 4px; 
+                font-size: ${styles.normalFontSize};
+                vertical-align: top;
+                font-weight: bold;
+            }
+
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+
+            .totals-section { 
+                margin-top: 10px; 
+                border-top: 2px solid #000; 
                 padding-top: 10px;
             }
             
-            /* Print optimization */
-            @media print {
-                .receipt-container {
-                    width: 100%;
-                    margin: 0;
-                    padding: 0;
-                    page-break-inside: avoid;
-                    break-inside: avoid;
-                }
-                
-                .info-row, .net-total, th, tfoot tr {
-                    -webkit-print-color-adjust: exact;
-                    print-color-adjust: exact;
-                }
-                
-                /* Prevent any overflow */
-                body, .receipt-container, table, .totals-section {
-                    overflow: visible !important;
-                }
-                
-                /* Keep rows together */
-                tbody tr {
-                    page-break-inside: avoid;
-                    break-inside: avoid;
-                }
+            .total-row { 
+                display: flex; 
+                justify-content: space-between; 
+                padding: 6px 0; 
+                font-size: ${parseInt(styles.normalFontSize) + 2}px;
+                font-weight: bold;
             }
             
-            /* Handle many items - allow natural page break */
-            @media print {
-                tbody {
-                    page-break-inside: auto;
-                }
-                tr {
-                    page-break-inside: avoid;
-                    page-break-after: auto;
-                }
+            .net-total { 
+                display: flex; 
+                justify-content: space-between; 
+                padding: 10px 5px; 
+                border-top: 3px solid #000; 
+                border-bottom: 3px solid #000;
+                font-size: ${parseInt(styles.normalFontSize) + 6}px;
+                margin-top: 8px; 
+                background: #f9f9f9;
+                font-weight: bold;
+            }
+
+            .footer { 
+                margin-top: 15px; 
+                text-align: center; 
+                font-size: ${styles.smallFontSize}; 
+                border-top: 2px dashed #000; 
+                padding-top: 10px; 
+                font-weight: bold;
             }
         </style>
     </head>
     <body>
-        <div class="receipt-container">
-            <div class="header">
-                <div class="shop-name">මහතුන් වෙළඳසැල</div>
-                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-            </div>
-            
-            <div class="info-row">
-                <div class="info-item">කේතය: <strong>${selectedSupplier || ''}</strong></div>
-                <div class="info-item">බිල්පත් අංකය: <strong>${currentBillNo || ''}</strong></div>
-                <div class="info-item">දිනය: <strong>${date}</strong></div>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>වර්ගය</th>
-                        <th>මලු</th>
-                        <th>බර(kg)</th>
-                        <th>මිල</th>
-                        <th>ගනුදෙනු</th>
-                        <th>එකතුව</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${supplierDetails.map(record => `
-                        <tr>
-                            <td style="font-size: 11px;">${record.item_name || ''}</td>
-                            <td class="text-center" style="font-size: 11px;">${record.packs || 0}</td>
-                            <td class="text-right" style="font-size: 11px;">${parseFloat(record.weight || 0).toFixed(2)}</td>
-                            <td class="text-right" style="font-size: 11px;">${parseFloat(record.SupplierPricePerKg || 0).toFixed(2)}</td>
-                            <td class="text-center" style="font-size: 11px;">${(record.customer_code || '').toUpperCase()}</td>
-                            <td class="text-right" style="font-size: 11px;">${parseFloat(record.SupplierTotal || 0).toFixed(2)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-                <tfoot>
-                    <tr style="font-weight: bold; background: #f9f9f9;">
-                        <td style="font-size: 12px;"><strong>මුළු එකතුව</strong></td>
-                        <td class="text-center" style="font-size: 12px;"><strong>${totalPacksSum || 0}</strong></td>
-                        <td class="text-right" style="font-size: 12px;"><strong>${(totalWeight || 0).toFixed(2)}</strong></td>
-                        <td colspan="2"></td>
-                        <td class="text-right" style="font-size: 12px;"><strong>${(totalsupplierSales || 0).toFixed(2)}</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
-
-            <div class="totals-section">
-                <div class="total-row">
-                    <span>බිල්පත් වටිනාකම:</span>
-                    <span>රු. ${(totalsupplierSales || 0).toFixed(2)}</span>
-                </div>
-                <div class="total-row">
-                    <span>මලු වියදම (Pack Cost):</span>
-                    <span>රු. ${(totalCustomerPackCost || 0).toFixed(2)}</span>
-                </div>
-                <div class="total-row">
-                    <span>අත්තිකාරම් (Advance):</span>
-                    <span>රු. ${(advanceAmount || 0).toFixed(2)}</span>
-                </div>
-                ${paidAmountValue > 0 ? `
-                <div class="total-row">
-                    <span>ගෙවූ මුදල (Paid):</span>
-                    <span>රු. ${paidAmountValue.toFixed(2)}</span>
-                </div>` : ''}
-                <div class="net-total">
-                    <span><strong>ශුද්ධ ඉතිරි ගෙවිය යුතු මුදල:</strong></span>
-                    <span><strong>රු. ${netPayable.toFixed(2)}</strong></span>
-                </div>
-            </div>
-            
-            <div class="footer">
-                *** ස්තුතියි! නැවත පැමිණීමට සාදරයෙන් පිළිගනිමු ***
-                <div>${date} | ${time}</div>
-            </div>
-        </div>
+        ${allPagesHTML}
     </body>
     </html>`;
-}, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
+    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
 
     const getBillContent = useCallback((currentBillNo) => {
         const date = new Date().toLocaleDateString('si-LK');
@@ -984,169 +1130,194 @@ const getA4Content = useCallback((currentBillNo) => {
 </html>`;
     }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount, totalCustomerPackCost]);
 
-   // --- Print function that opens only print dialog without preview window ---
-const handlePrint = useCallback(async () => {
-    if (!supplierDetails || supplierDetails.length === 0) return;
+    const handlePrint = useCallback(async () => {
+        if (!supplierDetails || supplierDetails.length === 0) return;
 
-    // Pause auto-refresh during print process
-    isPrintingOrUpdatingRef.current = true;
+        // Pause auto-refresh during print process
+        isPrintingOrUpdatingRef.current = true;
 
-    let finalBillNo = selectedBillNo;
+        let finalBillNo = selectedBillNo;
 
-    // If it's a new bill (Unprinted), we must finalize and send SMS
-    if (isUnprintedBill) {
-        setIsDetailsLoading(true);
-        try {
-            const response = await api.post('/suppliers/mark-as-printed', {
-                transaction_ids: supplierDetails.map(r => r.id),
-                telephone_no: phoneNo,
-                advance_amount: advanceAmount,
-                supplier_code: selectedSupplier
-            });
-
-            finalBillNo = response.data.new_bill_no;
-            setSelectedBillNo(finalBillNo);
-
-            if (phoneNo) {
-                console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
-            }
-        } catch (err) {
-            console.error('Finalize/SMS Error:', err);
-            alert('Finalize failed. SMS could not be sent.');
-            setIsDetailsLoading(false);
-            isPrintingOrUpdatingRef.current = false;
-            return;
-        } finally {
-            setIsDetailsLoading(false);
-        }
-    } else {
-        // For printed bills, send SMS without finalizing
-        if (phoneNo) {
+        // If it's a new bill (Unprinted), we must finalize and send SMS
+        if (isUnprintedBill) {
             setIsDetailsLoading(true);
             try {
-                const smsResponse = await api.post('/suppliers/resend-sms', {
-                    bill_no: selectedBillNo,
-                    telephone_no: phoneNo,
-                    supplier_code: selectedSupplier,
+                const response = await api.post('/suppliers/mark-as-printed', {
                     transaction_ids: supplierDetails.map(r => r.id),
+                    telephone_no: phoneNo,
                     advance_amount: advanceAmount,
-                    is_reprint: true
+                    supplier_code: selectedSupplier
                 });
 
-                console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
+                finalBillNo = response.data.new_bill_no;
+                setSelectedBillNo(finalBillNo);
 
-                setPhoneStatus('📱 SMS resent');
-                setTimeout(() => setPhoneStatus(''), 2000);
-
+                if (phoneNo) {
+                    console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
+                }
             } catch (err) {
-                console.error('SMS Resend Error:', err);
-                setPhoneStatus('⚠️ SMS failed');
-                setTimeout(() => setPhoneStatus(''), 2000);
+                console.error('Finalize/SMS Error:', err);
+                alert('Finalize failed. SMS could not be sent.');
+                setIsDetailsLoading(false);
+                isPrintingOrUpdatingRef.current = false;
+                return;
             } finally {
                 setIsDetailsLoading(false);
             }
         } else {
-            setPhoneStatus('⚠️ No phone number');
-            setTimeout(() => setPhoneStatus(''), 2000);
-        }
-    }
+            // For printed bills, send SMS without finalizing
+            if (phoneNo) {
+                setIsDetailsLoading(true);
+                try {
+                    const smsResponse = await api.post('/suppliers/resend-sms', {
+                        bill_no: selectedBillNo,
+                        telephone_no: phoneNo,
+                        supplier_code: selectedSupplier,
+                        transaction_ids: supplierDetails.map(r => r.id),
+                        advance_amount: advanceAmount,
+                        is_reprint: true
+                    });
 
-    // Create content for printing
-    const content = printFormat === 'a4' ? getA4Content(finalBillNo) : getBillContent(finalBillNo);
-    
-    // Create an iframe for printing (hidden) to avoid opening a new window
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    
-    const iframeDoc = iframe.contentWindow.document;
-    iframeDoc.open();
-    iframeDoc.write(`
+                    console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
+
+                    setPhoneStatus('📱 SMS resent');
+                    setTimeout(() => setPhoneStatus(''), 2000);
+
+                } catch (err) {
+                    console.error('SMS Resend Error:', err);
+                    setPhoneStatus('⚠️ SMS failed');
+                    setTimeout(() => setPhoneStatus(''), 2000);
+                } finally {
+                    setIsDetailsLoading(false);
+                }
+            } else {
+                setPhoneStatus('⚠️ No phone number');
+                setTimeout(() => setPhoneStatus(''), 2000);
+            }
+        }
+
+        // 🎯 ONLY apply top margin for A4 format
+        const isA4 = printFormat === 'a4';
+        const topMargin = "20mm"; // Only used for A4
+
+        // Create content for printing
+        const content = isA4 ? getA4Content(finalBillNo, "155mm", topMargin) : getBillContent(finalBillNo);
+
+        // Create an iframe for printing (hidden) to avoid opening a new window
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(`
         <!DOCTYPE html>
         <html>
             <head>
                 <title>Print Bill</title>
                 <style>
+                    /* CRITICAL FIX: Force margins in print */
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
                     @media print {
                         @page {
-                            margin: 0.5cm;
-                            size: ${printFormat === 'a4' ? 'A4' : '80mm auto'};
+                            margin: 0;
+                            size: ${isA4 ? 'A4' : '80mm auto'};
                         }
                         body {
-                            margin: 0;
-                            padding: 0;
+                            margin: 0 !important;
+                            padding: 0 !important;
                             -webkit-print-color-adjust: exact;
                             print-color-adjust: exact;
                         }
+                        /* 🎯 ONLY apply margin-top when printing A4 */
+                        ${isA4 ? `
+                        .print-container {
+                            margin-top: ${topMargin} !important;
+                            padding-top: 0 !important;
+                        }
+                        ` : `
+                        .print-container {
+                            margin-top: 0 !important;
+                            padding-top: 0 !important;
+                        }
+                        `}
                     }
                     body {
                         margin: 0;
-                        padding: 10px;
+                        padding: 0;
                         background: white;
                         font-family: 'Iskoola Pota', 'Courier New', monospace;
                     }
                 </style>
             </head>
             <body>
-                ${content}
+                <div class="print-container">
+                    ${content}
+                </div>
             </body>
         </html>
     `);
-    iframeDoc.close();
-    
-    // Focus and print the iframe content
-    iframe.contentWindow.focus();
-    
-    // Use setTimeout to ensure content is fully loaded
-    setTimeout(() => {
-        iframe.contentWindow.print();
-        
-        // Remove iframe after print dialog closes
-        const checkPrintDone = setInterval(() => {
-            try {
-                if (iframe.contentWindow.document && iframe.contentWindow.document.hasFocus()) {
-                    // Print dialog might still be open
-                } else {
+        iframeDoc.close();
+
+        // Rest of the function remains the same...
+        // Focus and print the iframe content
+        iframe.contentWindow.focus();
+
+        // Use setTimeout to ensure content is fully loaded
+        setTimeout(() => {
+            iframe.contentWindow.print();
+
+            // Remove iframe after print dialog closes
+            const checkPrintDone = setInterval(() => {
+                try {
+                    if (iframe.contentWindow.document && iframe.contentWindow.document.hasFocus()) {
+                        // Print dialog might still be open
+                    } else {
+                        clearInterval(checkPrintDone);
+                        setTimeout(() => {
+                            if (iframe && iframe.parentNode) {
+                                document.body.removeChild(iframe);
+                            }
+                            // Reload the page after printing
+                            window.location.reload();
+                        }, 500);
+                    }
+                } catch (e) {
+                    // If we can't access the iframe, remove it
                     clearInterval(checkPrintDone);
                     setTimeout(() => {
                         if (iframe && iframe.parentNode) {
                             document.body.removeChild(iframe);
                         }
-                        // Reload the page after printing
                         window.location.reload();
                     }, 500);
                 }
-            } catch (e) {
-                // If we can't access the iframe, remove it
+            }, 1000);
+
+            // Safety timeout - force cleanup after 10 seconds
+            setTimeout(() => {
                 clearInterval(checkPrintDone);
-                setTimeout(() => {
-                    if (iframe && iframe.parentNode) {
-                        document.body.removeChild(iframe);
-                    }
-                    window.location.reload();
-                }, 500);
-            }
-        }, 1000);
-        
-        // Safety timeout - force cleanup after 10 seconds
-        setTimeout(() => {
-            clearInterval(checkPrintDone);
-            if (iframe && iframe.parentNode) {
-                document.body.removeChild(iframe);
-            }
-            window.location.reload();
-        }, 10000);
-        
-        // Re-enable auto-refresh
-        setTimeout(() => {
-            isPrintingOrUpdatingRef.current = false;
-        }, 1000);
-    }, 300);
-    
-}, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
+                if (iframe && iframe.parentNode) {
+                    document.body.removeChild(iframe);
+                }
+                window.location.reload();
+            }, 10000);
+
+            // Re-enable auto-refresh
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 1000);
+        }, 300);
+
+    }, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
 
     // --- Keyboard event listener ---
     useEffect(() => {
@@ -1387,13 +1558,17 @@ const handlePrint = useCallback(async () => {
                         </h2>
 
                         {/* TELEPHONE INPUT - DISABLED FOR PRINTED BILLS */}
+                        {/* TELEPHONE INPUT - DISABLED FOR PRINTED BILLS */}
                         {selectedSupplier && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <input
                                     type="text"
                                     placeholder="දුරකථන අංකය..."
                                     value={phoneNo}
-                                    onChange={(e) => setPhoneNo(e.target.value)}
+                                    onChange={(e) => {
+                                        setPhoneNo(e.target.value);
+                                        setIsPhoneManuallyChanged(true); // 🔄 MARK as manually changed
+                                    }}
                                     onKeyDown={handlePhoneSubmit}
                                     disabled={!isUnprintedBill}
                                     style={{
