@@ -11,26 +11,26 @@ const SupplierReport = () => {
     const [isRefreshing, setIsRefreshing] = useState(false); // New state for auto-refresh indicator
 
     // 🚀 NEW STATE: Bill size selector (3mm or 4mm) - PERSISTED
-const [billSize, setBillSize] = useState(() => {
-    const saved = localStorage.getItem('supplier_bill_size');
-    return saved || '3mm';
-});
+    const [billSize, setBillSize] = useState(() => {
+        const saved = localStorage.getItem('supplier_bill_size');
+        return saved || '3mm';
+    });
 
-// 🚀 NEW STATE: Print Format selector (Thermal or A4) - PERSISTED
-const [printFormat, setPrintFormat] = useState(() => {
-    const saved = localStorage.getItem('supplier_print_format');
-    return saved || 'thermal';
-});
+    // 🚀 NEW STATE: Print Format selector (Thermal or A4) - PERSISTED
+    const [printFormat, setPrintFormat] = useState(() => {
+        const saved = localStorage.getItem('supplier_print_format');
+        return saved || 'thermal';
+    });
 
-// Save billSize to localStorage whenever it changes
-useEffect(() => {
-    localStorage.setItem('supplier_bill_size', billSize);
-}, [billSize]);
+    // Save billSize to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_bill_size', billSize);
+    }, [billSize]);
 
-// Save printFormat to localStorage whenever it changes
-useEffect(() => {
-    localStorage.setItem('supplier_print_format', printFormat);
-}, [printFormat]);
+    // Save printFormat to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_print_format', printFormat);
+    }, [printFormat]);
 
     const [printedSearchTerm, setPrintedSearchTerm] = useState('');
     const [unprintedSearchTerm, setUnprintedSearchTerm] = useState('');
@@ -567,9 +567,9 @@ useEffect(() => {
     }, [supplierDetails]);
 
     // 🚀 FIXED: Customizable width bill with center alignment and ultra-clear high-visibility styling
-    const getA4Content = useCallback((currentBillNo, billWidth = "155mm", topMargin = "20mm") => {
+    const getA4Content = useCallback((currentBillNo, billWidth = "101mm", topMargin = "13mm") => {
         const date = new Date().toLocaleDateString('si-LK');
-        const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
         const paidAmountValue = parseFloat(payingAmount) || 0;
         const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
 
@@ -594,30 +594,40 @@ useEffect(() => {
             });
         };
 
-        // Calculate font sizes based on bill width - EXACT SAME AS A4BillHTML
+        // ALL SIZES MULTIPLIED BY 0.65 (65% of original)
         const getStyles = (width) => {
             const widthNum = parseInt(width);
 
             let headerFontSize, shopFontSize, normalFontSize, smallFontSize, tinyFontSize;
+            let tableHeaderFontSize, totalRowFontSize, netTotalFontSize;
 
             if (widthNum <= 58) {
-                headerFontSize = '18px';
-                shopFontSize = '13px';
-                normalFontSize = '13px';
-                smallFontSize = '12px';
-                tinyFontSize = '11px';
+                headerFontSize = '2.9mm';    // 4.5mm × 0.65
+                shopFontSize = '2.3mm';      // 3.5mm × 0.65
+                normalFontSize = '2.3mm';    // 3.5mm × 0.65
+                smallFontSize = '2.1mm';     // 3.2mm × 0.65
+                tinyFontSize = '2mm';        // 3mm × 0.65
+                tableHeaderFontSize = '2.1mm'; // 3.2mm × 0.65
+                totalRowFontSize = '2.5mm';    // 3.8mm × 0.65
+                netTotalFontSize = '2.9mm';    // 4.5mm × 0.65
             } else if (widthNum <= 80) {
-                headerFontSize = '22px';
-                shopFontSize = '15px';
-                normalFontSize = '15px';
-                smallFontSize = '14px';
-                tinyFontSize = '13px';
+                headerFontSize = '3.6mm';    // 5.5mm × 0.65
+                shopFontSize = '2.6mm';      // 4mm × 0.65
+                normalFontSize = '2.6mm';    // 4mm × 0.65
+                smallFontSize = '2.4mm';     // 3.7mm × 0.65
+                tinyFontSize = '2.3mm';      // 3.5mm × 0.65
+                tableHeaderFontSize = '2.4mm'; // 3.7mm × 0.65
+                totalRowFontSize = '2.7mm';    // 4.2mm × 0.65
+                netTotalFontSize = '3.3mm';    // 5mm × 0.65
             } else {
-                headerFontSize = '28px';
-                shopFontSize = '18px';
-                normalFontSize = '16px';
-                smallFontSize = '15px';
-                tinyFontSize = '14px';
+                headerFontSize = '4.6mm';    // 7mm × 0.65
+                shopFontSize = '2.9mm';      // 4.5mm × 0.65
+                normalFontSize = '2.7mm';    // 4.2mm × 0.65
+                smallFontSize = '2.6mm';     // 4mm × 0.65
+                tinyFontSize = '2.4mm';      // 3.7mm × 0.65
+                tableHeaderFontSize = '2.6mm'; // 4mm × 0.65
+                totalRowFontSize = '2.9mm';    // 4.5mm × 0.65
+                netTotalFontSize = '3.6mm';    // 5.5mm × 0.65
             }
 
             return {
@@ -627,7 +637,11 @@ useEffect(() => {
                 normalFontSize,
                 smallFontSize,
                 tinyFontSize,
-                padding: widthNum <= 58 ? '4mm' : '5mm'
+                tableHeaderFontSize,
+                totalRowFontSize,
+                netTotalFontSize,
+                padding: widthNum <= 58 ? '2mm' : '2.6mm',      // 3mm/4mm × 0.65
+                cellPadding: widthNum <= 58 ? '1mm' : '1.3mm'  // 1.5mm/2mm × 0.65
             };
         };
 
@@ -666,127 +680,127 @@ useEffect(() => {
             });
 
             return `
-            <div class="bill-border" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
-                ${pageNumber === 1 ? `
-                <div class="header">
-                    <div class="shop-name">මහතුන් වෙළඳ සැල</div>
-                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-                </div>
-                
-                <div class="info-row">
-                    <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
-                    <div>අංකය: ${currentBillNo || ''}</div>
-                    <div>දිනය: ${date}</div>
-                    <div>වේලාව: ${time}</div>
-                </div>
-                ` : `
-                <div class="header-continued">
-                    <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
-                </div>
-                `}
-
-                ${itemPages.length > 1 ? `
-                <div style="margin-bottom: 5px; font-size: 12px; text-align: center; font-weight: bold;">
-                    පිටුව ${pageNumber} / ${itemPages.length}
-                </div>
-                ` : ''}
-
-                <table>
-                    <colgroup>
-                        <col style="width: 30%">
-                        <col style="width: 10%">
-                        <col style="width: 15%">
-                        <col style="width: 15%">
-                        <col style="width: 15%">
-                        <col style="width: 15%">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th style="text-align: left;">වර්ගය</th>
-                            <th>මලු</th>
-                            <th style="text-align: right;">බර</th>
-                            <th style="text-align: right;">මිල</th>
-                            <th style="text-align: center;">ගනු</th>
-                            <th style="text-align: right;">එකතුව</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${pageItems.map(record => `
-                            <tr style="page-break-inside: avoid;">
-                                <td style="text-align: left; padding: 8px 4px; font-size: ${styles.normalFontSize};">${record.item_name || ''}</td>
-                                <td style="text-align: center; padding: 8px 4px; font-size: ${styles.normalFontSize};">${record.packs || 0}</td>
-                                <td class="text-right" style="padding: 8px 4px; font-size: ${styles.normalFontSize};">${formatNumber(record.weight)}</td>
-                                <td class="text-right" style="padding: 8px 4px; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierPricePerKg)}</td>
-                                <td style="text-align: center; padding: 8px 4px; font-size: ${styles.normalFontSize};">${(record.customer_code || '').toUpperCase()}</td>
-                                <td class="text-right" style="padding: 8px 4px; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierTotal)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                    <tfoot>
-                        <tr style="background: #f0f0f0;">
-                            <td colspan="2" style="font-size: ${styles.normalFontSize}; font-weight: bold;">මෙම පිටුවේ එකතුව</td>
-                            <td class="text-right" style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
-                            <td style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
-                            <td class="text-center" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${pageTotalPacks}</td>
-                            <td class="text-right" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${formatNumber(pageTotalSales)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-
-                ${isLastPage ? `
-                <div class="totals-section">
-                    <div class="total-row"><span>මුළු එකතුව:</span><span>රු. ${formatNumber(grandTotalSales)}</span></div>
-                    <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(grandTotalPackCost)}</span></div>
-                    <div class="total-row"><span>අත්තිකාරම්:</span><span style="color: red !important;">රු. -${formatNumber(grandAdvanceAmount)}</span></div>
-                    ${grandPaidAmount > 0 ? `<div class="total-row"><span>ගෙවූ මුදල:</span><span>රු. -${formatNumber(grandPaidAmount)}</span></div>` : ''}
-                    <div class="net-total">
-                        <span>ශුද්ධ ඉතිරි ගෙවිය යුතු මුදල:</span>
-                        <span>රු. ${formatNumber(grandNetPayable)}</span>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
-                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
-                </div>
-                ` : `
-                <div class="footer" style="margin-top: 15px; text-align: center; font-size: ${styles.smallFontSize}; border-top: 2px dashed #000; padding-top: 10px;">
-                    *** කරුණාකර පහත පිටුවට හැරෙන්න ***
-                </div>
-                `}
+        <div class="bill-border" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
+            ${pageNumber === 1 ? `
+            <div class="header">
+                <div class="shop-name">මහතුන් වෙළඳ සැල</div>
+                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
             </div>
-        `;
+            
+            <div class="info-row" style="display: flex; flex-wrap: nowrap; gap: 3.3mm; white-space: nowrap;">
+                <div>ගොවියා: ${(selectedSupplier || '').toUpperCase()}</div>
+                <div>අං: ${currentBillNo || ''}</div>
+                <div>දිනය: ${date}</div>
+                <div>${time}</div>
+            </div>
+            ` : `
+            <div class="header-continued">
+                <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
+            </div>
+            `}
+
+            ${itemPages.length > 1 ? `
+            <div style="margin-bottom: 1.3mm; font-size: ${styles.tinyFontSize}; text-align: center; font-weight: bold;">
+                පිටුව ${pageNumber} / ${itemPages.length}
+            </div>
+            ` : ''}
+
+            <table>
+                <colgroup>
+                    <col style="width: 30%">
+                    <col style="width: 10%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th style="text-align: left; font-size: ${styles.tableHeaderFontSize};">වර්ගය</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">මලු</th>
+                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">බර</th>
+                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">මිල</th>
+                        <th style="text-align: center; font-size: ${styles.tableHeaderFontSize};">ගනු</th>
+                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">එකතුව</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pageItems.map(record => `
+                        <tr style="page-break-inside: avoid;">
+                            <td style="text-align: left; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${record.item_name || ''}</td>
+                            <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${record.packs || 0}</td>
+                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.weight)}</td>
+                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierPricePerKg)}</td>
+                            <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${(record.customer_code || '').toUpperCase()}</td>
+                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierTotal)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0;">
+                        <td colspan="2" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">මෙම පිටුවේ එකතුව</td>
+                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">  </td>
+                        <td style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">  </td>
+                        <td class="text-center" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${pageTotalPacks}</td>
+                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${formatNumber(pageTotalSales)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            ${isLastPage ? `
+            <div class="totals-section">
+                <div class="total-row"><span>මුළු එකතුව:</span><span>රු. ${formatNumber(grandTotalSales)}</span></div>
+                <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(grandTotalPackCost)}</span></div>
+                <div class="total-row"><span>අත්තිකාරම්:</span><span style="color: red !important;">රු. -${formatNumber(grandAdvanceAmount)}</span></div>
+                ${grandPaidAmount > 0 ? `<div class="total-row"><span>ගෙවූ මුදල:</span><span>රු. -${formatNumber(grandPaidAmount)}</span></div>` : ''}
+                <div class="net-total">
+                    <span>ගෙවිය යුතු මුදල:</span>
+                    <span>රු. ${formatNumber(grandNetPayable)}</span>
+                </div>
+            </div>
+            
+            <div class="footer">
+                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+            </div>
+            ` : `
+            <div class="footer" style="margin-top: 2.6mm; text-align: center; font-size: ${styles.smallFontSize}; border-top: 0.3mm dashed #000; padding-top: 1.6mm;">
+                *** කරුණාකර පහත පිටුවට හැරෙන්න ***
+            </div>
+            `}
+        </div>
+    `;
         };
 
         // Generate all pages
         let allPagesHTML = '';
         if (supplierDetails.length === 0) {
             allPagesHTML = `
-            <div class="bill-border">
-                <div class="header">
-                    <div class="shop-name">මහතුන් වෙළඳ සැල</div>
-                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-                </div>
-                
-                <div class="info-row">
-                    <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
-                    <div>අංකය: ${currentBillNo || ''}</div>
-                    <div>දිනය: ${date}</div>
-                    <div>වේලාව: ${time}</div>
-                </div>
-                
-                <div style="text-align: center; padding: 40px; font-size: ${styles.headerFontSize}; font-weight: bold;">
-                    අයිතම නොමැත
-                </div>
-                
-                <div class="footer">
-                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
-                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
-                </div>
+        <div class="bill-border">
+            <div class="header">
+                <div class="shop-name">මහතුන් වෙළඳ සැල</div>
+                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
             </div>
-        `;
+            
+            <div class="info-row">
+                <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
+                <div>අංකය: ${currentBillNo || ''}</div>
+                <div>දිනය: ${date}</div>
+                <div>වේලාව: ${time}</div>
+            </div>
+            
+            <div style="text-align: center; padding: 6.5mm; font-size: ${styles.headerFontSize}; font-weight: bold;">
+                අයිතම නොමැත
+            </div>
+            
+            <div class="footer">
+                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+            </div>
+        </div>
+    `;
         } else {
             itemPages.forEach((page, idx) => {
                 allPagesHTML += generatePage(page, idx + 1, idx === itemPages.length - 1);
@@ -794,162 +808,160 @@ useEffect(() => {
         }
 
         return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
-            
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        
+        body { 
+            font-family: 'Iskoola Pota', Arial, sans-serif; 
+            background: #f0f0f0; 
+            padding: 0;
+            margin: 0;
+        }
+
+        .bill-border { 
+            width: ${styles.containerWidth}; 
+            max-width: ${styles.containerWidth};
+            min-width: ${styles.containerWidth};
+            background: white;
+            padding: ${styles.padding};
+            margin: ${topMargin} auto 0 auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+
+        @media print {
             body { 
-                font-family: 'Iskoola Pota', Arial, sans-serif; 
-                background: #f0f0f0; 
-                padding: 0;
+                background: white; 
+                padding: 0; 
                 margin: 0;
             }
-
             .bill-border { 
-                width: ${styles.containerWidth}; 
-                max-width: 100%;
-                background: white;
-                padding: ${styles.padding};
-                margin: ${topMargin} auto 0 auto;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                box-shadow: none; 
+                margin: 0 auto !important;
                 page-break-after: always;
                 page-break-inside: avoid;
             }
+            @page { 
+                size: ${styles.containerWidth} auto;
+                margin: 0mm;
+            }
+        }
 
-            @media print {
-                body { 
-                    background: white; 
-                    padding: 0; 
-                    margin: 0;
-                }
-                .bill-border { 
-                    box-shadow: none; 
-                    margin: ${topMargin} auto 0 auto !important;
-                    page-break-after: always;
-                    page-break-inside: avoid;
-                }
-                @page { 
-                    size: ${styles.containerWidth} auto;
-                    margin: 0;
-                }
-            }
+        div, span, p, td, th, strong, .shop-name, .shop-address, .shop-phone, 
+        .info-row, .total-row, .net-total, .footer, .header-continued { 
+            color: #000 !important; 
+            font-weight: bold !important; 
+        }
 
-            div, span, p, td, th, strong, .shop-name, .shop-address, .shop-phone, 
-            .info-row, .total-row, .net-total, .footer, .header-continued { 
-                color: #000 !important; 
-                font-weight: bold !important; 
-            }
+        .header { 
+            text-align: center; 
+            border-bottom: 0.5mm solid #000; 
+            padding-bottom: 1.6mm; 
+            margin-bottom: 1.6mm; 
+        }
+        
+        .header-continued {
+            text-align: center;
+            border-bottom: 0.3mm solid #000;
+            padding-bottom: 1.3mm;
+            margin-bottom: 1.6mm;
+        }
+        
+        .continued-label {
+            font-size: ${styles.smallFontSize};
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .shop-name { 
+            font-size: ${styles.headerFontSize}; 
+            margin-bottom: 1mm; 
+            font-weight: bold;
+        }
+        .shop-address, .shop-phone { 
+            font-size: ${styles.shopFontSize}; 
+            margin: 0.7mm 0; 
+            font-weight: bold;
+        }
 
-            .header { 
-                text-align: center; 
-                border-bottom: 3px solid #000; 
-                padding-bottom: 10px; 
-                margin-bottom: 10px; 
-            }
-            
-            .header-continued {
-                text-align: center;
-                border-bottom: 2px solid #000;
-                padding-bottom: 8px;
-                margin-bottom: 10px;
-            }
-            
-            .continued-label {
-                font-size: 14px;
-                font-weight: bold;
-                color: #333;
-            }
-            
-            .shop-name { 
-                font-size: ${styles.headerFontSize}; 
-                margin-bottom: 5px; 
-                font-weight: bold;
-            }
-            .shop-address, .shop-phone { 
-                font-size: ${styles.shopFontSize}; 
-                margin: 3px 0; 
-                font-weight: bold;
-            }
+        .info-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 1.6mm; 
+            padding: 1.3mm; 
+            border: 0.3mm solid #000; 
+            font-size: ${styles.normalFontSize};
+            font-weight: bold;
+        }
 
-            .info-row { 
-                display: flex; 
-                justify-content: space-between; 
-                margin-bottom: 10px; 
-                padding: 8px; 
-                border: 2px solid #000; 
-                font-size: ${styles.normalFontSize};
-                font-weight: bold;
-            }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 1.6mm;
+            table-layout: fixed;
+        }
+        
+        th { 
+            border: 0.3mm solid #000; 
+            padding: ${styles.cellPadding}; 
+            background: #eee; 
+            font-weight: bold;
+        }
+        
+        td { 
+            border: 0.2mm solid #000; 
+            vertical-align: top;
+            font-weight: bold;
+        }
 
-            table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin-bottom: 10px;
-                table-layout: fixed;
-            }
-            
-            th { 
-                border: 2px solid #000; 
-                padding: 8px 4px; 
-                background: #eee; 
-                font-size: ${styles.smallFontSize};
-                font-weight: bold;
-            }
-            
-            td { 
-                border: 1px solid #000; 
-                padding: 8px 4px; 
-                font-size: ${styles.normalFontSize};
-                vertical-align: top;
-                font-weight: bold;
-            }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
 
-            .text-right { text-align: right; }
-            .text-center { text-align: center; }
+        .totals-section { 
+            margin-top: 1.6mm; 
+            border-top: 0.3mm solid #000; 
+            padding-top: 1.6mm;
+        }
+        
+        .total-row { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 1mm 0; 
+            font-size: ${styles.totalRowFontSize};
+            font-weight: bold;
+        }
+        
+        .net-total { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 1.6mm 1mm; 
+            border-top: 0.5mm solid #000; 
+            border-bottom: 0.5mm solid #000;
+            font-size: ${styles.netTotalFontSize};
+            margin-top: 1.3mm; 
+            background: #f9f9f9;
+            font-weight: bold;
+        }
 
-            .totals-section { 
-                margin-top: 10px; 
-                border-top: 2px solid #000; 
-                padding-top: 10px;
-            }
-            
-            .total-row { 
-                display: flex; 
-                justify-content: space-between; 
-                padding: 6px 0; 
-                font-size: ${parseInt(styles.normalFontSize) + 2}px;
-                font-weight: bold;
-            }
-            
-            .net-total { 
-                display: flex; 
-                justify-content: space-between; 
-                padding: 10px 5px; 
-                border-top: 3px solid #000; 
-                border-bottom: 3px solid #000;
-                font-size: ${parseInt(styles.normalFontSize) + 6}px;
-                margin-top: 8px; 
-                background: #f9f9f9;
-                font-weight: bold;
-            }
-
-            .footer { 
-                margin-top: 15px; 
-                text-align: center; 
-                font-size: ${styles.smallFontSize}; 
-                border-top: 2px dashed #000; 
-                padding-top: 10px; 
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        ${allPagesHTML}
-    </body>
-    </html>`;
+        .footer { 
+            margin-top: 2.6mm; 
+            text-align: center; 
+            font-size: ${styles.smallFontSize}; 
+            border-top: 0.3mm dashed #000; 
+            padding-top: 1.6mm; 
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    ${allPagesHTML}
+</body>
+</html>`;
     }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
 
     const getBillContent = useCallback((currentBillNo) => {

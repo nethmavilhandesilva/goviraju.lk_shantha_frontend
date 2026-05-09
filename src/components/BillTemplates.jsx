@@ -210,7 +210,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
 
 // src/components/BillTemplates.jsx
 
-export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billWidth = '150mm', topMargin = '15mm' }) => {
+export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billWidth = '98mm', topMargin = '10mm' }) => {
     const formatNumber = (num) => {
         if (typeof num !== 'number' && typeof num !== 'string') return '0.00';
         const number = parseFloat(num);
@@ -219,7 +219,7 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
     };
 
     const date = new Date().toLocaleDateString('si-LK');
-    const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit' });
+    const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', hour12: false });
 
     const groupedById = new Map();
     salesData.forEach(s => {
@@ -275,32 +275,45 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 
     const finalGrandTotal = totalSales + totalPackCost + totalKuliya + globalLoanAmount;
 
-    // Calculate font sizes and padding based on bill width
+    // ALL SIZES ARE NOW AT 65% OF ORIGINAL (multiplied by 0.65)
     const getStyles = (width) => {
         const widthNum = parseInt(width);
-        
+
         let headerFontSize, shopFontSize, normalFontSize, smallFontSize, tinyFontSize;
-        
+        let tableHeaderFontSize, tableDataFontSize, totalRowFontSize, netTotalFontSize;
+
         if (widthNum <= 58) {
-            headerFontSize = '18px';
-            shopFontSize = '13px';
-            normalFontSize = '13px';
-            smallFontSize = '12px';
-            tinyFontSize = '11px';
+            headerFontSize = '2.9mm';    // 4.5mm × 0.65
+            shopFontSize = '2.3mm';      // 3.5mm × 0.65
+            normalFontSize = '2.3mm';    // 3.5mm × 0.65
+            smallFontSize = '2.1mm';     // 3.2mm × 0.65
+            tinyFontSize = '2mm';        // 3mm × 0.65
+            tableHeaderFontSize = '2.1mm'; // 3.2mm × 0.65
+            tableDataFontSize = '3.3mm';   // 5mm × 0.65
+            totalRowFontSize = '2.5mm';    // 3.8mm × 0.65
+            netTotalFontSize = '2.9mm';    // 4.5mm × 0.65
         } else if (widthNum <= 80) {
-            headerFontSize = '22px';
-            shopFontSize = '15px';
-            normalFontSize = '15px';
-            smallFontSize = '14px';
-            tinyFontSize = '13px';
+            headerFontSize = '3.6mm';    // 5.5mm × 0.65
+            shopFontSize = '2.6mm';      // 4mm × 0.65
+            normalFontSize = '2.6mm';    // 4mm × 0.65
+            smallFontSize = '2.4mm';     // 3.7mm × 0.65
+            tinyFontSize = '2.3mm';      // 3.5mm × 0.65
+            tableHeaderFontSize = '2.4mm'; // 3.7mm × 0.65
+            tableDataFontSize = '3.4mm';   // 5.3mm × 0.65
+            totalRowFontSize = '2.7mm';    // 4.2mm × 0.65
+            netTotalFontSize = '3.3mm';    // 5mm × 0.65
         } else {
-            headerFontSize = '28px';
-            shopFontSize = '18px';
-            normalFontSize = '16px';
-            smallFontSize = '15px';
-            tinyFontSize = '14px';
+            headerFontSize = '4.6mm';    // 7mm × 0.65
+            shopFontSize = '2.9mm';      // 4.5mm × 0.65
+            normalFontSize = '2.7mm';    // 4.2mm × 0.65
+            smallFontSize = '2.6mm';     // 4mm × 0.65
+            tinyFontSize = '2.4mm';      // 3.7mm × 0.65
+            tableHeaderFontSize = '2.6mm'; // 4mm × 0.65
+            tableDataFontSize = '3.6mm';   // 5.5mm × 0.65
+            totalRowFontSize = '2.9mm';    // 4.5mm × 0.65
+            netTotalFontSize = '3.6mm';    // 5.5mm × 0.65
         }
-        
+
         return {
             containerWidth: width,
             headerFontSize,
@@ -308,15 +321,19 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             normalFontSize,
             smallFontSize,
             tinyFontSize,
-            padding: widthNum <= 58 ? '4mm' : '5mm'
+            tableHeaderFontSize,
+            tableDataFontSize,
+            totalRowFontSize,
+            netTotalFontSize,
+            padding: widthNum <= 58 ? '2mm' : '2.6mm',      // 3mm/4mm × 0.65
+            cellPadding: widthNum <= 58 ? '1mm' : '1.3mm'  // 1.5mm/2mm × 0.65
         };
     };
-    
+
     const styles = getStyles(billWidth);
 
-    // Split items into pages with 9 items per page
     const ITEMS_PER_PAGE = 9;
-    
+
     const splitItemsIntoPages = (items, itemsPerPage = 9) => {
         const pages = [];
         for (let i = 0; i < items.length; i += itemsPerPage) {
@@ -324,25 +341,23 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         }
         return pages;
     };
-    
+
     const itemPages = splitItemsIntoPages(itemsList, ITEMS_PER_PAGE);
 
-    // Generate HTML for each page
     const generatePage = (pageItems, pageNumber, isLastPage) => {
         const pageItemsRows = pageItems.map((item) => {
             return `
-                <tr style="page-break-inside: avoid;">
-                    <td style="text-align: center; padding: 8px 4px; font-size: 20px;">${item.id}</td>
-                    <td style="padding: 8px 4px; font-size: 16px;">${item.name}<br><span style="font-size: 20px;">${item.code}</span></td>
-                    <td class="text-right" style="padding: 8px 4px; font-size: 20px;">${formatNumber(item.weight)}</td>
-                    <td class="text-right" style="padding: 8px 4px; font-size: 20px;">${formatNumber(item.price)}</td>
-                    <td class="text-center" style="padding: 8px 4px; font-size: 20px;">${item.packs}</td>
-                    <td class="text-right" style="padding: 8px 4px; font-size: 20px;">${formatNumber(item.total)}</td>
-                </tr>
-            `;
+            <tr style="page-break-inside: avoid;">
+                <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.tableDataFontSize};">${item.id}</td>
+                <td style="padding: ${styles.cellPadding}; font-size: ${styles.tableDataFontSize};">${item.name}<br><span style="font-size: ${parseFloat(styles.tableDataFontSize) * 0.9}mm;">${item.code}</span></td>
+                <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.tableDataFontSize};">${formatNumber(item.weight)}</td>
+                <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.tableDataFontSize};">${formatNumber(item.price)}</td>
+                <td class="text-center" style="padding: ${styles.cellPadding}; font-size: ${styles.tableDataFontSize};">${item.packs}</td>
+                <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.tableDataFontSize};">${formatNumber(item.total)}</td>
+            </tr>
+        `;
         }).join('');
 
-        // Calculate page-specific totals
         let pageTotalSales = 0;
         let pageTotalPacks = 0;
         pageItems.forEach(item => {
@@ -351,93 +366,91 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         });
 
         return `
-            <div class="receipt-container" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
-                ${pageNumber === 1 ? `
-                <div class="header">
-                    <div class="shop-name">මහතුන් වෙළඳසැල</div>
-                    <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-                </div>
-                
-                <div class="info-row">
-                    <div>කේතය: ${(customerName || '').toUpperCase()}</div>
-                    <div>අංකය: ${billNo}</div>
-                    <div>දිනය: ${date}</div>
-                </div>
-                ` : `
-                <div class="header-continued">
-                    <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
-                </div>
-                `}
-
-                ${itemPages.length > 1 ? `
-                <div style="margin-bottom: 5px; font-size: 12px; text-align: center; font-weight: bold;">
-                    පිටුව ${pageNumber} / ${itemPages.length}
-                </div>
-                ` : ''}
-
-                <table>
-                    <colgroup>
-                        <col style="width: 8%">
-                        <col style="width: 32%">
-                        <col style="width: 15%">
-                        <col style="width: 15%">
-                        <col style="width: 10%">
-                        <col style="width: 20%">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>අයිතමය</th>
-                            <th>බර(kg)</th>
-                            <th>මිල</th>
-                            <th>මලු</th>
-                            <th>එකතුව</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${pageItemsRows || ''}
-                    </tbody>
-                    <tfoot>
-                        <tr style="background: #f0f0f0;">
-                            <td colspan="2" style="font-size: ${styles.normalFontSize}; font-weight: bold;">මෙම පිටුවේ එකතුව</td>
-                            <td class="text-right" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${formatNumber(pageTotalSales)}</td>
-                            <td style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
-                            <td class="text-center" style="font-size: ${styles.normalFontSize}; font-weight: bold;">${pageTotalPacks}</td>
-                            <td style="font-size: ${styles.normalFontSize}; font-weight: bold;"></td>
-                        </tr>
-                    </tfoot>
-                </table>
-
-                ${isLastPage ? `
-                <div class="totals-section">
-                    <div class="total-row"><span>භාණ්ඩ එකතුව:</span><span>රු. ${formatNumber(totalSales)}</span></div>
-                    <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(totalPackCost)}</span></div>
-                    ${totalKuliya > 0 ? `<div class="total-row"><span>කුලිය:</span><span>රු. ${formatNumber(totalKuliya)}</span></div>` : ''}
-                    ${globalLoanAmount !== 0 ? `<div class="total-row"><span>පෙර ණය:</span><span>රු. ${formatNumber(Math.abs(globalLoanAmount))}</span></div>` : ''}
-                    <div class="net-total">
-                        <span>මුළු ගෙවිය යුතු මුදල:</span>
-                        <span>රු. ${formatNumber(finalGrandTotal)}</span>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    *** ස්තුතියි! නැවත පැමිණෙන්න ***
-                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
-                </div>
-                ` : `
-                <div class="footer" style="margin-top: 15px; text-align: center; font-size: ${styles.smallFontSize}; border-top: 2px dashed #000; padding-top: 10px;">
-                    *** කරුණාකර පහත පිටුවට හැරෙන්න ***
-                </div>
-                `}
+        <div class="receipt-container" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
+            ${pageNumber === 1 ? `
+            <div class="header">
+                <div class="shop-name">මහතුන් වෙළඳසැල</div>
+                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
             </div>
-        `;
+            
+            <div class="info-row">
+                <div>ගණුම්කරු: ${(customerName || '').toUpperCase()}</div>
+                <div>අංකය: ${billNo}</div>
+                <div>දිනය: ${date}</div>
+            </div>
+            ` : `
+            <div class="header-continued">
+                <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
+            </div>
+            `}
+
+            ${itemPages.length > 1 ? `
+            <div style="margin-bottom: 1.3mm; font-size: ${styles.tinyFontSize}; text-align: center; font-weight: bold;">
+                පිටුව ${pageNumber} / ${itemPages.length}
+            </div>
+            ` : ''}
+
+            <table>
+                <colgroup>
+                    <col style="width: 8%">
+                    <col style="width: 32%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                    <col style="width: 10%">
+                    <col style="width: 20%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">#</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">අයිතමය</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">බර(kg)</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">මිල</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">මලු</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">එකතුව</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pageItemsRows || ''}
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0;">
+                        <td colspan="2" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">මෙම පිටුවේ එකතුව</td>
+                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${formatNumber(pageTotalSales)}</td>
+                        <td style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};"></td>
+                        <td class="text-center" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${pageTotalPacks}</td>
+                        <td style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};"></td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            ${isLastPage ? `
+            <div class="totals-section">
+                <div class="total-row"><span>භාණ්ඩ එකතුව:</span><span>රු. ${formatNumber(totalSales)}</span></div>
+                <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(totalPackCost)}</span></div>
+                ${totalKuliya > 0 ? `<div class="total-row"><span>කුලිය:</span><span>රු. ${formatNumber(totalKuliya)}</span></div>` : ''}
+                ${globalLoanAmount !== 0 ? `<div class="total-row"><span>පෙර ණය:</span><span>රු. ${formatNumber(Math.abs(globalLoanAmount))}</span></div>` : ''}
+                <div class="net-total">
+                    <span>මුළු ගෙවිය යුතු මුදල:</span>
+                    <span>රු. ${formatNumber(finalGrandTotal)}</span>
+                </div>
+            </div>
+            
+            <div class="footer">
+                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+            </div>
+            ` : `
+            <div class="footer" style="margin-top: 2.6mm; text-align: center; font-size: ${styles.smallFontSize}; border-top: 0.3mm dashed #000; padding-top: 1.6mm;">
+                *** කරුණාකර පහත පිටුවට හැරෙන්න ***
+            </div>
+            `}
+        </div>
+    `;
     };
 
-    // Generate all pages
     let allPagesHTML = '';
     if (itemsList.length === 0) {
-        // Single page with no items
         allPagesHTML = `
             <div class="receipt-container">
                 <div class="header">
@@ -452,13 +465,13 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
                     <div>දිනය: ${date}</div>
                 </div>
                 
-                <div style="text-align: center; padding: 40px; font-size: 20px; font-weight: bold;">
+                <div style="text-align: center; padding: 6.5mm; font-size: ${styles.normalFontSize}; font-weight: bold;">
                     අයිතම නොමැත
                 </div>
                 
                 <div class="footer">
                     *** ස්තුතියි! නැවත පැමිණෙන්න ***
-                    <div style="margin-top: 5px; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+                    <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
                 </div>
             </div>
         `;
@@ -473,7 +486,13 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 <head>
     <meta charset="UTF-8">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
+        }
         
         body { 
             font-family: 'Iskoola Pota', Arial, sans-serif; 
@@ -484,7 +503,8 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 
         .receipt-container { 
             width: ${styles.containerWidth}; 
-            max-width: 100%;
+            max-width: ${styles.containerWidth};
+            min-width: ${styles.containerWidth};
             background: white;
             padding: ${styles.padding};
             margin: ${topMargin} auto 0 auto;
@@ -501,13 +521,13 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             }
             .receipt-container { 
                 box-shadow: none; 
-                margin: ${topMargin} auto 0 auto !important;
+                margin: 0 auto !important;
                 page-break-after: always;
                 page-break-inside: avoid;
             }
             @page { 
                 size: ${styles.containerWidth} auto;
-                margin: 0;
+                margin: 0mm;
             }
         }
 
@@ -519,41 +539,41 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 
         .header { 
             text-align: center; 
-            border-bottom: 3px solid #000; 
-            padding-bottom: 10px; 
-            margin-bottom: 10px; 
+            border-bottom: 0.5mm solid #000; 
+            padding-bottom: 1.6mm; 
+            margin-bottom: 1.6mm; 
         }
         
         .header-continued {
             text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 8px;
-            margin-bottom: 10px;
+            border-bottom: 0.3mm solid #000;
+            padding-bottom: 1.3mm;
+            margin-bottom: 1.6mm;
         }
         
         .continued-label {
-            font-size: 14px;
+            font-size: ${styles.smallFontSize};
             font-weight: bold;
             color: #333;
         }
         
         .shop-name { 
             font-size: ${styles.headerFontSize}; 
-            margin-bottom: 5px; 
+            margin-bottom: 1mm; 
             font-weight: bold;
         }
         .shop-address, .shop-phone { 
             font-size: ${styles.shopFontSize}; 
-            margin: 3px 0; 
+            margin: 0.7mm 0; 
             font-weight: bold;
         }
 
         .info-row { 
             display: flex; 
             justify-content: space-between; 
-            margin-bottom: 10px; 
-            padding: 8px; 
-            border: 2px solid #000; 
+            margin-bottom: 1.6mm; 
+            padding: 1.3mm; 
+            border: 0.3mm solid #000; 
             font-size: ${styles.normalFontSize};
             font-weight: bold;
         }
@@ -561,22 +581,19 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin-bottom: 10px;
+            margin-bottom: 1.6mm;
             table-layout: fixed;
         }
         
         th { 
-            border: 2px solid #000; 
-            padding: 8px 4px; 
+            border: 0.3mm solid #000; 
+            padding: ${styles.cellPadding}; 
             background: #eee; 
-            font-size: ${styles.smallFontSize};
             font-weight: bold;
         }
         
         td { 
-            border: 1px solid #000; 
-            padding: 8px 4px; 
-            font-size: ${styles.normalFontSize};
+            border: 0.2mm solid #000; 
             vertical-align: top;
             font-weight: bold;
         }
@@ -585,37 +602,37 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         .text-center { text-align: center; }
 
         .totals-section { 
-            margin-top: 10px; 
-            border-top: 2px solid #000; 
-            padding-top: 10px;
+            margin-top: 1.6mm; 
+            border-top: 0.3mm solid #000; 
+            padding-top: 1.6mm;
         }
         
         .total-row { 
             display: flex; 
             justify-content: space-between; 
-            padding: 6px 0; 
-            font-size: ${parseInt(styles.normalFontSize) + 2}px;
+            padding: 1mm 0; 
+            font-size: ${styles.totalRowFontSize};
             font-weight: bold;
         }
         
         .net-total { 
             display: flex; 
             justify-content: space-between; 
-            padding: 10px 5px; 
-            border-top: 3px solid #000; 
-            border-bottom: 3px solid #000;
-            font-size: ${parseInt(styles.normalFontSize) + 6}px;
-            margin-top: 8px; 
+            padding: 1.6mm 1mm; 
+            border-top: 0.5mm solid #000; 
+            border-bottom: 0.5mm solid #000;
+            font-size: ${styles.netTotalFontSize};
+            margin-top: 1.3mm; 
             background: #f9f9f9;
             font-weight: bold;
         }
 
         .footer { 
-            margin-top: 15px; 
+            margin-top: 2.6mm; 
             text-align: center; 
             font-size: ${styles.smallFontSize}; 
-            border-top: 2px dashed #000; 
-            padding-top: 10px; 
+            border-top: 0.3mm dashed #000; 
+            padding-top: 1.6mm; 
             font-weight: bold;
         }
     </style>
@@ -625,4 +642,3 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
 </body>
 </html>`;
 };
-
