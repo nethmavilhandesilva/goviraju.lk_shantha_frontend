@@ -323,7 +323,7 @@ const SalesSummaryFooter = ({ sales, formatDecimal }) => {
 // --- Main Export Component ---
 const initialFormData = { customer_code: "", customer_name: "", supplier_code: "", code: "", item_code: "", item_name: "", weight: "", price_per_kg: "", pack_due: "", total: "", packs: "", given_amount: "", pack_cost: "", telephone_no: "", kuliya: "", };
 const fieldOrder = ["telephone_no", "customer_code_input", "customer_code_select", "supplier_code", "item_code_select", "weight", "price_per_kg_grid_item", "packs", "kuliya"];
-const skipMap = { telephone_no: "customer_code_input", customer_code_input: "supplier_code", customer_code_select: "supplier_code", given_amount: "supplier_code", supplier_code: "item_code_select", item_code_select: "weight", price_per_kg: "packs", price_per_kg_grid_item: "packs", packs: "kuliya",kuliya: null };
+const skipMap = { telephone_no: "customer_code_input", customer_code_input: "supplier_code", customer_code_select: "supplier_code", given_amount: "supplier_code", supplier_code: "item_code_select", item_code_select: "weight", price_per_kg: "packs", price_per_kg_grid_item: "packs", packs: "kuliya", kuliya: null };
 
 export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPrintMode: propSetPrintMode }) {
     const [localPrintMode, setLocalPrintMode] = useState(propPrintMode || 'thermal');
@@ -331,6 +331,36 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     // Use propPrintMode if available, otherwise use local state
     const printMode = propPrintMode || localPrintMode;
     const setPrintMode = propSetPrintMode || setLocalPrintMode;
+    // Add this with your other state declarations
+    const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [isLoadingAllSales, setIsLoadingAllSales] = useState(false);
+    // Add this function to fetch all sales records
+    const fetchAllSalesRecords = async () => {
+        try {
+            setIsLoadingAllSales(true);
+            const response = await api.get('/sales/all-sales-data');
+            const salesData = response.data.sales || response.data.data || response.data;
+
+            // Ensure we have an array
+            const salesArray = Array.isArray(salesData) ? salesData : [];
+
+            setAllSalesRecords(salesArray);
+        } catch (error) {
+            console.error("Failed to fetch all sales records:", error);
+            setAllSalesRecords([]);
+        } finally {
+            setIsLoadingAllSales(false);
+        }
+    };
+    // Add this function after your fetchAllSalesRecords function
+    const refreshAllSalesData = async () => {
+        await fetchAllSalesRecords();
+    };
+    // Add this useEffect after your existing fetchInitialData
+    useEffect(() => {
+        // Fetch all sales records from database
+        fetchAllSalesRecords();
+    }, []);
 
     const refs = {
         telephone_no: useRef(null), customer_code_input: useRef(null), customer_code_select: useRef(null), given_amount: useRef(null),
@@ -637,6 +667,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             });
 
             if (response.data.success) {
+                await fetchAllSalesRecords();
 
 
                 // Full page refresh
@@ -692,7 +723,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                     bulkUpdateSupplierCode: "", // Reset
                     isSubmitting: false
                 });
-
+                await fetchAllSalesRecords();
 
             } else {
                 throw new Error(response.data.message || "Update failed");
@@ -930,133 +961,179 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
     useEffect(() => { fetchInitialData(); refs.customer_code_input.current?.focus(); }, []);
 
-   const handleKeyDown = async (e, currentFieldName) => {
-    if (e.key === "Enter") {
-        e.preventDefault();
+    const handleKeyDown = async (e, currentFieldName) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
 
-        // 1. Handle Given Amount
-        if (currentFieldName === "given_amount") {
-            const success = await handleSubmitGivenAmount(e);
-            if (success) {
-                handlePrintAndClear();
-            }
-            return;
-        }
-
-        // 2. Handle KULIYA field - Submit form when Enter pressed on kuliya
-        if (currentFieldName === "kuliya") {
-            await handleSubmit(e);
-            return;
-        }
-
-        // 3. Logic for TELEPHONE input (Reverse Lookup)
-        if (currentFieldName === "telephone_no") {
-            updateState({ showSavePhoneButton: false });
-            refs.customer_code_input.current?.focus();
-            return;
-        }
-
-        // 4. Logic for CUSTOMER CODE input
-        if (currentFieldName === "customer_code_input") {
-            const code = (formData.customer_code || autoCustomerCode).trim().toUpperCase();
-
-            if (code) {
-                const match = customers.find(c => String(c.short_name).toUpperCase() === code);
-
-                if (match) {
-                    setFormData(prev => ({
-                        ...prev,
-                        customer_name: match.name || ""
-                    }));
-                    fetchLoanAmount(code);
-                } else {
-                    console.log("Customer not found in local data");
-                }
-            }
-
-            refs.supplier_code.current?.focus();
-            return;
-        }
-
-        // 5. Logic for WEIGHT field with validation
-        if (currentFieldName === "weight") {
-            const customerCode = (formData.customer_code || autoCustomerCode).trim();
-            const supplierCode = formData.supplier_code?.trim();
-            const itemCode = formData.item_code?.trim();
-            const areRequiredFieldsEmpty = !customerCode || !supplierCode || !itemCode;
-            const weightValue = formData.weight?.trim();
-
-            if (areRequiredFieldsEmpty) {
-                if (weightValue && weightValue !== "") {
-                    setTimeout(() => {
-                        refs.price_per_kg_grid_item.current?.focus();
-                        refs.price_per_kg_grid_item.current?.select();
-                    }, 50);
+            // 1. Handle Given Amount
+            if (currentFieldName === "given_amount") {
+                const success = await handleSubmitGivenAmount(e);
+                if (success) {
+                    handlePrintAndClear();
                 }
                 return;
             }
 
-            const requiredBeforeWeight = [
-                { key: "customer_code", ref: "customer_code_input", label: "Customer Code" },
-                { key: "supplier_code", ref: "supplier_code", label: "Supplier Code" },
-                { key: "item_code", ref: "item_code_select", label: "Item" }
-            ];
+            // 2. Handle KULIYA field - Submit form when Enter pressed on kuliya
+            if (currentFieldName === "kuliya") {
+                await handleSubmit(e);
+                return;
+            }
 
-            let isValid = true;
-            for (const field of requiredBeforeWeight) {
-                const value = field.key === "customer_code"
-                    ? (formData.customer_code || autoCustomerCode)
-                    : formData[field.key];
+            // 3. Logic for TELEPHONE input
+            if (currentFieldName === "telephone_no") {
+                updateState({ showSavePhoneButton: false });
+                refs.customer_code_input.current?.focus();
+                return;
+            }
 
-                if (value === null || value === undefined || value.toString().trim() === "") {
-                    updateState({ errors: { form: `කරුණාකර ${field.label} ඇතුළත් කරන්න` } });
-                    const targetRef = refs[field.ref];
-                    if (targetRef?.current) {
-                        targetRef.current.focus();
-                        if (!field.ref.includes("select")) targetRef.current.select();
+            // 4. Logic for CUSTOMER CODE input - ALWAYS move to supplier
+            if (currentFieldName === "customer_code_input") {
+                const code = (formData.customer_code || autoCustomerCode).trim().toUpperCase();
+
+                if (code) {
+                    const match = customers.find(c => String(c.short_name).toUpperCase() === code);
+                    if (match) {
+                        setFormData(prev => ({
+                            ...prev,
+                            customer_name: match.name || ""
+                        }));
+                        fetchLoanAmount(code);
                     }
-                    isValid = false;
-                    break;
                 }
-            }
 
-            if (!isValid) {
+                // ALWAYS move to supplier code field (don't stop here)
+                refs.supplier_code.current?.focus();
                 return;
             }
-        }
 
-        // 6. Navigation Logic - Get next field from skipMap
-        let nextFieldName = skipMap[currentFieldName];
-
-        // If no next field defined in skipMap, try fieldOrder
-        if (!nextFieldName && currentFieldName !== "kuliya") {
-            const currentIndex = fieldOrder.indexOf(currentFieldName);
-            let nextIndex = currentIndex + 1;
-            while (nextIndex < fieldOrder.length &&
-                ["customer_code_select", "item_name"].includes(fieldOrder[nextIndex])) {
-                nextIndex++;
-            }
-            nextFieldName = nextIndex < fieldOrder.length ? fieldOrder[nextIndex] : null;
-        }
-
-        // 7. If we're at kuliya or no next field, submit the form
-        if (currentFieldName === "kuliya" || !nextFieldName) {
-            await handleSubmit(e);
-            return;
-        }
-
-        // 8. Focus on next field
-        const nextRef = refs[nextFieldName];
-        if (nextRef?.current) {
-            requestAnimationFrame(() => {
+            // 5. Logic for SUPPLIER CODE input - ALWAYS move to item select
+            if (currentFieldName === "supplier_code") {
+                // ALWAYS move to item select field (don't stop here)
                 setTimeout(() => {
-                    nextRef.current.focus();
-                    if (!nextFieldName.includes("select")) nextRef.current.select();
-                }, 0);
-            });
+                    if (refs.item_code_select.current) {
+                        refs.item_code_select.current.focus();
+                    }
+                }, 50);
+                return;
+            }
+
+            // 6. Logic for ITEM SELECT - ALWAYS move to weight
+            if (currentFieldName === "item_code_select") {
+                // ALWAYS move to weight field (don't stop here)
+                setTimeout(() => {
+                    if (refs.weight.current) {
+                        refs.weight.current.focus();
+                        refs.weight.current.select();
+                    }
+                }, 50);
+                return;
+            }
+
+            // 7. Logic for WEIGHT field - Check validation, stop here if fields empty
+            // 7. Logic for WEIGHT field - Check validation, go back to customer if fields empty
+            if (currentFieldName === "weight") {
+                const customerCode = (formData.customer_code || autoCustomerCode).trim();
+                const supplierCode = formData.supplier_code?.trim();
+                const itemCode = formData.item_code?.trim();
+                const areRequiredFieldsEmpty = !customerCode || !supplierCode || !itemCode;
+
+                if (areRequiredFieldsEmpty) {
+                    // Clear any existing errors
+                    updateState({ errors: {} });
+
+                    // Find the first empty field and focus on it
+                    if (!customerCode) {
+                        // Customer code is empty - go to customer_code_input
+                        setTimeout(() => {
+                            if (refs.customer_code_input.current) {
+                                refs.customer_code_input.current.focus();
+                                refs.customer_code_input.current.select();
+                            }
+                        }, 50);
+                    } else if (!supplierCode) {
+                        // Supplier code is empty - go to supplier_code
+                        setTimeout(() => {
+                            if (refs.supplier_code.current) {
+                                refs.supplier_code.current.focus();
+                                refs.supplier_code.current.select();
+                            }
+                        }, 50);
+                    } else if (!itemCode) {
+                        // Item is empty - go to item_code_select
+                        setTimeout(() => {
+                            if (refs.item_code_select.current) {
+                                refs.item_code_select.current.focus();
+                            }
+                        }, 50);
+                    }
+                    return;
+                }
+
+                // All fields have values, move to price field
+                setTimeout(() => {
+                    if (refs.price_per_kg_grid_item.current) {
+                        refs.price_per_kg_grid_item.current.focus();
+                        refs.price_per_kg_grid_item.current.select();
+                    }
+                }, 50);
+                return;
+            }
+
+            // 8. Logic for PRICE field
+            if (currentFieldName === "price_per_kg_grid_item") {
+                setTimeout(() => {
+                    if (refs.packs.current) {
+                        refs.packs.current.focus();
+                        refs.packs.current.select();
+                    }
+                }, 50);
+                return;
+            }
+
+            // 9. Logic for PACKS field
+            if (currentFieldName === "packs") {
+                setTimeout(() => {
+                    if (refs.kuliya.current) {
+                        refs.kuliya.current.focus();
+                        refs.kuliya.current.select();
+                    }
+                }, 50);
+                return;
+            }
+
+            // 10. Logic for KULIYA field - Submit form
+            if (currentFieldName === "kuliya") {
+                await handleSubmit(e);
+                return;
+            }
+
+            // 11. Default navigation for other fields
+            let nextFieldName = skipMap[currentFieldName];
+
+            if (!nextFieldName && currentFieldName !== "kuliya") {
+                const currentIndex = fieldOrder.indexOf(currentFieldName);
+                let nextIndex = currentIndex + 1;
+                while (nextIndex < fieldOrder.length &&
+                    ["customer_code_select", "item_name"].includes(fieldOrder[nextIndex])) {
+                    nextIndex++;
+                }
+                nextFieldName = nextIndex < fieldOrder.length ? fieldOrder[nextIndex] : null;
+            }
+
+            if (nextFieldName) {
+                const nextRef = refs[nextFieldName];
+                if (nextRef?.current) {
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            nextRef.current.focus();
+                            if (!nextFieldName.includes("select")) nextRef.current.select();
+                        }, 0);
+                    });
+                }
+            }
         }
-    }
-};
+    };
 
     const salesTotal = displayedSales.reduce((sum, s) => sum + ((parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0)), 0);
     const packCostTotal = displayedSales.reduce((sum, s) => sum + ((parseFloat(s.CustomerPackCost) || 0) * (parseFloat(s.packs) || 0)), 0);
@@ -1225,20 +1302,20 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }
 
         setFormData((prev) => ({
-    ...sale,
-    item_name: sale.item_name || "",
-    customer_code: sale.customer_code || "",
-    customer_name: sale.customer_name || "",
-    telephone_no: sale.telephone_no || prev.telephone_no || "",
-    supplier_code: sale.supplier_code || "",
-    item_code: sale.item_code || "",
-    weight: sale.weight || "",
-    price_per_kg: sale.price_per_kg || "",
-    pack_due: fetchedPackDue,
-    total: sale.total || "",
-    packs: sale.packs || "",
-    kuliya: sale.Kuliya || ""  // ← ADD THIS
-}));
+            ...sale,
+            item_name: sale.item_name || "",
+            customer_code: sale.customer_code || "",
+            customer_name: sale.customer_name || "",
+            telephone_no: sale.telephone_no || prev.telephone_no || "",
+            supplier_code: sale.supplier_code || "",
+            item_code: sale.item_code || "",
+            weight: sale.weight || "",
+            price_per_kg: sale.price_per_kg || "",
+            pack_due: fetchedPackDue,
+            total: sale.total || "",
+            packs: sale.packs || "",
+            kuliya: sale.Kuliya || ""  // ← ADD THIS
+        }));
         updateState({
             editingSaleId: sale.id,
             isManualClear: false,
@@ -1276,14 +1353,15 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }, 0);
     };
 
-  const handleClearForm = (clearBillNo = false) => {
-    setFormData(initialFormData);
-    updateState({ editingSaleId: null, loanAmount: 0, isManualClear: false, packCost: 0, customerSearchInput: "", itemSearchInput: "", supplierSearchInput: "", priceManuallyChanged: false, isKuliyaManuallyChanged: false, gridPricePerKg: "", isGivenAmountManuallyTouched: false, selectedSaleForBreakdown: null, ...(clearBillNo && { currentBillNo: null }) });
-};
+    const handleClearForm = (clearBillNo = false) => {
+        setFormData(initialFormData);
+        updateState({ editingSaleId: null, loanAmount: 0, isManualClear: false, packCost: 0, customerSearchInput: "", itemSearchInput: "", supplierSearchInput: "", priceManuallyChanged: false, isKuliyaManuallyChanged: false, gridPricePerKg: "", isGivenAmountManuallyTouched: false, selectedSaleForBreakdown: null, ...(clearBillNo && { currentBillNo: null }) });
+    };
     const handleDeleteRecord = async (saleId) => {
         if (!saleId || !window.confirm("Are you sure you want to delete this sales record?")) return;
         try {
             await api.delete(`${routes.sales}/${saleId}`);
+            await fetchAllSalesRecords();
             updateState({ allSales: allSales.filter(s => s.id !== saleId) });
             if (editingSaleId === saleId) handleClearForm();
         } catch (error) { updateState({ errors: { form: error.response?.data?.message || error.message } }); }
@@ -1401,7 +1479,26 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 }
             }
 
-          const payload = { supplier_code: currentSupplierCode.toUpperCase(), customer_code: customerCode, customer_name: currentCustomerName, item_code: formData.item_code, item_name: formData.item_name, weight: parseFloat(formData.weight) || 0, price_per_kg: parseFloat(formData.price_per_kg) || 0, pack_due: parseFloat(formData.pack_due) || 0, total: parseFloat(formData.total) || 0, packs: parseFloat(formData.packs) || 0, given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null, kuliya: formData.kuliya ? parseFloat(formData.kuliya) : null, ...(billPrintedStatus && { bill_printed: billPrintedStatus }), ...(billNoToUse && { bill_no: billNoToUse }), update_related_price: shouldUpdateRelatedPrice };
+            // REMOVED: await fetchAllSalesRecords(); - DON'T fetch before API call!
+
+            const payload = {
+                supplier_code: currentSupplierCode.toUpperCase(),
+                customer_code: customerCode,
+                customer_name: currentCustomerName,
+                item_code: formData.item_code,
+                item_name: formData.item_name,
+                weight: parseFloat(formData.weight) || 0,
+                price_per_kg: parseFloat(formData.price_per_kg) || 0,
+                pack_due: parseFloat(formData.pack_due) || 0,
+                total: parseFloat(formData.total) || 0,
+                packs: parseFloat(formData.packs) || 0,
+                given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null,
+                kuliya: formData.kuliya ? parseFloat(formData.kuliya) : null,
+                ...(billPrintedStatus && { bill_printed: billPrintedStatus }),
+                ...(billNoToUse && { bill_no: billNoToUse }),
+                update_related_price: shouldUpdateRelatedPrice
+            };
+
             const url = isEditing ? `${routes.sales}/${editingSaleId}` : routes.sales;
             const method = isEditing ? "put" : "post";
 
@@ -1416,6 +1513,9 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             // We update everything in one cycle to prevent multiple re-renders
             setFormData({ ...initialFormData, customer_code: customerCode, customer_name: currentCustomerName, telephone_no: currentTelephone, supplier_code: currentSupplierCode });
             updateState({ allSales: newAllSales, editingSaleId: null, isManualClear: false, isSubmitting: false, priceManuallyChanged: false, gridPricePerKg: "" });
+
+            // ✅ IMPORTANT: Refresh the all-sales table AFTER successful submission
+            await fetchAllSalesRecords();
 
             // Immediate focus (no timeout) for faster data entry workflow
             if (refs.supplier_code.current) {
@@ -2083,14 +2183,12 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         );
     });
     return (
-
         <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
             {isLoading && (<div className="fixed top-0 left-0 right-0 bg-blue-500 text-white py-1 text-center text-sm z-50">Refreshing data...</div>)}
             {state.isPrinting && (<div className="fixed top-0 left-0 right-0 bg-yellow-500 text-black py-1 text-center text-sm z-50">Printing in progress... Please wait</div>)}
 
             <div className="three-column-layout" style={{ opacity: isLoading ? 0.7 : 1, display: 'grid', gridTemplateColumns: '200px 1fr 200px', gap: '16px', padding: '10px', marginTop: '-149px' }}>
                 <div className="left-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto' }}>
-
                     {hasData ? (
                         <CustomerList customers={printedCustomers} type="printed" searchQuery={searchQueries.printed} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, printed: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} isCashFilterActive={state.isCashFilterActive} toggleCashFilter={() => updateState({ isCashFilterActive: !state.isCashFilterActive })} />
                     ) : (
@@ -2107,7 +2205,6 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                     )}
                 </div>
 
-
                 <div className="center-form flex flex-col" style={{ backgroundColor: '#111439ff', padding: '20px', borderRadius: '0.75rem', color: 'white', minHeight: '100vh', height: 'auto', boxSizing: 'border-box', gridColumnStart: 2, gridColumnEnd: 3 }}>
                     {currentUser?.role === 'Admin' ? (
                         <AdminView
@@ -2122,7 +2219,6 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                             <div className="flex-shrink-0">
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div className="w-full flex justify-between items-center">
-                                        {/* --- TEXT SECTION (Moved Up Independently) --- */}
                                         <div style={{ position: 'relative', top: '-20px', display: 'flex', alignItems: 'center', zIndex: 20 }}>
                                             <div className="font-bold text-lg" style={{ color: 'red', fontSize: '1.35rem' }}>
                                                 බිල් අං: {currentBillNo}
@@ -2131,92 +2227,53 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                 <div className="font-bold text-xl whitespace-nowrap" style={{ color: 'red', fontSize: '1.15rem' }}>
                                                     මුළු විකුණුම්: Rs. {formatDecimal(totalSalesValue)}
                                                 </div>
-
-                                                {/* Bulk Printing Checkbox */}
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <input
                                                         type="checkbox"
                                                         id="bulkPrintCheckbox"
                                                         checked={state.isBulkPrintEnabled}
                                                         onChange={(e) => updateState({ isBulkPrintEnabled: e.target.checked })}
-                                                        style={{
-                                                            width: '18px',
-                                                            height: '18px',
-                                                            cursor: 'pointer',
-                                                            accentColor: '#4CAF50'
-                                                        }}
+                                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#4CAF50' }}
                                                     />
-                                                    <label
-                                                        htmlFor="bulkPrintCheckbox"
-                                                        style={{
-                                                            color: 'white',
-                                                            fontSize: '0.9rem',
-                                                            fontWeight: 'bold',
-                                                            cursor: 'pointer',
-                                                            whiteSpace: 'nowrap'
-                                                        }}
-                                                    >
+                                                    <label htmlFor="bulkPrintCheckbox" style={{ color: 'white', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                                         Bulk Printing
                                                     </label>
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* --- PHOTO SECTION (Stays in original position) --- */}
                                         <div className="flex gap-10 items-center justify-start mt-4 mb-4 relative" style={{ minHeight: '150px' }}>
-                                            {/* CUSTOMER PHOTO */}
                                             {state.customerProfilePic && (
-                                                <div onClick={() => handleImageClick('customer')}
-                                                    className="cursor-pointer hover:scale-105 transition-transform"
-                                                    style={{ position: 'absolute', left: '805px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', zIndex: 10 }}>
+                                                <div onClick={() => handleImageClick('customer')} className="cursor-pointer hover:scale-105 transition-transform" style={{ position: 'absolute', left: '805px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', zIndex: 10 }}>
                                                     <span className="text-xs text-gray-400">ගැ</span>
                                                     <div style={{ width: '100px', height: '100px', backgroundColor: 'white', border: '5px solid #1ec139', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                                         <img src={state.customerProfilePic} alt="Customer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                     </div>
                                                 </div>
                                             )}
-
-                                            {/* SUPPLIER PHOTO */}
                                             {state.supplierProfilePic && (
-                                                <div onClick={() => handleImageClick('supplier')}
-                                                    className="cursor-pointer hover:scale-105 transition-transform"
-                                                    style={{ position: 'absolute', left: '940px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                                                <div onClick={() => handleImageClick('supplier')} className="cursor-pointer hover:scale-105 transition-transform" style={{ position: 'absolute', left: '940px', top: '100px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
                                                     <span className="text-xs text-gray-400">සැ</span>
                                                     <div style={{ width: '100px', height: '100px', backgroundColor: 'white', border: '5px solid #3b82f6', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                                         <img src={state.supplierProfilePic} alt="Supplier Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                     </div>
                                                 </div>
                                             )}
-
-                                            <ImagePreviewModal
-                                                isOpen={state.isImageModalOpen}
-                                                onClose={() => updateState({ isImageModalOpen: false })}
-                                                data={state.selectedImageData}
-                                            />
+                                            <ImagePreviewModal isOpen={state.isImageModalOpen} onClose={() => updateState({ isImageModalOpen: false })} data={state.selectedImageData} />
                                         </div>
                                     </div>
-                                    <div
-                                        className="flex items-end gap-3 w-full"
-                                        style={{ marginTop: '-160px' }} // Adjust this number until it looks perfect
-                                    >
-                                        {/* STACK TELEPHONE + CUSTOMER CODE VERTICALLY */}
+
+                                    <div className="flex items-end gap-3 w-full" style={{ marginTop: '-160px' }}>
                                         <div className="flex flex-col gap-2 w-full">
-                                            {/* TELEPHONE NUMBER FIELD - Moved up independently using relative positioning */}
                                             <div className="flex-1 min-w-0" style={{ position: 'relative', top: '-50px' }}>
                                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                     <input id="telephone_no" ref={refs.telephone_no} name="telephone_no" value={formData.telephone_no || ""} onChange={(e) => handleInputChange("telephone_no", e.target.value)} onKeyDown={(e) => handleKeyDown(e, "telephone_no")} type="tel" maxLength="10" pattern="\d*" placeholder="දුරකථන අංකය (10 ඉලක්කම්)" disabled={!!selectedPrintedCustomer} className="px-2 py-1 font-bold text-sm w-full border rounded text-black placeholder-gray-500" style={{ backgroundColor: selectedPrintedCustomer ? '#4a5568' : '#f6f6ff', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box', cursor: selectedPrintedCustomer ? 'not-allowed' : 'text', opacity: selectedPrintedCustomer ? 0.7 : 1, flex: 1 }} />
                                                     {state.showSavePhoneButton && (
-                                                        <button
-                                                            onClick={savePhoneNumber}
-                                                            style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', height: '36px' }}
-                                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
-                                                            onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
-                                                        >
+                                                        <button onClick={savePhoneNumber} style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', height: '36px' }}>
                                                             Save
                                                         </button>
                                                     )}
                                                 </div>
                                             </div>
-                                            {/* CUSTOMER CODE FIELD - Stays in its original position */}
                                             <div className="flex-1 min-w-0" style={{ marginTop: '-40px' }}>
                                                 <input id="customer_code_input" ref={refs.customer_code_input} name="customer_code" value={formData.customer_code || autoCustomerCode} onChange={(e) => handleInputChange("customer_code", e.target.value.toUpperCase())} onKeyDown={(e) => handleKeyDown(e, "customer_code_input")} type="text" placeholder="පාරිභෝගික කේතය" className="px-2 py-1 uppercase font-bold text-sm w-full border rounded bg-white text-black placeholder-gray-500" style={{ backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '36px', fontSize: '1rem', padding: '0 0.75rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
                                             </div>
@@ -2229,22 +2286,18 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="rounded-lg border relative bg-white flex items-center justify-start pl-2 pt-2.5" style={{ flex: "0 0 100px", marginLeft: "5px", height: "36px" }}>
-                                                <span className="absolute left-2 top-1 text-gray-400 text-[10px] pointer-events-none">
-                                                    Loan Amount
-                                                </span>
-                                                <span className="text-black font-bold text-sm">
-                                                    Rs. {loanAmount < 0 ? formatDecimal(Math.abs(loanAmount)) : formatDecimal(loanAmount)}
-                                                </span>
+                                                <span className="absolute left-2 top-1 text-gray-400 text-[10px] pointer-events-none">Loan Amount</span>
+                                                <span className="text-black font-bold text-sm">Rs. {loanAmount < 0 ? formatDecimal(Math.abs(loanAmount)) : formatDecimal(loanAmount)}</span>
                                             </div>
                                         </div>
                                     </div>
+
                                     <div className="w-full" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", columnGap: "8px", alignItems: "end", marginTop: "8px" }}>
                                         <div style={{ gridColumnStart: 1, gridColumnEnd: 3 }}>
                                             <input id="supplier_code" ref={refs.supplier_code} name="supplier_code" value={formData.supplier_code} onChange={(e) => handleInputChange("supplier_code", e.target.value.toUpperCase())} onKeyDown={(e) => handleKeyDown(e, "supplier_code")} type="text" placeholder="සැපයුම්කරු" className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 w-full" style={{ width: "150px", backgroundColor: '#0d0d4d', border: '1px solid #4a5568', color: 'white', height: '44px', fontSize: '1.25rem', padding: '0 1rem', borderRadius: '0.5rem', boxSizing: 'border-box' }} />
                                         </div>
-                                        <div style={{ gridColumnStart: 5, gridColumnEnd: 7, marginLeft: "-120px", marginRight: "-2px" }}>
+                                        <div style={{ gridColumnStart: 5, gridColumnEnd: 7, marginLeft: "-120px", marginRight: "-2px", position: "relative", zIndex: 10000 }}>
                                             {(() => {
-
                                                 const currentFilteredOptions = [...items]
                                                     .filter(item => {
                                                         if (!state.itemSearchInput) return true;
@@ -2258,11 +2311,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                         if (!isANumeric && isBNumeric) return -1;
                                                         return String(a.no).toUpperCase().localeCompare(String(b.no).toUpperCase());
                                                     })
-                                                    .map(item => ({
-                                                        value: item.no,
-                                                        label: `${item.no} - ${item.type}`,
-                                                        item,
-                                                    }));
+                                                    .map(item => ({ value: item.no, label: `${item.no} - ${item.type}`, item }));
 
                                                 return (
                                                     <Select
@@ -2276,132 +2325,76 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                         options={currentFilteredOptions}
                                                         placeholder="භාණ්ඩය"
                                                         defaultMenuIsOpen={false}
-
-                                                        value={
-                                                            formData.item_code
-                                                                ? {
-                                                                    value: formData.item_code,
-                                                                    label: `${formData.item_code} - ${formData.item_name}`,
-                                                                }
-                                                                : null
-                                                        }
-
-                                                        onInputChange={(value, meta) => {
-                                                            if (meta.action === "input-change") {
-                                                                updateState({ itemSearchInput: value.toUpperCase() });
-                                                            }
-                                                        }}
-
+                                                        value={formData.item_code ? { value: formData.item_code, label: `${formData.item_code} - ${formData.item_name}` } : null}
+                                                        onInputChange={(value, meta) => { if (meta.action === "input-change") { updateState({ itemSearchInput: value.toUpperCase() }); } }}
                                                         onChange={(selectedOption) => {
                                                             if (!selectedOption) return;
-
                                                             handleItemSelect(selectedOption);
                                                             updateState({ itemSearchInput: "" });
-
                                                             setTimeout(() => {
                                                                 refs.weight.current?.focus();
                                                                 refs.weight.current?.select();
                                                             }, 50);
                                                         }}
-
                                                         onKeyDown={(e) => {
-                                                            const shortcutKeys = ["+", "0", "1", "2", "3"];
-
-                                                            // 🔥 Shortcut for +, 0, 1, 2, 3
-                                                            if (e.key === "Enter" && shortcutKeys.includes(state.itemSearchInput)) {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-
-                                                                const searchValue = state.itemSearchInput;
-                                                                let itemToUse = null;
-
-                                                                // Check if the entered value exists as an item code in database (for 0-3 only)
-                                                                if (searchValue !== "+") {
-                                                                    // Try to find item with matching item_code in database
-                                                                    const matchingItem = items.find(item =>
-                                                                        String(item.no).toUpperCase() === searchValue.toUpperCase()
-                                                                    );
-
-                                                                    if (matchingItem) {
-                                                                        // Found in database - use this item
-                                                                        itemToUse = {
-                                                                            no: matchingItem.no,
-                                                                            type: matchingItem.type,
-                                                                            pack_due: matchingItem.pack_due,
-                                                                            price_per_kg: matchingItem.price_per_kg
-                                                                        };
-                                                                    }
-                                                                }
-
-                                                                // If no matching item found in database (or it's "+" shortcut), use last sale
-                                                                if (!itemToUse) {
-                                                                    const lastSale = displayedSales[0];
-                                                                    if (lastSale) {
-                                                                        itemToUse = {
-                                                                            no: lastSale.item_code,
-                                                                            type: lastSale.item_name,
-                                                                            pack_due: lastSale.pack_due,
-                                                                            price_per_kg: lastSale.price_per_kg
-                                                                        };
-                                                                    }
-                                                                }
-
-                                                                // Apply the item if found
-                                                                if (itemToUse) {
-                                                                    // Create a mock selected option
-                                                                    const mockOption = {
-                                                                        value: itemToUse.no,
-                                                                        label: `${itemToUse.no} - ${itemToUse.type}`,
-                                                                        item: {
-                                                                            no: itemToUse.no,
-                                                                            type: itemToUse.type,
-                                                                            pack_due: itemToUse.pack_due,
-                                                                            pack_cost: itemToUse.pack_cost,
-                                                                            price_per_kg: itemToUse.price_per_kg
-                                                                        }
-                                                                    };
-
-                                                                    handleItemSelect(mockOption);
-                                                                    updateState({ itemSearchInput: "" });
-
-                                                                    setTimeout(() => {
-                                                                        refs.weight.current?.focus();
-                                                                        refs.weight.current?.select();
-                                                                    }, 50);
-                                                                } else if (searchValue !== "+") {
-                                                                    alert(`No item found with code "${searchValue}" and no previous sales to copy from`);
-                                                                }
-
-                                                                return;
-                                                            }
-
-                                                            // 🔥 Normal Enter behavior for regular item selection
+                                                            // Handle Enter key - Let react-select handle selection when menu is open
                                                             if (e.key === "Enter") {
-                                                                // Let react-select handle it naturally
+                                                                // Don't prevent default if menu might be open
+                                                                // The onChange will handle moving to weight after selection
+                                                                // We'll let react-select do its thing first
                                                                 setTimeout(() => {
-                                                                    if (formData.item_code) {
-                                                                        updateState({ itemSearchInput: "" });
+                                                                    // After a short delay, check if an item was selected
+                                                                    // If no item was selected (formData.item_code is still empty), move to weight
+                                                                    if (!formData.item_code) {
+                                                                        // Check for shortcut keys (+, 0, 1, 2, 3)
+                                                                        const shortcutKeys = ["+", "0", "1", "2", "3"];
+                                                                        if (shortcutKeys.includes(state.itemSearchInput)) {
+                                                                            const searchValue = state.itemSearchInput;
+                                                                            let itemToUse = null;
+                                                                            if (searchValue !== "+") {
+                                                                                const matchingItem = items.find(item => String(item.no).toUpperCase() === searchValue.toUpperCase());
+                                                                                if (matchingItem) {
+                                                                                    itemToUse = { no: matchingItem.no, type: matchingItem.type, pack_due: matchingItem.pack_due, price_per_kg: matchingItem.price_per_kg };
+                                                                                }
+                                                                            }
+                                                                            if (!itemToUse) {
+                                                                                const lastSale = displayedSales[0];
+                                                                                if (lastSale) {
+                                                                                    itemToUse = { no: lastSale.item_code, type: lastSale.item_name, pack_due: lastSale.pack_due, price_per_kg: lastSale.price_per_kg };
+                                                                                }
+                                                                            }
+                                                                            if (itemToUse) {
+                                                                                const mockOption = { value: itemToUse.no, label: `${itemToUse.no} - ${itemToUse.type}`, item: { no: itemToUse.no, type: itemToUse.type, pack_due: itemToUse.pack_due, pack_cost: itemToUse.pack_cost, price_per_kg: itemToUse.price_per_kg } };
+                                                                                handleItemSelect(mockOption);
+                                                                                updateState({ itemSearchInput: "" });
+                                                                            }
+                                                                        }
 
+                                                                        // Move to weight field after a short delay
                                                                         setTimeout(() => {
-                                                                            refs.weight.current?.focus();
-                                                                            refs.weight.current?.select();
-                                                                        }, 50);
+                                                                            if (refs.weight.current) {
+                                                                                refs.weight.current.focus();
+                                                                                refs.weight.current.select();
+                                                                            }
+                                                                        }, 100);
                                                                     }
-                                                                }, 10);
-
+                                                                }, 50);
+                                                                // Don't call preventDefault here - let react-select handle selection
                                                                 return;
                                                             }
                                                         }}
-
-                                                        onMenuOpen={() => {
-                                                            // Don't force-clear highlighting, let react-select manage it naturally
-                                                            // Just ensure the menu opens with default behavior
-                                                        }}
-
                                                         className="react-select-container font-bold text-sm w-full"
-
                                                         styles={{
-                                                            control: base => ({ ...base, height: "44px", minHeight: "44px", fontSize: "1.25rem", backgroundColor: "white", borderColor: "#4a5568", borderRadius: "0.5rem" }),
+                                                            control: base => ({
+                                                                ...base,
+                                                                height: "44px",
+                                                                minHeight: "44px",
+                                                                fontSize: "1.25rem",
+                                                                backgroundColor: "white",
+                                                                borderColor: "#4a5568",
+                                                                borderRadius: "0.5rem",
+                                                                zIndex: 10001
+                                                            }),
                                                             valueContainer: base => ({ ...base, padding: "0 1rem", height: "44px" }),
                                                             input: base => ({ ...base, color: "black", fontSize: "1.25rem" }),
                                                             singleValue: base => ({ ...base, color: "black", fontWeight: "bold", fontSize: "1.25rem" }),
@@ -2411,250 +2404,436 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                                 color: "black",
                                                                 backgroundColor: state.isFocused ? "#e5e7eb" : "white",
                                                                 fontSize: "1rem",
-                                                                ...(state.isSelected && { backgroundColor: "#e5e7eb" })
+                                                                ...(state.isSelected && { backgroundColor: "#e5e7eb" }),
+                                                                zIndex: 10002
                                                             }),
-                                                            menu: base => ({ ...base, marginTop: "4px" })
+                                                            menu: base => ({
+                                                                ...base,
+                                                                marginTop: "4px",
+                                                                zIndex: 10003,
+                                                                position: "absolute"
+                                                            }),
+                                                            menuPortal: base => ({ ...base, zIndex: 10003 })
                                                         }}
-
                                                         openMenuOnClick={true}
                                                         menuPlacement="auto"
+                                                        menuPortalTarget={document.body}
                                                     />
                                                 );
                                             })()}
                                         </div>
-
-                                       {[
-    { id: 'weight', placeholder: "බර", fieldRef: refs.weight },
-    { id: 'price_per_kg_grid_item', placeholder: "මිල", fieldRef: refs.price_per_kg_grid_item },
-    { id: 'packs', placeholder: "අසුරුම්", fieldRef: refs.packs },
-    { id: 'kuliya', placeholder: "කුලිය", fieldRef: refs.kuliya, isReadOnly: false }
-].map(({ id, placeholder, fieldRef, isReadOnly = false }) => (
-    <div key={id} style={{
-        ...(id === 'weight' && { gridColumnStart: 8, gridColumnEnd: 9, marginLeft: "-70px", width: "100px" }),
-        ...(id === 'price_per_kg_grid_item' && { gridColumnStart: 9, gridColumnEnd: 10, marginLeft: "-30px", width: "105px" }),
-        ...(id === 'packs' && { gridColumnStart: 10, gridColumnEnd: 11 }),
-        ...(id === 'kuliya' && { gridColumnStart: 11, gridColumnEnd: 13, marginLeft: "10px" })
-    }}>
-        <input
-            id={id}
-            ref={fieldRef}
-            name={id}
-            type="text"
-            value={id === 'price_per_kg_grid_item' ? gridPricePerKg : formData[id]}
-            onChange={(e) => {
-                if (id === 'price_per_kg_grid_item') {
-                    handleInputChange(id, e.target.value);
-                } else if (id === 'kuliya') {
-                    // ONLY ALLOW '0' - no other numbers
-                    const newValue = e.target.value;
-                    // Allow empty string or single '0'
-                    if (newValue === '' || newValue === '0') {
-                        handleKuliyaChange(newValue);
-                        handleInputChange(id, newValue);
-                    }
-                    // Block any other input (1-9, decimals, etc.)
-                } else if (/^\d*\.?\d*$/.test(e.target.value)) {
-                    handleInputChange(id, e.target.value);
-                    if (id === 'weight' || id === 'packs') {
-                        updateState({ isKuliyaManuallyChanged: false });
-                    }
-                }
-            }}
-            onKeyDown={(e) => {
-                if (id === 'kuliya') {
-                    // Block all number keys except '0'
-                    const blockedKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', 'e', 'E', '+'];
-                    if (blockedKeys.includes(e.key)) {
-                        e.preventDefault();
-                    }
-                    // Allow '0' key to work normally
-                    if (e.key === '0') {
-                        // Allow it
-                    }
-                    // Allow backspace, delete, tab, enter, etc.
-                    const allowedControlKeys = ['Backspace', 'Delete', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
-                    if (allowedControlKeys.includes(e.key)) {
-                        // Allow these
-                    } else if (e.key === '0') {
-                        // Allow '0'
-                    } else if (e.key.length === 1 && !allowedControlKeys.includes(e.key)) {
-                        // Block all other single characters
-                        e.preventDefault();
-                    }
-                } else {
-                    handleKeyDown(e, id);
-                }
-            }}
-            onBlur={(e) => {
-                if (id === 'kuliya') {
-                    // If field is empty or has any value other than '0', set to '0'
-                    if (e.target.value !== '0') {
-                        const zeroValue = '0';
-                        handleKuliyaChange(zeroValue);
-                        handleInputChange(id, zeroValue);
-                    }
-                }
-            }}
-            placeholder={placeholder}
-            readOnly={isReadOnly}
-            className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 text-center"
-            style={{
-                backgroundColor: isReadOnly ? '#e2e8f0' : 'white',
-                borderRadius: '0.5rem',
-                textAlign: 'right',
-                fontSize: '1.125rem',
-                height: '40px',
-                boxSizing: 'border-box',
-                width: '100%'
-            }}
-        />
-    </div>
-))}
+                                        {[
+                                            { id: 'weight', placeholder: "බර", fieldRef: refs.weight },
+                                            { id: 'price_per_kg_grid_item', placeholder: "මිල", fieldRef: refs.price_per_kg_grid_item },
+                                            { id: 'packs', placeholder: "අසුරුම්", fieldRef: refs.packs },
+                                            { id: 'kuliya', placeholder: "කුලිය", fieldRef: refs.kuliya, isReadOnly: false }
+                                        ].map(({ id, placeholder, fieldRef, isReadOnly = false }) => (
+                                            <div key={id} style={{
+                                                ...(id === 'weight' && { gridColumnStart: 8, gridColumnEnd: 9, marginLeft: "-70px", width: "100px" }),
+                                                ...(id === 'price_per_kg_grid_item' && { gridColumnStart: 9, gridColumnEnd: 10, marginLeft: "-30px", width: "105px" }),
+                                                ...(id === 'packs' && { gridColumnStart: 10, gridColumnEnd: 11 }),
+                                                ...(id === 'kuliya' && { gridColumnStart: 11, gridColumnEnd: 13, marginLeft: "10px" })
+                                            }}>
+                                                <input
+                                                    id={id}
+                                                    ref={fieldRef}
+                                                    name={id}
+                                                    type="text"
+                                                    value={id === 'price_per_kg_grid_item' ? gridPricePerKg : formData[id]}
+                                                    onChange={(e) => {
+                                                        if (id === 'price_per_kg_grid_item') {
+                                                            handleInputChange(id, e.target.value);
+                                                        } else if (id === 'kuliya') {
+                                                            const newValue = e.target.value;
+                                                            if (newValue === '' || newValue === '0') {
+                                                                handleKuliyaChange(newValue);
+                                                                handleInputChange(id, newValue);
+                                                            }
+                                                        } else if (/^\d*\.?\d*$/.test(e.target.value)) {
+                                                            handleInputChange(id, e.target.value);
+                                                            if (id === 'weight' || id === 'packs') {
+                                                                updateState({ isKuliyaManuallyChanged: false });
+                                                            }
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (id === 'kuliya') {
+                                                            const blockedKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', 'e', 'E', '+'];
+                                                            if (blockedKeys.includes(e.key)) {
+                                                                e.preventDefault();
+                                                            }
+                                                        } else {
+                                                            handleKeyDown(e, id);
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        if (id === 'kuliya') {
+                                                            if (e.target.value !== '0') {
+                                                                const zeroValue = '0';
+                                                                handleKuliyaChange(zeroValue);
+                                                                handleInputChange(id, zeroValue);
+                                                            }
+                                                        }
+                                                    }}
+                                                    placeholder={placeholder}
+                                                    readOnly={isReadOnly}
+                                                    className="px-2 py-1 uppercase font-bold text-xs border rounded bg-white text-black placeholder-gray-500 text-center"
+                                                    style={{
+                                                        backgroundColor: isReadOnly ? '#e2e8f0' : 'white',
+                                                        borderRadius: '0.5rem',
+                                                        textAlign: 'right',
+                                                        fontSize: '1.125rem',
+                                                        height: '40px',
+                                                        boxSizing: 'border-box',
+                                                        width: '100%'
+                                                    }}
+                                                />
+                                            </div>
+                                        ))}
                                     </div>
                                     <button type="submit" style={{ display: "none" }}></button>
                                 </form>
                                 {errors.form && <div className="mt-6 p-3 bg-red-100 text-red-700 rounded-xl">{errors.form}</div>}
                             </div>
+
+                            {/* MAIN TABLE SECTION - ONLY ONE INSTANCE */}
                             <div className="flex-grow overflow-y-auto mt-1">
-                                {displayedSales.length === 0 ? (<div className="text-center py-8 text-gray-500 border rounded-lg bg-gray-50">විකුණුම් වාර්තා කිසිවක් හමු නොවීය.</div>) : (
-                                    <table
-                                        className="min-w-full border-gray-200 rounded-xl text-sm"
+                                {displayedSales.length > 0 ? (
+                                    <>
+                                        <table className="min-w-full border-gray-200 rounded-xl text-sm" style={{ backgroundColor: '#000000', color: 'white', borderCollapse: 'collapse', margin: '0px 0', width: '100%' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#000000' }}>
+                                                    <th className="px-2 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}></th>
+                                                    {['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (
+                                                        <th key={index} className="px-4 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000' }}>{header}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {displayedSales.map((s, idx) => {
+                                                    const isSelected = state.selectedSalesIds.includes(s.id);
+                                                    return (
+                                                        <tr key={idx} tabIndex={0} className={`text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? 'bg-blue-900' : ''}`} onClick={() => handleEditClick(s)} onContextMenu={(e) => handleRightClick(e, s)} style={{ backgroundColor: isSelected ? '#1e40af' : 'transparent' }}>
+                                                            <td className="px-2 py-2 border text-center" onClick={(e) => e.stopPropagation()}>
+                                                                <input type="checkbox" checked={isSelected} onChange={() => toggleSaleSelection(s.id)} onClick={(e) => e.stopPropagation()} style={{ cursor: 'pointer' }} />
+                                                            </td>
+                                                            <td className="px-4 py-2 border">{s.supplier_code}</td>
+                                                            <td className="px-4 py-2 border">{s.item_code}</td>
+                                                            <td className="px-4 py-2 border">{s.item_name}</td>
+                                                            <td className="px-2 py-2 border">{formatDecimal(s.weight)}</td>
+                                                            <td className="px-2 py-2 border">{formatDecimal(s.price_per_kg)}</td>
+                                                            <td className="px-2 py-2 border">
+                                                                {formatDecimal((parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0) + (parseFloat(s.packs) || 0) * (parseFloat(s.pack_due) || 0))}
+                                                            </td>
+                                                            <td className="px-2 py-2 border">{s.packs}</td>
+                                                            <td className="px-2 py-2 border text-center">
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteRecord(s.id); }} className="text-black font-bold p-1 rounded-full bg-white hover:bg-gray-200">🗑️</button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+
+                                        <ContextMenu show={state.bulkUpdateContextMenu.show} onClose={closeContextMenu} onUpdate={handleBulkUpdateCustomer} selectionCriteria={state.selectionCriteria} selectedCount={state.selectedSalesIds.length} />
+
+                                        {displayedSales.length > 0 && (<SalesSummaryFooter sales={displayedSales} formatDecimal={formatDecimal} />)}
+
+                                        <div className="flex gap-4 items-start">
+                                            <ItemSummary sales={displayedSales} formatDecimal={formatDecimal} />
+                                            <BreakdownDisplay sale={selectedSaleForBreakdown} formatDecimal={formatDecimal} />
+                                        </div>
+
+                                        <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
+                                            {displayedSales.length > 0 && (
+                                                <div className="text-2xl font-bold" style={{ color: 'red' }}>
+                                                    (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div
                                         style={{
-                                            backgroundColor: '#000000',
-                                            color: 'white',
-                                            borderCollapse: 'collapse',
-                                            margin: '0px 0',
-                                            width: '100%',
+                                            height: "650px", // Fixed full section height
+                                            display: "flex",
+                                            flexDirection: "column"
                                         }}
                                     >
-                                        <thead>
-                                            <tr style={{ backgroundColor: '#000000' }}>
-                                                {/* ❌ Header checkbox removed */}
+                                        {/* Header */}
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                marginBottom: "8px",
+                                                padding: "0 4px",
+                                                flexShrink: 0
+                                            }}
+                                        >
+                                            <span
+                                                style={{
+                                                    color: "#888",
+                                                    fontSize: "13px",
+                                                    fontWeight: "500"
+                                                }}
+                                            >
+                                                📋 All Sales Records ({allSalesRecords.length} total)
+                                            </span>
 
-                                                <th className="px-2 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}>
-                                                </th>
+                                            {isLoadingAllSales && (
+                                                <span
+                                                    style={{
+                                                        color: "#ffd700",
+                                                        fontSize: "12px"
+                                                    }}
+                                                >
+                                                    Loading...
+                                                </span>
+                                            )}
+                                        </div>
 
-                                                {['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (
-                                                    <th
-                                                        key={index}
-                                                        className="px-4 py-2 border"
-                                                        style={{ backgroundColor: '#f5fafb', color: '#000000' }}
-                                                    >
-                                                        {header}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-
-                                        <tbody>
-                                            {displayedSales.map((s, idx) => {
-                                                const isSelected = state.selectedSalesIds.includes(s.id);
-
-                                                return (
+                                        {/* Scrollable Table Container */}
+                                        <div
+                                            style={{
+                                                flex: 1,
+                                                overflowY: "auto",
+                                                overflowX: "auto",
+                                                border: "1px solid #4a5568",
+                                                borderRadius: "0.5rem",
+                                                backgroundColor: "#1a1a2e",
+                                                minHeight: 0
+                                            }}
+                                        >
+                                            <table
+                                                style={{
+                                                    width: "100%",
+                                                    borderCollapse: "collapse",
+                                                    color: "white",
+                                                    fontSize: "13px",
+                                                    marginTop: "-6px"
+                                                }}
+                                            >
+                                                {/* Transparent Sticky Header */}
+                                                <thead
+                                                    style={{
+                                                        position: "sticky",
+                                                        top: 0,
+                                                        zIndex: 1, // lower than dropdown
+                                                        background: "transparent",
+                                                        backdropFilter: "blur(1px)"
+                                                    }}
+                                                >
                                                     <tr
-                                                        key={idx}
-                                                        tabIndex={0}
-                                                        className={`text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? 'bg-blue-900' : ''
-                                                            }`}
-                                                        onClick={() => handleEditClick(s)}
-                                                        onContextMenu={(e) => handleRightClick(e, s)}
-                                                        style={{ backgroundColor: isSelected ? '#1e40af' : 'transparent' }}
+                                                        style={{
+                                                            backgroundColor: "transparent",
+                                                            borderBottom: "1px solid rgba(255,255,255,0.1)"
+                                                        }}
                                                     >
-                                                        {/* ✅ Checkbox column (single click works properly) */}
-                                                        <td
-                                                            className="px-2 py-2 border text-center"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isSelected}
-                                                                onChange={() => toggleSaleSelection(s.id)} // ✅ fixed
-                                                                onClick={(e) => e.stopPropagation()} // ✅ prevents row click
-                                                                style={{ cursor: 'pointer' }}
-                                                            />
-                                                        </td>
-
-                                                        <td className="px-4 py-2 border">{s.supplier_code}</td>
-                                                        <td className="px-4 py-2 border">{s.item_code}</td>
-                                                        <td className="px-4 py-2 border">{s.item_name}</td>
-                                                        <td className="px-2 py-2 border">{formatDecimal(s.weight)}</td>
-                                                        <td className="px-2 py-2 border">{formatDecimal(s.price_per_kg)}</td>
-                                                        <td className="px-2 py-2 border">
-                                                            {formatDecimal(
-                                                                (parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0) +
-                                                                (parseFloat(s.packs) || 0) * (parseFloat(s.pack_due) || 0)
-                                                            )}
-                                                        </td>
-                                                        <td className="px-2 py-2 border">{s.packs}</td>
-
-                                                        <td className="px-2 py-2 border text-center">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteRecord(s.id);
-                                                                }}
-                                                                className="text-black font-bold p-1 rounded-full bg-white hover:bg-gray-200"
-                                                            >
-                                                                🗑️
-                                                            </button>
-                                                        </td>
+                                                        <th style={{ padding: "10px 8px", textAlign: "left", fontWeight: "bold" }}>Bill No</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "left", fontWeight: "bold" }}>Customer</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "left", fontWeight: "bold" }}>Supplier</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "left", fontWeight: "bold" }}>Item Code</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "left", fontWeight: "bold" }}>Item Name</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "right", fontWeight: "bold" }}>Weight (kg)</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "right", fontWeight: "bold" }}>Price/kg</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "right", fontWeight: "bold" }}>Packs</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "right", fontWeight: "bold" }}>Kuliya</th>
+                                                        <th style={{ padding: "10px 8px", textAlign: "right", fontWeight: "bold" }}>Total</th>
                                                     </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                )}
-                                {/* Context Menu */}
+                                                </thead>
 
-                                <ContextMenu
-                                    show={state.bulkUpdateContextMenu.show}
-                                    onClose={closeContextMenu}
-                                    onUpdate={handleBulkUpdateCustomer}
-                                    selectionCriteria={state.selectionCriteria}
-                                    selectedCount={state.selectedSalesIds.length}
-                                />
+                                                <tbody>
+                                                    {isLoadingAllSales ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan="10"
+                                                                style={{
+                                                                    padding: "40px",
+                                                                    textAlign: "center",
+                                                                    color: "#888"
+                                                                }}
+                                                            >
+                                                                Loading sales records...
+                                                            </td>
+                                                        </tr>
+                                                    ) : allSalesRecords.length === 0 ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan="10"
+                                                                style={{
+                                                                    padding: "40px",
+                                                                    textAlign: "center",
+                                                                    color: "#888",
+                                                                    fontStyle: "italic"
+                                                                }}
+                                                            >
+                                                                No sales records found in database.
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        allSalesRecords.map((sale, index) => (
+                                                            <tr
+                                                                key={sale.id || index}
+                                                                onClick={() => handleEditClick(sale)}
+                                                                style={{
+                                                                    borderBottom: "1px solid #2a2a3e",
+                                                                    cursor: "pointer",
+                                                                    backgroundColor:
+                                                                        editingSaleId === sale.id
+                                                                            ? "#1e3a5f"
+                                                                            : "transparent",
+                                                                    transition: "background-color 0.2s"
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    if (editingSaleId !== sale.id) {
+                                                                        e.currentTarget.style.backgroundColor = "#252540";
+                                                                    }
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    if (editingSaleId !== sale.id) {
+                                                                        e.currentTarget.style.backgroundColor = "transparent";
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <td style={{ padding: "8px" }}>
+                                                                    {sale.bill_no || "-"}
+                                                                </td>
 
-                                {/* Click outside to close context menu */}
+                                                                <td style={{ padding: "8px", fontWeight: "500" }}>
+                                                                    {sale.customer_code || "-"}
+                                                                </td>
 
-                                {displayedSales.length > 0 && (<SalesSummaryFooter sales={displayedSales} formatDecimal={formatDecimal} />)}
-                                <div
-                                    className="flex items-center space-x-3 overflow-x-auto whitespace-nowrap"
-                                    style={{ marginTop: "-75px" }}  // adjust value as needed
-                                >
-                                    <div style={{ marginLeft: '660px', marginTop: '-2px', display: 'none' }}>
-                                        <input id="given_amount" ref={refs.given_amount} name="given_amount_field" type="tel" inputMode="numeric" autoComplete="new-password" value={formData.given_amount ? Number(formData.given_amount).toLocaleString() : ""} onChange={(e) => handleInputChange("given_amount", e.target.value.replace(/,/g, ""))} onKeyDown={(e) => handleKeyDown(e, "given_amount")} placeholder="දුන් මුදල" className="px-4 py-2 border rounded-xl text-right bg-white text-black" style={{ width: "180px", fontWeight: "bold", fontSize: "1.1rem" }} />
-                                    </div>
-                                </div>
-                                <div className="flex gap-4 items-start"><ItemSummary sales={displayedSales} formatDecimal={formatDecimal} /><BreakdownDisplay sale={selectedSaleForBreakdown} formatDecimal={formatDecimal} /></div>
-                                <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                    {/* Red Total Text */}
-                                    <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                        {displayedSales.length > 0 && (
-                                            <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                                {/* Red Total Text */}
-                                                <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
-                                                    <div className="text-2xl font-bold" style={{ color: 'red' }}>
-                                                        (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
-                                                    </div>
-                                                </div>
+                                                                <td style={{ padding: "8px" }}>
+                                                                    {sale.supplier_code || "-"}
+                                                                </td>
+
+                                                                <td style={{ padding: "8px" }}>
+                                                                    {sale.item_code || "-"}
+                                                                </td>
+
+                                                                <td
+                                                                    style={{
+                                                                        padding: "8px",
+                                                                        maxWidth: "150px",
+                                                                        overflow: "hidden",
+                                                                        textOverflow: "ellipsis",
+                                                                        whiteSpace: "nowrap"
+                                                                    }}
+                                                                    title={sale.item_name}
+                                                                >
+                                                                    {sale.item_name || "-"}
+                                                                </td>
+
+                                                                <td style={{ padding: "8px", textAlign: "right" }}>
+                                                                    {formatDecimal(sale.weight)}
+                                                                </td>
+
+                                                                <td style={{ padding: "8px", textAlign: "right" }}>
+                                                                    {formatDecimal(sale.price_per_kg)}
+                                                                </td>
+
+                                                                <td style={{ padding: "8px", textAlign: "right" }}>
+                                                                    {sale.packs || "0"}
+                                                                </td>
+
+                                                                <td
+                                                                    style={{
+                                                                        padding: "8px",
+                                                                        textAlign: "right",
+                                                                        color:
+                                                                            sale.Kuliya > 0
+                                                                                ? "#ffd700"
+                                                                                : "#888"
+                                                                    }}
+                                                                >
+                                                                    {formatDecimal(sale.Kuliya || 0)}
+                                                                </td>
+
+                                                                <td
+                                                                    style={{
+                                                                        padding: "8px",
+                                                                        textAlign: "right",
+                                                                        fontWeight: "bold",
+                                                                        color: "#4ade80"
+                                                                    }}
+                                                                >
+                                                                    {formatDecimal(sale.total || 0)}
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Footer Summary */}
+                                        {allSalesRecords.length > 0 && !isLoadingAllSales && (
+                                            <div
+                                                style={{
+                                                    padding: "12px",
+                                                    backgroundColor: "#0f0f23",
+                                                    borderRadius: "0.5rem",
+                                                    display: "flex",
+                                                    justifyContent: "space-between",
+                                                    marginTop: "6px",
+                                                    flexShrink: 0
+                                                }}
+                                            >
+                                                <span style={{ color: "#888", fontSize: "12px" }}>
+                                                    Total Records: {allSalesRecords.length}
+                                                </span>
+
+                                                <span style={{ color: "#888", fontSize: "12px" }}>
+                                                    Total Weight:{" "}
+                                                    {formatDecimal(
+                                                        allSalesRecords.reduce(
+                                                            (sum, s) => sum + (parseFloat(s.weight) || 0),
+                                                            0
+                                                        )
+                                                    )}{" "}
+                                                    kg
+                                                </span>
+
+                                                <span
+                                                    style={{
+                                                        color: "#4ade80",
+                                                        fontSize: "12px",
+                                                        fontWeight: "bold"
+                                                    }}
+                                                >
+                                                    Total Value: Rs.{" "}
+                                                    {formatDecimal(
+                                                        allSalesRecords.reduce(
+                                                            (sum, s) => sum + (parseFloat(s.total) || 0),
+                                                            0
+                                                        )
+                                                    )}
+                                                </span>
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
                 </div>
 
                 <div className="right-sidebar" style={{ backgroundColor: '#1ec139ff', borderRadius: '0.75rem', maxHeight: '80.5vh', overflowY: 'auto', gridColumnStart: 3, gridColumnEnd: 4 }}>
-                    {hasData ? (<CustomerList customers={unprintedCustomers} type="unprinted" searchQuery={searchQueries.unprinted} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, unprinted: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} />) : (
+                    {hasData ? (
+                        <CustomerList customers={unprintedCustomers} type="unprinted" searchQuery={searchQueries.unprinted} onSearchChange={(value) => updateState({ searchQueries: { ...searchQueries, unprinted: value } })} selectedPrintedCustomer={selectedPrintedCustomer} selectedUnprintedCustomer={selectedUnprintedCustomer} handleCustomerClick={handleCustomerClick} formatDecimal={formatDecimal} allSales={allSales} lastUpdate={state.forceUpdate || state.windowFocused} />
+                    ) : (
                         <div className="w-full shadow-xl rounded-xl overflow-y-auto border border-black p-4 text-center" style={{ backgroundColor: "#1ec139ff", maxHeight: "80.5vh" }}>
-                            <div style={{ backgroundColor: "#006400" }} className="p-1 rounded-t-xl"><h2 className="font-bold text-white mb-1 whitespace-nowrap text-center" style={{ fontSize: '14px' }}>මුද්‍රණය නොකළ</h2></div><div className="py-4"><p className="text-gray-700">මුද්‍රණය නොකළ විකුණුම් කිසිවක් සොයාගත නොහැක</p></div>
+                            <div style={{ backgroundColor: "#006400" }} className="p-1 rounded-t-xl">
+                                <h2 className="font-bold text-white mb-1 whitespace-nowrap text-center" style={{ fontSize: '14px' }}>මුද්‍රණය නොකළ</h2>
+                            </div>
+                            <div className="py-4">
+                                <p className="text-gray-700">මුද්‍රණය නොකළ විකුණුම් කිසිවක් සොයාගත නොහැක</p>
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
         </div>
-
     );
 }

@@ -6,6 +6,8 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
     const [totalKuliya, setTotalKuliya] = useState(0);
     const [currentDate, setCurrentDate] = useState('');
     const [recordCount, setRecordCount] = useState(0);
+    const [numberOfWorkers, setNumberOfWorkers] = useState(1);
+    const [perPersonKuliya, setPerPersonKuliya] = useState(0);
     const modalContentRef = useRef(null);
 
     useEffect(() => {
@@ -13,6 +15,15 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
             fetchTodaysKuliya();
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        // Calculate per person kuliya whenever totalKuliya or numberOfWorkers changes
+        if (totalKuliya > 0 && numberOfWorkers > 0) {
+            setPerPersonKuliya(totalKuliya / numberOfWorkers);
+        } else {
+            setPerPersonKuliya(0);
+        }
+    }, [totalKuliya, numberOfWorkers]);
 
     const fetchTodaysKuliya = async () => {
         setLoading(true);
@@ -36,6 +47,13 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
         }
     };
 
+    const handleNumberOfWorkersChange = (e) => {
+        const value = parseInt(e.target.value) || 0;
+        if (value >= 0) {
+            setNumberOfWorkers(value);
+        }
+    };
+
     const handlePrint = () => {
         const printWindow = window.open('', '_blank');
         const modalContent = modalContentRef.current;
@@ -54,7 +72,7 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                             margin: 0;
                         }
                         .print-container {
-                            max-width: 400px;
+                            max-width: 500px;
                             margin: 0 auto;
                             text-align: center;
                         }
@@ -83,6 +101,23 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                             color: #666;
                             margin-top: 5px;
                         }
+                        .per-person-section {
+                            background-color: #e8f5e9;
+                            padding: 20px;
+                            border-radius: 10px;
+                            margin: 20px 0;
+                        }
+                        .per-person-amount {
+                            font-size: 36px;
+                            font-weight: bold;
+                            color: #ff9800;
+                            margin: 10px 0;
+                        }
+                        .worker-count {
+                            font-size: 16px;
+                            color: #555;
+                            margin: 10px 0;
+                        }
                         .record-count {
                             background-color: #17a2b8;
                             color: white;
@@ -101,6 +136,10 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                         }
                         .no-data {
                             color: #999;
+                            margin: 20px 0;
+                        }
+                        .divider {
+                            border-top: 1px dashed #ddd;
                             margin: 20px 0;
                         }
                         @media print {
@@ -131,6 +170,20 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                             සම්පූර්ණ කුලිය (Total Kuliya)
                         </div>
                         
+                        ${numberOfWorkers > 0 ? `
+                            <div class="per-person-section">
+                                <div class="worker-count">
+                                    👥 සේවක සංඛ්‍යාව: ${numberOfWorkers}
+                                </div>
+                                <div class="per-person-amount">
+                                    රු. ${formatNumber(perPersonKuliya)}
+                                </div>
+                                <div class="amount-label">
+                                    එක් සේවකයෙකුට (Per Person)
+                                </div>
+                            </div>
+                        ` : ''}
+                        
                         <div class="record-count">
                             🧾 ගනුදෙනු ගණන: ${recordCount}
                         </div>
@@ -138,6 +191,13 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                         ${recordCount === 0 ? `
                             <div class="no-data">
                                 ℹ️ අද දින කුලිය ගෙවූ ගනුදෙනු නොමැත
+                            </div>
+                        ` : ''}
+                        
+                        ${numberOfWorkers > 0 && perPersonKuliya > 0 ? `
+                            <div class="divider"></div>
+                            <div style="font-size: 12px; color: #666;">
+                                * කුලිය සේවක ${numberOfWorkers} දෙනෙකුට බෙදා දෙන ලදී
                             </div>
                         ` : ''}
                         
@@ -157,6 +217,7 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
     };
 
     const formatDate = (dateString) => {
+        if (!dateString) return new Date().toLocaleDateString('si-LK');
         const date = new Date(dateString);
         return date.toLocaleDateString('si-LK');
     };
@@ -172,7 +233,7 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
 
     return (
         <div className="modal show d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
-            <div className="modal-dialog modal-sm" role="document" style={{ marginTop: '100px' }}>
+            <div className="modal-dialog modal-md" role="document" style={{ marginTop: '100px', maxWidth: '500px' }}>
                 <div className="modal-content" ref={modalContentRef}>
                     <div className="modal-header" style={{ backgroundColor: '#004d00', color: 'white', padding: '15px' }}>
                         <h5 className="modal-title" style={{ fontWeight: 'bold' }}>
@@ -210,6 +271,40 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
 
+                                {/* Number of Workers Input */}
+                                <div className="mb-4">
+                                    <label className="form-label" style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                        👥 සේවක සංඛ්‍යාව (Number of Workers)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        className="form-control text-center"
+                                        value={numberOfWorkers}
+                                        onChange={handleNumberOfWorkersChange}
+                                        min="1"
+                                        step="1"
+                                        style={{
+                                            width: '120px',
+                                            margin: '0 auto',
+                                            fontSize: '18px',
+                                            fontWeight: 'bold',
+                                            textAlign: 'center'
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Per Person Kuliya */}
+                                {numberOfWorkers > 0 && totalKuliya > 0 && (
+                                    <div className="mb-4 p-3 rounded" style={{ backgroundColor: '#e8f5e9' }}>
+                                        <div className="text-muted mb-2" style={{ fontSize: '13px' }}>
+                                            එක් සේවකයෙකුට (Per Person)
+                                        </div>
+                                        <div className="fw-bold" style={{ fontSize: '32px', color: '#ff9800' }}>
+                                            රු. {formatNumber(perPersonKuliya)}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Transactions Count */}
                                 <div className="mt-3">
                                     <span className="badge bg-info" style={{ fontSize: '14px', padding: '8px 15px' }}>
@@ -229,7 +324,7 @@ const TodaysKuliyaModal = ({ isOpen, onClose }) => {
                         )}
                     </div>
 
-                    <div className="modal-footer" style={{ justifyContent: 'center' }}>
+                    <div className="modal-footer" style={{ justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
                         <button 
                             type="button" 
                             className="btn btn-secondary" 
