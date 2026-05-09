@@ -127,11 +127,14 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     <body>
         <div class="receipt-main">
             <div class="header">
-                <div style="font-size: 22px; font-weight: bold;">මහතුන් වෙළඳසැල</div>
-                <div style="margin: 10px 0;">
-                    <span class="badge">F2-1</span>
-                    <span class="badge">${customerName.toUpperCase()}</span>
-                </div>
+         <span class="badge" style="position: relative; top: 3px;">F2-1</span>
+             <div style="margin-top: 8px; font-size: 22px; font-weight: bold;">
+    මහතුන් වෙළඳසැල
+</div>
+
+<div style="margin: 5px 0 10px 0;">
+    <span class="badge">${customerName.toUpperCase()}</span>
+</div>
                 <div style="font-size: 14px; font-weight: bold;">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
             </div>
 
@@ -179,8 +182,17 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
             </table>
 
             <table class="total-table">
-                ${totalPackCost > 0 ? `<tr><td>මලු:</td><td style="text-align:right;">${formatNumber(totalPackCost.toFixed(2))}</td></tr>` : ''}
-                ${totalKuliyaSum > 0 ? `<tr><td>කුලිය:</td><td style="text-align:right;">${formatNumber(totalKuliyaSum.toFixed(2))}</td></tr>` : ''}
+                ${totalPackCost > 0 ? `
+<tr>
+    <td style="font-size:14px;">මලු:</td>
+    <td style="text-align:right;">${formatNumber(totalPackCost.toFixed(2))}</td>
+</tr>` : ''}
+
+${totalKuliyaSum > 0 ? `
+<tr>
+    <td style="font-size:14px;">කුලිය:</td>
+    <td style="text-align:right;">${formatNumber(totalKuliyaSum.toFixed(2))}</td>
+</tr>` : ''}
                 <tr>
                     <td style="padding-top:10px;">එකතුව:</td>
                     <td style="text-align:right; padding-top:10px;">
@@ -374,10 +386,14 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
                 <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
             </div>
             
+            <div class="info-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 4.6mm; font-weight: bold;">F2-1</div>
+                <div style="font-size: 4.6mm; font-weight: bold;">ගණුම්කරු: ${(customerName || '').toUpperCase()}</div>
+            </div>
+            
             <div class="info-row">
-                <div>ගණුම්කරු: ${(customerName || '').toUpperCase()}</div>
-                <div>අංකය: ${billNo}</div>
-                <div>දිනය: ${date}</div>
+                <div style="font-size: 3.6mm;">අංකය: ${billNo}</div>
+                <div style="font-size: 3.6mm;">දිනය: ${date}</div>
             </div>
             ` : `
             <div class="header-continued">
@@ -459,10 +475,14 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
                     <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
                 </div>
                 
+                <div class="info-row" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 4.6mm; font-weight: bold;">F2-1</div>
+                    <div style="font-size: 4.6mm; font-weight: bold;">ගණුම්කරු: ${(customerName || '').toUpperCase()}</div>
+                </div>
+                
                 <div class="info-row">
-                    <div>කේතය: ${(customerName || '').toUpperCase()}</div>
-                    <div>අංකය: ${billNo}</div>
-                    <div>දිනය: ${date}</div>
+                    <div style="font-size: 3.6mm;">අංකය: ${billNo}</div>
+                    <div style="font-size: 3.6mm;">දිනය: ${date}</div>
                 </div>
                 
                 <div style="text-align: center; padding: 6.5mm; font-size: ${styles.normalFontSize}; font-weight: bold;">
