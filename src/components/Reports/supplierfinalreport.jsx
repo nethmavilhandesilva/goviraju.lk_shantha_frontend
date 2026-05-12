@@ -95,8 +95,50 @@ const SupplierReport = () => {
         fetchReport();
     }, []);
 
+    // Calculate Grand Total
+    const calculateGrandTotal = () => {
+        let grandTotal = 0;
+        
+        // Calculate total for non-billed records
+        Object.keys(filteredReportData.nonBilled).forEach(supplierCode => {
+            grandTotal += filteredReportData.nonBilled[supplierCode].reduce((sum, item) => 
+                sum + parseFloat(item.SupplierTotal || 0), 0
+            );
+        });
+        
+        // Calculate total for billed records
+        Object.keys(filteredReportData.billed).forEach(supplierCode => {
+            grandTotal += filteredReportData.billed[supplierCode].reduce((sum, item) => 
+                sum + parseFloat(item.SupplierTotal || 0), 0
+            );
+        });
+        
+        return grandTotal;
+    };
+
+    // Calculate Grand Profit
+    const calculateGrandProfit = () => {
+        let grandProfit = 0;
+        
+        // Calculate profit for non-billed records
+        Object.keys(filteredReportData.nonBilled).forEach(supplierCode => {
+            grandProfit += filteredReportData.nonBilled[supplierCode].reduce((sum, item) => 
+                sum + parseFloat(item.profit || 0), 0
+            );
+        });
+        
+        // Calculate profit for billed records
+        Object.keys(filteredReportData.billed).forEach(supplierCode => {
+            grandProfit += filteredReportData.billed[supplierCode].reduce((sum, item) => 
+                sum + parseFloat(item.profit || 0), 0
+            );
+        });
+        
+        return grandProfit;
+    };
+
     // Render Table Function
-    const renderTableBlock = (groups) => {
+    const renderTableBlock = (groups, type) => {
         const groupKeys = Object.keys(groups);
         if (groupKeys.length === 0) return null;
 
@@ -124,7 +166,7 @@ const SupplierReport = () => {
                                     <th className="text-end">මිල</th>
                                     <th className="text-end">එකතුව</th>
                                     <th className="text-end">ලාභය</th>
-                                 </tr>
+                                </tr>
                             </thead>
                             <tbody>
                                 {groups[key].map((sale, idx) => (
@@ -148,7 +190,9 @@ const SupplierReport = () => {
                                     <td className="text-end fw-bold text-primary">
                                         {groups[key].reduce((sum, item) => sum + parseFloat(item.SupplierTotal || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td></td>
+                                    <td className="text-end fw-bold text-success">
+                                        {groups[key].reduce((sum, item) => sum + parseFloat(item.profit || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -157,6 +201,9 @@ const SupplierReport = () => {
             </div>
         ));
     };
+
+    const grandTotal = calculateGrandTotal();
+    const grandProfit = calculateGrandProfit();
 
     return (
         <div style={{ display: 'flex' }}>
@@ -270,7 +317,7 @@ const SupplierReport = () => {
                         {Object.keys(filteredReportData.nonBilled).length > 0 && (
                             <>
                                 <h4 className="fw-bold">බිල් නොකළ වාර්තා</h4>
-                                {renderTableBlock(filteredReportData.nonBilled)}
+                                {renderTableBlock(filteredReportData.nonBilled, 'nonBilled')}
                             </>
                         )}
 
@@ -278,7 +325,7 @@ const SupplierReport = () => {
                             <>
                                 <hr />
                                 <h4 className="fw-bold">බිල් කළ වාර්තා</h4>
-                                {renderTableBlock(filteredReportData.billed)}
+                                {renderTableBlock(filteredReportData.billed, 'billed')}
                             </>
                         )}
 
@@ -286,6 +333,43 @@ const SupplierReport = () => {
                          Object.keys(filteredReportData.nonBilled).length === 0 && (
                             <div className="alert alert-info">
                                 {searchSupplierBillNo ? `"${searchSupplierBillNo}" සඳහා වාර්තා හමු නොවිණි` : 'No records found'}
+                            </div>
+                        )}
+
+                        {/* GRAND TOTAL SECTION */}
+                        {(Object.keys(filteredReportData.billed).length > 0 || 
+                          Object.keys(filteredReportData.nonBilled).length > 0) && (
+                            <div className="card shadow mt-4 mb-3 border-0" style={{ backgroundColor: '#f8f9fa' }}>
+                                <div className="card-body">
+                                    <div className="row">
+                                        <div className="col-md-6 offset-md-6">
+                                            <table className="table table-bordered mb-0">
+                                                <tbody>
+                                                    <tr style={{ backgroundColor: '#e9ecef' }}>
+                                                        <td className="fw-bold fs-5">සම්පූර්ණ එකතුව (Grand Total):</td>
+                                                        <td className="text-end fw-bold fs-5 text-primary">
+                                                            {grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                    <tr style={{ backgroundColor: '#e9ecef' }}>
+                                                        <td className="fw-bold fs-5">සම්පූර්ණ ලාභය (Grand Profit):</td>
+                                                        <td className="text-end fw-bold fs-5 text-success">
+                                                            {grandProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                    {(searchSupplierBillNo || startDate || endDate) && (
+                                                        <tr style={{ backgroundColor: '#fff3cd' }}>
+                                                            <td colSpan="2" className="text-muted small">
+                                                                <i className="bi bi-info-circle"></i> 
+                                                                පෙරහනට අනුව ගණනය කරන ලදී (Filtered results)
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </>
