@@ -987,29 +987,32 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 return;
             }
 
-            // 4. Logic for CUSTOMER CODE input - ALWAYS move to supplier
+            // 4. Logic for CUSTOMER CODE input
             if (currentFieldName === "customer_code_input") {
                 const code = (formData.customer_code || autoCustomerCode).trim().toUpperCase();
 
-                if (code) {
-                    const match = customers.find(c => String(c.short_name).toUpperCase() === code);
-                    if (match) {
-                        setFormData(prev => ({
-                            ...prev,
-                            customer_name: match.name || ""
-                        }));
-                        fetchLoanAmount(code);
-                    }
+                // IF EMPTY: Smoothly pass the cursor forward to supplier_code anyway
+                if (!code) {
+                    refs.supplier_code.current?.focus();
+                    return;
                 }
 
-                // ALWAYS move to supplier code field (don't stop here)
+                // If filled, process profile mappings normally
+                const match = customers.find(c => String(c.short_name).toUpperCase() === code);
+                if (match) {
+                    setFormData(prev => ({ ...prev, customer_name: match.name || "" }));
+                    fetchLoanAmount(code);
+                }
+
                 refs.supplier_code.current?.focus();
                 return;
             }
 
-            // 5. Logic for SUPPLIER CODE input - ALWAYS move to item select
+            // 5. Logic for SUPPLIER CODE input
             if (currentFieldName === "supplier_code") {
-                // ALWAYS move to item select field (don't stop here)
+                const supplierCode = formData.supplier_code?.trim().toUpperCase();
+
+                // IF EMPTY or filled: Pass focus seamlessly to item selection container
                 setTimeout(() => {
                     if (refs.item_code_select.current) {
                         refs.item_code_select.current.focus();
@@ -1018,9 +1021,9 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 return;
             }
 
-            // 6. Logic for ITEM SELECT - ALWAYS move to weight
+            // 6. Logic for ITEM SELECT 
             if (currentFieldName === "item_code_select") {
-                // ALWAYS move to weight field (don't stop here)
+                // IF EMPTY or filled: Move straight into the weight input box
                 setTimeout(() => {
                     if (refs.weight.current) {
                         refs.weight.current.focus();
@@ -1030,47 +1033,36 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 return;
             }
 
-            // 7. Logic for WEIGHT field - Check validation, stop here if fields empty
-            // 7. Logic for WEIGHT field - Check validation, go back to customer if fields empty
+            // 7. Logic for WEIGHT field (The Hard Boundary Stop)
             if (currentFieldName === "weight") {
-                const customerCode = (formData.customer_code || autoCustomerCode).trim();
-                const supplierCode = formData.supplier_code?.trim();
-                const itemCode = formData.item_code?.trim();
-                const areRequiredFieldsEmpty = !customerCode || !supplierCode || !itemCode;
+                const weightValue = formData.weight?.trim();
 
-                if (areRequiredFieldsEmpty) {
-                    // Clear any existing errors
-                    updateState({ errors: {} });
+                // STOP RIGHT HERE: If weight is completely blank, enforce input
+                if (!weightValue) {
+                    updateState({ errors: { form: "කරුණාකර බර ඇතුළත් කරන්න" } });
+                    setTimeout(() => {
+                        if (refs.weight.current) {
+                            refs.weight.current.focus();
+                            refs.weight.current.select();
+                        }
+                    }, 50);
+                    return; // Enforces the hold at the weight field
+                }
 
-                    // Find the first empty field and focus on it
-                    if (!customerCode) {
-                        // Customer code is empty - go to customer_code_input
-                        setTimeout(() => {
-                            if (refs.customer_code_input.current) {
-                                refs.customer_code_input.current.focus();
-                                refs.customer_code_input.current.select();
-                            }
-                        }, 50);
-                    } else if (!supplierCode) {
-                        // Supplier code is empty - go to supplier_code
-                        setTimeout(() => {
-                            if (refs.supplier_code.current) {
-                                refs.supplier_code.current.focus();
-                                refs.supplier_code.current.select();
-                            }
-                        }, 50);
-                    } else if (!itemCode) {
-                        // Item is empty - go to item_code_select
-                        setTimeout(() => {
-                            if (refs.item_code_select.current) {
-                                refs.item_code_select.current.focus();
-                            }
-                        }, 50);
-                    }
+                // Enforce correct value formatting
+                const weightNum = parseFloat(weightValue);
+                if (isNaN(weightNum) || weightNum <= 0) {
+                    updateState({ errors: { form: "කරුණාකර වලංගු බරක් ඇතුළත් කරන්න" } });
+                    setTimeout(() => {
+                        if (refs.weight.current) {
+                            refs.weight.current.focus();
+                            refs.weight.current.select();
+                        }
+                    }, 50);
                     return;
                 }
 
-                // All fields have values, move to price field
+                // SUCCESS: If a correct weight value exists, step to the price element
                 setTimeout(() => {
                     if (refs.price_per_kg_grid_item.current) {
                         refs.price_per_kg_grid_item.current.focus();
@@ -1102,13 +1094,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 return;
             }
 
-            // 10. Logic for KULIYA field - Submit form
-            if (currentFieldName === "kuliya") {
-                await handleSubmit(e);
-                return;
-            }
-
-            // 11. Default navigation for other fields
+            // 10. Fallback standard positioning loop
             let nextFieldName = skipMap[currentFieldName];
 
             if (!nextFieldName && currentFieldName !== "kuliya") {
@@ -1201,18 +1187,61 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             const fetchedPackDue = parseFloat(item?.pack_due) || 0;
             const fetchedPackCost = parseFloat(item?.pack_cost) || 0;
 
+            // Grab instant values from input references to bypass React state sync lags
+            const liveWeightVal = refs.weight.current ? refs.weight.current.value : formData.weight;
+            const livePacksVal = refs.packs.current ? refs.packs.current.value : formData.packs;
+
+            const parsedWeight = parseFloat(liveWeightVal) || 0;
+            const parsedPacks = parseInt(livePacksVal) || 0;
+
+            // Update form data synchronously with new item codes AND live grid values
             setFormData(prev => ({
                 ...prev,
                 item_code: item.no,
                 item_name: item.type,
-                pack_due: fetchedPackDue
+                pack_due: fetchedPackDue,
+                weight: liveWeightVal,
+                packs: livePacksVal
             }));
 
             updateState({
                 packCost: fetchedPackCost,
                 itemSearchInput: "",
-                gridPricePerKg: formData.price_per_kg || ""
+                gridPricePerKg: formData.price_per_kg || "",
+                isKuliyaManuallyChanged: false  // ← ADD THIS LINE - Reset manual flag when item changes
             });
+
+            // Trigger calculation immediately using parsed metrics
+            if (parsedWeight > 0 && parsedPacks > 0) {
+                const fetchKuliyaDirectly = async () => {
+                    try {
+                        const bagRealWeight = item?.bag_real_price || 0;
+                        const response = await api.post('/sales/calculate-kuliya', {
+                            item_code: item.no,
+                            item_name: item.type,
+                            weight: parsedWeight,
+                            packs: parsedPacks,
+                            bag_real_weight: bagRealWeight
+                        });
+
+                        if (response.data.kuliya !== undefined) {
+                            setFormData(prev => ({ ...prev, kuliya: response.data.kuliya }));
+                        }
+                    } catch (error) {
+                        const calculatedKuliya = calculateKuliyaLocally(
+                            item.no,
+                            item.type,
+                            parsedWeight,
+                            parsedPacks,
+                            items
+                        );
+                        if (calculatedKuliya !== undefined) {
+                            setFormData(prev => ({ ...prev, kuliya: calculatedKuliya }));
+                        }
+                    }
+                };
+                fetchKuliyaDirectly();
+            }
 
             setTimeout(() => refs.weight.current?.focus(), 100);
         } else {
@@ -1222,7 +1251,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 item_name: "",
                 pack_due: ""
             }));
-            updateState({ packCost: 0, itemSearchInput: "" });
+            updateState({ packCost: 0, itemSearchInput: "", isKuliyaManuallyChanged: false }); // Also reset here
         }
     };
 
@@ -1283,7 +1312,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 isManualClear: true,
                 priceManuallyChanged: false,
                 gridPricePerKg: "",
-                selectedSaleForBreakdown: null
+                selectedSaleForBreakdown: null,
+                isKuliyaManuallyChanged: false  // ← ADD THIS
             });
 
             setTimeout(() => {
@@ -1321,7 +1351,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             isManualClear: false,
             priceManuallyChanged: false,
             gridPricePerKg: sale.price_per_kg || "",
-            selectedSaleForBreakdown: sale
+            selectedSaleForBreakdown: sale,
+            isKuliyaManuallyChanged: false  // ← ADD THIS
         });
 
         // FIX: Set focus to weight field and ensure Enter key navigation works
@@ -1355,7 +1386,21 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
     const handleClearForm = (clearBillNo = false) => {
         setFormData(initialFormData);
-        updateState({ editingSaleId: null, loanAmount: 0, isManualClear: false, packCost: 0, customerSearchInput: "", itemSearchInput: "", supplierSearchInput: "", priceManuallyChanged: false, isKuliyaManuallyChanged: false, gridPricePerKg: "", isGivenAmountManuallyTouched: false, selectedSaleForBreakdown: null, ...(clearBillNo && { currentBillNo: null }) });
+        updateState({
+            editingSaleId: null,
+            loanAmount: 0,
+            isManualClear: false,
+            packCost: 0,
+            customerSearchInput: "",
+            itemSearchInput: "",
+            supplierSearchInput: "",
+            priceManuallyChanged: false,
+            isKuliyaManuallyChanged: false,  // ← ADD THIS
+            gridPricePerKg: "",
+            isGivenAmountManuallyTouched: false,
+            selectedSaleForBreakdown: null,
+            ...(clearBillNo && { currentBillNo: null })
+        });
     };
     const handleDeleteRecord = async (saleId) => {
         if (!saleId || !window.confirm("Are you sure you want to delete this sales record?")) return;
@@ -2315,6 +2360,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
                                                 return (
                                                     <Select
+                                                        id="item_code_select"
                                                         ref={refs.item_code_select}
                                                         openMenuOnFocus={false}
                                                         isSearchable
@@ -2339,6 +2385,18 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                         onKeyDown={(e) => {
                                                             // Handle Enter key - Let react-select handle selection when menu is open
                                                             if (e.key === "Enter") {
+                                                                // Check if the user is currently highlighting an item in the open menu using arrow keys
+                                                                const isMenuFocused = refs.item_code_select.current?.state?.focusedOptionId;
+
+                                                                if (isMenuFocused) {
+                                                                    // Let react-select natively select the highlighted item with Enter.
+                                                                    // The native onChange handler above will automatically push focus to the weight field.
+                                                                    return;
+                                                                }
+
+                                                                // FIXED: Prevent native HTML form submission from jumping focus back to Customer Code
+                                                                e.preventDefault();
+
                                                                 // Don't prevent default if menu might be open
                                                                 // The onChange will handle moving to weight after selection
                                                                 // We'll let react-select do its thing first
@@ -2445,7 +2503,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                             handleInputChange(id, e.target.value);
                                                         } else if (id === 'kuliya') {
                                                             const newValue = e.target.value;
-                                                            if (newValue === '' || newValue === '0') {
+                                                            // Allow empty or numbers (including 0)
+                                                            if (newValue === '' || /^\d*\.?\d*$/.test(newValue)) {
                                                                 handleKuliyaChange(newValue);
                                                                 handleInputChange(id, newValue);
                                                             }
@@ -2458,6 +2517,12 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                     }}
                                                     onKeyDown={(e) => {
                                                         if (id === 'kuliya') {
+                                                            // Allow Enter key for form submission
+                                                            if (e.key === 'Enter') {
+                                                                // Let handleKeyDown handle it
+                                                                return;
+                                                            }
+                                                            // Block number keys (0-9) and other keys except backspace, delete, tab, etc.
                                                             const blockedKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', 'e', 'E', '+'];
                                                             if (blockedKeys.includes(e.key)) {
                                                                 e.preventDefault();
@@ -2468,7 +2533,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                     }}
                                                     onBlur={(e) => {
                                                         if (id === 'kuliya') {
-                                                            if (e.target.value !== '0') {
+                                                            // If value is empty or not a number, set to 0
+                                                            if (!e.target.value || isNaN(parseFloat(e.target.value))) {
                                                                 const zeroValue = '0';
                                                                 handleKuliyaChange(zeroValue);
                                                                 handleInputChange(id, zeroValue);

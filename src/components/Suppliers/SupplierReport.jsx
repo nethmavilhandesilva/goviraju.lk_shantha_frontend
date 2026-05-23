@@ -10,6 +10,13 @@ const SupplierReport = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false); // New state for auto-refresh indicator
 
+    // 🚀 BULK SELECTION STATE (add these with your other state variables)
+    const [selectedTransactionIds, setSelectedTransactionIds] = useState([]);
+    const [selectionCriteria, setSelectionCriteria] = useState(null);
+    const [bulkUpdateContextMenu, setBulkUpdateContextMenu] = useState({ show: false, x: 0, y: 0 });
+    const [bulkUpdateSupplierCode, setBulkUpdateSupplierCode] = useState('');
+    const [bulkUpdateCustomerCode, setBulkUpdateCustomerCode] = useState('');
+
     // 🚀 NEW STATE: Bill size selector (3mm or 4mm) - PERSISTED
     const [billSize, setBillSize] = useState(() => {
         const saved = localStorage.getItem('supplier_bill_size');
@@ -463,6 +470,202 @@ const SupplierReport = () => {
                 }, 500);
             }
         }
+    };
+    // 🚀 BULK SELECTION: Toggle individual row selection - STRICT ENFORCEMENT
+    const toggleTransactionSelection = (transactionId, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+
+        const transactionToSelect = supplierDetails.find(t => t.id === transactionId);
+        if (!transactionToSelect) return;
+
+        const isCurrentlySelected = selectedTransactionIds.includes(transactionId);
+
+        // If already selected, just unselect it
+        if (isCurrentlySelected) {
+            const newSelectedIds = selectedTransactionIds.filter(id => id !== transactionId);
+            setSelectedTransactionIds(newSelectedIds);
+            if (newSelectedIds.length === 0) {
+                setSelectionCriteria(null);
+            }
+            return;
+        }
+
+        // IMPORTANT: If there are already selected records, we MUST enforce the rule
+        if (selectedTransactionIds.length > 0) {
+            // Check if selectionCriteria exists
+            if (!selectionCriteria) {
+                alert("⚠️ Selection error. Please clear selection and try again.");
+                clearSelections();
+                return;
+            }
+
+            // STRICT CHECK: Use item_name instead of item_code
+            const supplierMatches = transactionToSelect.supplier_code === selectionCriteria.supplier_code;
+            const itemMatches = transactionToSelect.item_name === selectionCriteria.item_name;
+            const customerMatches = transactionToSelect.customer_code === selectionCriteria.customer_code;
+
+            const matchesCriteria = supplierMatches && itemMatches && customerMatches;
+
+            if (!matchesCriteria) {
+                // Show detailed error message
+                let mismatchDetails = [];
+                if (!supplierMatches) mismatchDetails.push(`   Supplier: ${selectionCriteria.supplier_code} (selected) vs ${transactionToSelect.supplier_code} (current)`);
+                if (!itemMatches) mismatchDetails.push(`   Item: ${selectionCriteria.item_name} (selected) vs ${transactionToSelect.item_name} (current)`);
+                if (!customerMatches) mismatchDetails.push(`   Customer: ${selectionCriteria.customer_code} (selected) vs ${transactionToSelect.customer_code} (current)`);
+
+                alert(`❌ Cannot select this record!\n\n✓ Current selection allows only records with EXACTLY:\n   Supplier: ${selectionCriteria.supplier_code}\n   Item: ${selectionCriteria.item_name}\n   Customer: ${selectionCriteria.customer_code}\n\n✗ This record has:\n   Supplier: ${transactionToSelect.supplier_code || 'N/A'}\n   Item: ${transactionToSelect.item_name || 'N/A'}\n   Customer: ${transactionToSelect.customer_code || 'N/A'}\n\n⚠️ Mismatch in:\n${mismatchDetails.join('\n')}\n\n📌 Tip: Click 'Clear Selection' button at the bottom to start a new selection.`);
+                return;
+            }
+
+            // If matches, add to selection
+            setSelectedTransactionIds([...selectedTransactionIds, transactionId]);
+            return;
+        }
+
+        // Case: No records selected yet - this becomes the template (use item_name)
+        setSelectedTransactionIds([transactionId]);
+        setSelectionCriteria({
+            supplier_code: transactionToSelect.supplier_code,
+            item_name: transactionToSelect.item_name,  // Changed from item_code to item_name
+            customer_code: transactionToSelect.customer_code
+        });
+    };
+
+    // 🚀 BULK SELECTION: Handle right-click on row - STRICT ENFORCEMENT
+    const handleRowRightClick = (e, transaction) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isSelected = selectedTransactionIds.includes(transaction.id);
+
+        if (!isSelected) {
+            // If no records selected yet, select this one as template
+            if (selectedTransactionIds.length === 0) {
+                setSelectedTransactionIds([transaction.id]);
+                setSelectionCriteria({
+                    supplier_code: transaction.supplier_code,
+                    item_name: transaction.item_name,  // Changed from item_code to item_name
+                    customer_code: transaction.customer_code
+                });
+            } else {
+                // Check if this transaction matches the existing selection criteria
+                if (!selectionCriteria) {
+                    alert("⚠️ Selection error. Please clear selection and try again.");
+                    clearSelections();
+                    return;
+                }
+
+                const supplierMatches = transaction.supplier_code === selectionCriteria.supplier_code;
+                const itemMatches = transaction.item_name === selectionCriteria.item_name;  // Changed from item_code
+                const customerMatches = transaction.customer_code === selectionCriteria.customer_code;
+
+                const matchesCriteria = supplierMatches && itemMatches && customerMatches;
+
+                if (matchesCriteria) {
+                    setSelectedTransactionIds([...selectedTransactionIds, transaction.id]);
+                } else {
+                    // Show detailed error message
+                    let mismatchDetails = [];
+                    if (!supplierMatches) mismatchDetails.push(`   Supplier: ${selectionCriteria.supplier_code} vs ${transaction.supplier_code}`);
+                    if (!itemMatches) mismatchDetails.push(`   Item: ${selectionCriteria.item_name} vs ${transaction.item_name}`);
+                    if (!customerMatches) mismatchDetails.push(`   Customer: ${selectionCriteria.customer_code} vs ${transaction.customer_code}`);
+
+                    alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Supplier: ${selectionCriteria.supplier_code}\n   Item: ${selectionCriteria.item_name}\n   Customer: ${selectionCriteria.customer_code}\n\n✗ This record has:\n   Supplier: ${transaction.supplier_code || 'N/A'}\n   Item: ${transaction.item_name || 'N/A'}\n   Customer: ${transaction.customer_code || 'N/A'}\n\n⚠️ Mismatch in:\n${mismatchDetails.join('\n')}\n\n📌 Tip: Click 'Clear Selection' button to start over.`);
+                    return;
+                }
+            }
+        }
+
+        // Only show context menu if there are selected records
+        if (selectedTransactionIds.length > 0 || isSelected) {
+            setBulkUpdateContextMenu({
+                show: true,
+                x: e.clientX,
+                y: e.clientY
+            });
+            setBulkUpdateSupplierCode('');
+            setBulkUpdateCustomerCode('');
+        }
+    };
+    // 🚀 BULK SELECTION: Close context menu
+    const closeContextMenu = () => {
+        setBulkUpdateContextMenu({ show: false, x: 0, y: 0 });
+        setBulkUpdateSupplierCode('');
+        setBulkUpdateCustomerCode('');
+    };
+
+    // 🚀 BULK SELECTION: Handle Escape key
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && bulkUpdateContextMenu.show) {
+                closeContextMenu();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [bulkUpdateContextMenu.show]);
+
+    // 🚀 BULK UPDATE: Update selected transactions
+    const handleBulkUpdate = async () => {
+        const finalSupplierCode = bulkUpdateSupplierCode.trim().toUpperCase();
+        const finalCustomerCode = bulkUpdateCustomerCode.trim().toUpperCase();
+
+        if (!finalSupplierCode && !finalCustomerCode) {
+            alert("Please enter at least one code to update (Supplier or Customer)");
+            return;
+        }
+
+        if (selectedTransactionIds.length === 0) {
+            alert("No transactions selected");
+            return;
+        }
+
+        // Pause auto-refresh during update
+        isPrintingOrUpdatingRef.current = true;
+
+        try {
+            const payload = {
+                transaction_ids: selectedTransactionIds,
+                ...(finalSupplierCode && { supplier_code: finalSupplierCode }),
+                ...(finalCustomerCode && { customer_code: finalCustomerCode })
+            };
+
+            const response = await api.put(`/sales/bulk-update-supplier`, payload);
+
+            if (response.status === 200) {
+                // Clear selection
+                setSelectedTransactionIds([]);
+                setSelectionCriteria(null);
+                closeContextMenu();
+
+                // Refresh current view
+                if (isUnprintedBill) {
+                    await handleUnprintedBillClick(selectedSupplier, null);
+                } else if (selectedBillNo) {
+                    await handlePrintedBillClick(selectedSupplier, selectedBillNo);
+                }
+                await fetchSummary();
+
+               
+            }
+        } catch (error) {
+            console.error("Bulk update failed:", error);
+            alert("Failed to update records. Please try again.");
+        } finally {
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
+        }
+    };
+
+    // 🚀 BULK SELECTION: Clear all selections
+    const clearSelections = () => {
+        setSelectedTransactionIds([]);
+        setSelectionCriteria(null);
+        closeContextMenu();
     };
 
     // 🚀 NEW: Handle loan amount submission and trigger print
@@ -1343,6 +1546,288 @@ const SupplierReport = () => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [supplierDetails, handlePrint, isDetailsLoading]);
+    // 🚀 CONTEXT MENU COMPONENT FOR BULK UPDATE
+  const BulkUpdateContextMenu = () => {
+    const supplierInputRef = useRef(null);
+    const customerInputRef = useRef(null);
+
+    // Auto-focus on the first input when modal opens
+    useEffect(() => {
+        if (bulkUpdateContextMenu.show) {
+            // Small delay to ensure modal is rendered
+            setTimeout(() => {
+                if (supplierInputRef.current) {
+                    supplierInputRef.current.focus();
+                }
+            }, 100);
+        }
+    }, [bulkUpdateContextMenu.show]);
+
+    if (!bulkUpdateContextMenu.show) return null;
+
+    return (
+        <>
+            {/* Backdrop Overlay - Use onClick to close, but don't capture focus */}
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 9999
+                }}
+                onClick={closeContextMenu}
+                onMouseDown={(e) => {
+                    // Prevent backdrop from stealing focus from inputs
+                    if (e.target === e.currentTarget) {
+                        e.preventDefault();
+                    }
+                }}
+            />
+
+            {/* Modal Container */}
+            <div
+                style={{
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '16px',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    zIndex: 10000,
+                    width: '90%',
+                    maxWidth: '450px',
+                    maxHeight: '90vh',
+                    overflow: 'auto'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    padding: '12px 20px',
+                    borderTopLeftRadius: '16px',
+                    borderTopRightRadius: '16px',
+                    color: 'white'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                            width: '32px',
+                            height: '32px',
+                            background: 'rgba(255, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '16px'
+                        }}>
+                            ⚡
+                        </div>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>
+                                Bulk Update Transactions
+                            </h2>
+                            <p style={{ margin: '2px 0 0 0', fontSize: '11px', opacity: 0.9 }}>
+                                Update multiple records at once
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: '16px 20px' }}>
+                    {selectionCriteria && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                            borderRadius: '10px',
+                            padding: '10px 12px',
+                            marginBottom: '16px',
+                            border: '1px solid #fbbf24'
+                        }}>
+                            <div style={{ marginBottom: '8px' }}>
+                                <span style={{ fontSize: '14px' }}>📋</span>
+                                <span style={{ fontWeight: 'bold', fontSize: '11px', color: '#92400e', marginLeft: '6px' }}>
+                                    Current Selection
+                                </span>
+                            </div>
+                            <div style={{ display: 'grid', gap: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'white', borderRadius: '6px' }}>
+                                    <span style={{ fontSize: '11px' }}>Supplier:</span>
+                                    <span style={{ fontWeight: 'bold', fontSize: '12px', fontFamily: 'monospace' }}>
+                                        {selectionCriteria.supplier_code}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'white', borderRadius: '6px' }}>
+                                    <span style={{ fontSize: '11px' }}>Item:</span>
+                                    <span style={{ fontWeight: 'bold', fontSize: '12px', fontFamily: 'monospace' }}>
+                                        {selectionCriteria.item_name}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'white', borderRadius: '6px' }}>
+                                    <span style={{ fontSize: '11px' }}>Customer:</span>
+                                    <span style={{ fontWeight: 'bold', fontSize: '12px', fontFamily: 'monospace' }}>
+                                        {selectionCriteria.customer_code}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#10b981', borderRadius: '6px', color: 'white' }}>
+                                    <span style={{ fontSize: '11px' }}>Selected:</span>
+                                    <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                        {selectedTransactionIds.length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Supplier Code Input */}
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '12px', color: '#374151' }}>
+                            ✏️ New Supplier Code (Optional)
+                        </label>
+                        <input
+                            ref={supplierInputRef}
+                            type="text"
+                            value={bulkUpdateSupplierCode}
+                            onChange={(e) => setBulkUpdateSupplierCode(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    // Move to customer field
+                                    if (customerInputRef.current) {
+                                        customerInputRef.current.focus();
+                                    }
+                                } else if (e.key === 'Escape') {
+                                    closeContextMenu();
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '12px 12px',
+                                border: '2px solid #e5e7eb',
+                                borderRadius: '10px',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                boxSizing: 'border-box',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                transition: 'border-color 0.2s'
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = '#667eea';
+                                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#e5e7eb';
+                                e.target.style.boxShadow = 'none';
+                            }}
+                            placeholder="e.g., SUP001 (leave empty to skip)"
+                            autoFocus={true}
+                        />
+                    </div>
+
+                    {/* Customer Code Input */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '12px', color: '#374151' }}>
+                            ✏️ New Customer Code (Optional)
+                        </label>
+                        <input
+                            ref={customerInputRef}
+                            type="text"
+                            value={bulkUpdateCustomerCode}
+                            onChange={(e) => setBulkUpdateCustomerCode(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleBulkUpdate();
+                                } else if (e.key === 'Escape') {
+                                    closeContextMenu();
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '12px 12px',
+                                border: '2px solid #e5e7eb',
+                                borderRadius: '10px',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                boxSizing: 'border-box',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                transition: 'border-color 0.2s'
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = '#667eea';
+                                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#e5e7eb';
+                                e.target.style.boxShadow = 'none';
+                            }}
+                            placeholder="e.g., CUST001 (leave empty to skip)"
+                        />
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                        <button
+                            onClick={handleBulkUpdate}
+                            style={{
+                                flex: 2,
+                                padding: '12px',
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                fontSize: '14px',
+                                transition: 'transform 0.2s, opacity 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.opacity = '0.9';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.opacity = '1';
+                            }}
+                        >
+                            🚀 Update {selectedTransactionIds.length} Record{selectedTransactionIds.length !== 1 ? 's' : ''}
+                        </button>
+                        <button
+                            onClick={closeContextMenu}
+                            style={{
+                                flex: 1,
+                                padding: '12px',
+                                background: '#6c757d',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                fontSize: '14px',
+                                transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = '#5a6268';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = '#6c757d';
+                            }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
 
     //new profile pic view modal
     const renderImageModal = () => {
@@ -1532,32 +2017,83 @@ const SupplierReport = () => {
 
         const renderDataRows = () => (
             <tbody>
-                {supplierDetails.map((record, index) => (
-                    <tr key={record.id || index} style={{ ...getRowStyle(index), cursor: 'pointer' }} onClick={() => setEditingRecord(record)}>
-                        <td style={tdStyle}>{record.bill_no || selectedBillNo}</td>
-                        <td style={tdStyle}>{record.customer_code}</td>
-                        <td style={tdStyle}><strong>{record.item_name}</strong></td>
-                        <td style={tdStyle}>{record.packs}</td>
-                        <td style={tdStyle}>{record.weight}</td>
-                        <td style={tdStyle}>{record.price_per_kg}</td>
-                        <td style={tdStyle}>{record.SupplierPricePerKg}</td>
-                        <td style={tdStyle}>{formatDecimal((record?.total || 0) - (record?.CustomerPackLabour || 0))}</td>
-                        <td style={tdStyle}>{record.SupplierTotal}</td>
-                        <td style={tdStyle}>{record.commission_amount}</td>
-                        <td style={tdStyle}>{record.CustomerPackCost}</td> {/* 🚀 NEW COLUMN */}
+                {supplierDetails.map((record, index) => {
+                    const isSelected = selectedTransactionIds.includes(record.id);
+                    return (
+                        <tr
+                            key={record.id || index}
+                            style={{
+                                ...getRowStyle(index),
+                                cursor: 'pointer',
+                                backgroundColor: isSelected ? '#1e40af' : (index % 2 === 0 ? '#f8f9fa' : '#ffffff'),
+                                color: isSelected ? 'white' : 'inherit'
+                            }}
+                            onClick={() => toggleTransactionSelection(record.id)}
+                            onContextMenu={(e) => handleRowRightClick(e, record)}
+                        >
+                            <td style={{ ...tdStyle, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleTransactionSelection(record.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                />
+                            </td>
+                            <td style={tdStyle}>{record.bill_no || selectedBillNo}</td>
+                            <td style={tdStyle}>{record.customer_code}</td>
+                            <td style={tdStyle}><strong>{record.item_name}</strong></td>
+                            <td style={tdStyle}>{record.packs}</td>
+                            <td style={tdStyle}>{record.weight}</td>
+                            <td style={tdStyle}>{record.price_per_kg}</td>
+                            <td style={tdStyle}>{record.SupplierPricePerKg}</td>
+                            <td style={tdStyle}>{formatDecimal((record?.total || 0) - (record?.CustomerPackLabour || 0))}</td>
+                            <td style={tdStyle}>{record.SupplierTotal}</td>
+                            <td style={tdStyle}>{record.commission_amount}</td>
+                            <td style={tdStyle}>{record.CustomerPackCost}</td>
+                        </tr>
+                    );
+                })}
+                {supplierDetails.length > 0 && (
+                    <tr style={{ fontWeight: 'bold', borderTop: '2px solid #000', backgroundColor: '#e9ecef' }}>
+                        <td style={tdStyle} colSpan="4"><strong>TOTALS</strong></td>
+                        <td style={tdStyle}>{totalPacksSum}</td>
+                        <td style={tdStyle}>{totalWeight.toFixed(3)}</td>
+                        <td style={tdStyle}>-</td>
+                        <td style={tdStyle}>-</td>
+                        <td style={tdStyle}>{totalCusGross.toFixed(2)}</td>
+                        <td style={tdStyle}>{totalsupplierSales.toFixed(2)}</td>
+                        <td style={tdStyle}>-</td>
+                        <td style={tdStyle}>{totalCustomerPackCost.toFixed(2)}</td>
                     </tr>
-                ))}
-                <tr style={{ ...getRowStyle(supplierDetails.length), fontWeight: 'bold', borderTop: '2px solid #000' }}>
-                    <td style={tdStyle} colSpan="3"><strong>TOTALS</strong></td>
-                    <td style={tdStyle}>{totalPacksSum}</td>
-                    <td style={tdStyle}>{totalWeight.toFixed(3)}</td>
-                    <td style={tdStyle}>-</td>
-                    <td style={tdStyle}>-</td>
-                    <td style={tdStyle}>{totalCusGross.toFixed(2)}</td>
-                    <td style={tdStyle}>{totalsupplierSales.toFixed(2)}</td>
-                    <td style={tdStyle}>-</td>
-                    <td style={tdStyle}>{totalCustomerPackCost.toFixed(2)}</td> {/* 🚀 NEW TOTAL ROW */}
-                </tr>
+                )}
+                {selectedTransactionIds.length > 0 && (
+                    <tr>
+                        <td colSpan="12" style={{ padding: '10px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>
+                            <span style={{ fontWeight: 'bold' }}>
+                                ✅ {selectedTransactionIds.length} record(s) selected
+                            </span>
+                            <button
+                                onClick={clearSelections}
+                                style={{
+                                    marginLeft: '15px',
+                                    padding: '4px 12px',
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                Clear Selection
+                            </button>
+                            <span style={{ marginLeft: '15px', fontSize: '12px', color: '#666' }}>
+                                💡 Right-click on selected row for bulk update
+                            </span>
+                        </td>
+                    </tr>
+                )}
             </tbody>
         );
 
@@ -1633,7 +2169,18 @@ const SupplierReport = () => {
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '250px', fontSize: '0.9rem', marginBottom: '30px' }}>
                         <thead>
                             <tr>
-                                <th style={thStyle}>බිල් අං:</th><th style={thStyle}>ගනුදෙ</th><th style={thStyle}>අයිත</th><th style={thStyle}>අසුරුම්</th><th style={thStyle}>බර</th><th style={thStyle}>ගනුදෙ මිල</th><th style={thStyle}>සැපයුම් මිල</th><th style={thStyle}>ගනුදෙ එක</th><th style={thStyle}>සැපයුම් එක</th><th style={thStyle}>කොමි</th><th style={thStyle}>මලු විය</th> {/* 🚀 NEW HEADER */}
+                                <th style={thStyle}>☑</th>
+                                <th style={thStyle}>බිල් අං:</th>
+                                <th style={thStyle}>ගනුදෙ</th>
+                                <th style={thStyle}>අයිත</th>
+                                <th style={thStyle}>අසුරුම්</th>
+                                <th style={thStyle}>බර</th>
+                                <th style={thStyle}>ගනුදෙ මිල</th>
+                                <th style={thStyle}>සැපයුම් මිල</th>
+                                <th style={thStyle}>ගනුදෙ එක</th>
+                                <th style={thStyle}>සැපයුම් එක</th>
+                                <th style={thStyle}>කොමි</th>
+                                <th style={thStyle}>මලු විය</th>
                             </tr>
                         </thead>
                         {selectedSupplier && supplierDetails.length > 0 ? renderDataRows() : <tbody><tr><td colSpan="12" style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', padding: '50px 0' }}>Select a bill to view details</td></tr></tbody>}
@@ -1787,6 +2334,7 @@ const SupplierReport = () => {
             </div>
             {renderImageModal()}
             {renderEditModal()}
+            <BulkUpdateContextMenu />
         </>
     );
 };
