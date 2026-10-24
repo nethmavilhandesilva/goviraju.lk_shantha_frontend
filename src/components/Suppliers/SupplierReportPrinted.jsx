@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import api from "../../api";
 import { useNavigate } from 'react-router-dom';
+import { SHOP_PHONE } from '../../config/shop';
 
 const SupplierReport = () => {
     const navigate = useNavigate();
@@ -520,7 +521,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
 
     const getBillContent = useCallback((currentBillNo) => {
         const date = new Date().toLocaleDateString('si-LK');
-        const mobile = '0777672838/071437115';
+        const mobile = SHOP_PHONE;
         const is4Inch = billSize === '4inch';
         const receiptMaxWidth = is4Inch ? '4in' : '350px';
         const fontSizeBody = '25px';
@@ -793,7 +794,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
         // Helper to format URLs correctly
         const formatUrl = (path) => {
             if (!path) return null;
-            return path.startsWith('http') ? path : `https://goviraju.lk/DBS_backend_30500/application/public/storage/${path}`;
+            return path.startsWith('http') ? path : `https://wday.lk/DBS_backend_30500/application/public/storage/${path}`;
         };
 
         const onClose = () => setIsImageModalOpen(false);
@@ -1029,7 +1030,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
     const renderFullReportView = () => {
         if (!fullReportData) return null;
         const { profile, loans, sales } = fullReportData;
-        const storageUrl = "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
+        const storageUrl = "https://wday.lk/DBS_backend_30500/application/public/storage/";
 
         return (
             <div style={fullScreenReportOverlay}>
@@ -1171,7 +1172,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
         );
 
         return (
-            <div style={panelContainerStyle}>
+            <div className="sr-panel" style={panelContainerStyle}>
                 <div style={headerStyle}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                         <h2 style={{ fontSize: "1.5rem", color: "white", margin: 0 }}>
@@ -1223,7 +1224,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
                     {profilePic && (
                         <div style={{ marginLeft: '20px' }}>
                             <img
-                                src={profilePic.startsWith('http') ? profilePic : `https://goviraju.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
+                                src={profilePic.startsWith('http') ? profilePic : `https://wday.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
                                 alt="Supplier"
                                 onClick={() => setIsImageModalOpen(true)}
                                 style={{
@@ -1348,7 +1349,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
                 </div>
             )}
 
-            <nav style={navBarStyle}>
+            <nav className="sr-nav" style={navBarStyle}>
                 <h1 style={{ color: 'white', fontSize: '1.5rem', margin: 0 }}>සැපයුම්කරු වාර්තාව ණය ලබාගත්</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <button 
@@ -1373,18 +1374,18 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
                 </div>
             </nav>
 
-            <div style={reportContainerStyle}>
-                <div style={sectionsContainerStyle}>
-                    <div style={printedContainerStyle}>
-                        <div style={printedSectionStyle}>
+            <div className="sr-container" style={reportContainerStyle}>
+                <div className="sr-sections" style={sectionsContainerStyle}>
+                    <div className="sr-side" style={printedContainerStyle}>
+                        <div className="sr-side-section" style={printedSectionStyle}>
                             <h2 style={{ ...printedHeaderStyle, padding: '0 25px 10px 25px', marginBottom: '15px' }}> මුද්‍රණය කළ </h2>
                             <input type="text" placeholder="🔍 මුද්‍රිත සෙවීම..." value={printedSearchTerm} onChange={(e) => setPrintedSearchTerm(e.target.value)} style={{ ...searchBarStyle, marginBottom: '20px', height: '22px', padding: '12px 25px' }} />
                             <SupplierCodeList items={filteredPrintedItems} type="printed" searchTerm={printedSearchTerm} />
                         </div>
                     </div>
-                    <div style={centerPanelContainerStyle}>{renderDetailsPanel()}</div>
-                    <div style={unprintedContainerStyle}>
-                        <div style={unprintedSectionStyle}>
+                    <div className="sr-center" style={centerPanelContainerStyle}>{renderDetailsPanel()}</div>
+                    <div className="sr-side" style={unprintedContainerStyle}>
+                        <div className="sr-side-section" style={unprintedSectionStyle}>
                        <h2 style={{ ...unprintedHeaderStyle, padding: '0 25px 10px 25px', marginBottom: '15px', whiteSpace: 'nowrap' }}>ණය ලබාගත්</h2>
                             <div style={listContainerStyle}>
                                 {loanSummary.length > 0 ? (

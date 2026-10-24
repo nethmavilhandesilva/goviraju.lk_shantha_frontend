@@ -6,6 +6,7 @@ import api from "../../api";
 import AdminView from "../AdminView";
 import { ThermalBillHTML, A4BillHTML } from '../BillTemplates';
 import ImagePreviewModal from '../ImagePreviewModal';
+import { SHOP_PHONE } from '../../config/shop';
 
 const routes = {
     markPrinted: "/sales/mark-printed",
@@ -17,7 +18,77 @@ const routes = {
     items: "/items",
     suppliers: "/suppliers",
     getCustomerGivenAmount: "/sales/customer/given-amount",
-    bulkUpdateCustomer: "/sales/bulk-update-customer"
+    bulkUpdateCustomer: "/sales/bulk-update-supplier",
+    ttsSpeak: "/tts/speak"
+};
+
+// --- Sinhala number-to-words + speech announcement for the bill total (F1 print) ---
+const numberToSinhalaWords = (num) => {
+    const ones = ['', 'එක', 'දෙක', 'තුන', 'හතර', 'පහ', 'හය', 'හත', 'අට', 'නවය'];
+    const teens = ['දහය', 'එකොළහ', 'දොළහ', 'දහතුන', 'දාහතර', 'පහළොව්', 'දහසය', 'දාහත', 'දහඅට', 'දහනවය'];
+    const tensPrefix = ['', '', 'විසි', 'තිස්', 'හතළිස්', 'පණස්', 'හැට', 'හැත්තෑ', 'අසූ', 'අනූ'];
+    const tensStandalone = ['', '', 'විස්ස', 'තිහ', 'හතළිහ', 'පනහ', 'හැට', 'හැත්තෑව', 'අසූව', 'අනූව'];
+    const hundredsWord = ['', 'එකසිය', 'දෙසිය', 'තුන්සිය', 'හාරසිය', 'පන්සිය', 'හයසිය', 'හත්සිය', 'අටසිය', 'නවසිය'];
+
+    const twoDigits = (n) => {
+        if (n === 0) return '';
+        if (n < 10) return ones[n];
+        if (n < 20) return teens[n - 10];
+        const t = Math.floor(n / 10);
+        const o = n % 10;
+        return o === 0 ? tensStandalone[t] : tensPrefix[t] + ones[o];
+    };
+
+    const threeDigits = (n) => {
+        const h = Math.floor(n / 100);
+        const rest = n % 100;
+        const parts = [];
+        if (h > 0) parts.push(hundredsWord[h]);
+        if (rest > 0) parts.push(twoDigits(rest));
+        return parts.join(' ');
+    };
+
+    const groupWords = (n, suffix) => (n > 0 ? `${threeDigits(n)} ${suffix}` : '');
+
+    let n = Math.round(Math.abs(num));
+    if (n === 0) return 'බිංදුව';
+
+    const crore = Math.floor(n / 10000000); n %= 10000000;
+    const lakh = Math.floor(n / 100000); n %= 100000;
+    const thousand = Math.floor(n / 1000); n %= 1000;
+    const rest = n;
+
+    const parts = [];
+    if (crore > 0) parts.push(groupWords(crore, 'කෝටි'));
+    if (lakh > 0) parts.push(groupWords(lakh, 'ලක්ෂ'));
+    if (thousand > 0) parts.push(groupWords(thousand, 'දහස්'));
+    if (rest > 0) parts.push(threeDigits(rest));
+
+    return parts.join(' ').trim();
+};
+
+// Fetches Sinhala speech audio from the backend (Google Cloud TTS proxy, cached server-side
+// by text) once, then plays that single clip back-to-back `times` times.
+const speakSinhalaBillTotal = async (amount, times = 3) => {
+    const words = numberToSinhalaWords(amount);
+    const text = `බිල්පත් එකතුව රුපියල් ${words} යි`;
+    try {
+        const res = await api.post(routes.ttsSpeak, { text });
+        const audioContent = res.data?.audioContent;
+        if (!audioContent) throw new Error("No audio returned from TTS endpoint");
+        const audioSrc = `data:audio/mp3;base64,${audioContent}`;
+
+        for (let i = 0; i < times; i++) {
+            await new Promise((resolve) => {
+                const audioEl = new Audio(audioSrc);
+                audioEl.onended = resolve;
+                audioEl.onerror = resolve;
+                audioEl.play().catch(resolve);
+            });
+        }
+    } catch (e) {
+        console.warn("Sinhala bill total announcement failed:", e);
+    }
 };
 
 // --- Sub-Components  ---
@@ -296,7 +367,7 @@ const SalesSummaryFooter = ({ sales, formatDecimal }) => {
     const finalPayable = totals.billTotal + totals.totalBagPrice;
 
     return (
-        <div className="flex flex-row flex-nowrap items-center justify-between w-full p-2 mt-2 rounded-xl border-2 border-blue-500 bg-gray-900 text-white font-bold shadow-lg overflow-hidden">
+        <div className="sales-totals-bar flex flex-row flex-nowrap items-center justify-between w-full p-2 mt-2 rounded-xl border-2 border-blue-500 bg-gray-900 text-white font-bold shadow-lg overflow-hidden">
             <div className="flex items-center gap-4 px-3 border-r border-gray-700 flex-1 justify-center">
                 <span className="text-gray-400 uppercase text-[10px] whitespace-nowrap">එකතුව:</span>
                 <span className="text-white text-sm whitespace-nowrap" style={{ marginLeft: '6px' }}>
@@ -321,6 +392,329 @@ const SalesSummaryFooter = ({ sales, formatDecimal }) => {
 };
 
 // --- Main Export Component ---
+// Hoisted to module scope so it keeps a stable identity across SalesEntry re-renders.
+// Defined inside SalesEntry, the 5s sales poll made React remount it on every render,
+// wiping the typed customer code and stealing focus from the input.
+const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
+    const [localCustomerCode, setLocalCustomerCode] = React.useState('');
+
+    React.useEffect(() => {
+        if (show) {
+            setLocalCustomerCode('');
+        }
+    }, [show]);
+
+    const handleInputChange = (e) => {
+        const value = e.target.value.toUpperCase();
+        setLocalCustomerCode(value);
+    };
+
+    const handleUpdate = () => {
+        if (localCustomerCode.trim()) {
+            onUpdate(localCustomerCode.trim().toUpperCase());
+            setLocalCustomerCode('');
+        } else {
+            alert("Please enter a customer code");
+        }
+    };
+
+    const handleClose = () => {
+        setLocalCustomerCode('');
+        onClose();
+    };
+
+    if (!show) return null;
+
+    return (
+        <>
+            {/* Backdrop Overlay */}
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 9999
+                }}
+                onClick={handleClose}
+            />
+
+            {/* Modal Container */}
+            <div
+                style={{
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '16px',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    zIndex: 10000,
+                    width: '90%',
+                    maxWidth: '450px',
+                    maxHeight: '90vh',
+                    overflow: 'auto'
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <style>{`
+                @keyframes fadeIn { 
+                    from { opacity: 0; } 
+                    to { opacity: 1; } 
+                } 
+                .modal-button { 
+                    transition: all 0.2s ease; 
+                    cursor: pointer; 
+                } 
+                .modal-button:hover { 
+                    transform: translateY(-1px); 
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
+                } 
+                .modal-button:active { 
+                    transform: translateY(0); 
+                }
+            `}</style>
+
+                {/* Header with Icon */}
+                <div style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    padding: '12px 20px',
+                    borderTopLeftRadius: '16px',
+                    borderTopRightRadius: '16px',
+                    color: 'white'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                            width: '32px',
+                            height: '32px',
+                            background: 'rgba(255, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '16px'
+                        }}>
+                            ⚡
+                        </div>
+                        <div>
+                            <h2 style={{
+                                margin: 0,
+                                fontSize: '16px',
+                                fontWeight: 'bold',
+                                letterSpacing: '-0.5px'
+                            }}>
+                                Bulk Update Customer
+                            </h2>
+                            <p style={{
+                                margin: '2px 0 0 0',
+                                fontSize: '11px',
+                                opacity: 0.9
+                            }}>
+                                Update multiple customer codes at once
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: '16px 20px' }}>
+                    {/* Selection Criteria Card */}
+                    {selectionCriteria && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                            borderRadius: '10px',
+                            padding: '10px 12px',
+                            marginBottom: '16px',
+                            border: '1px solid #fbbf24'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginBottom: '8px'
+                            }}>
+                                <span style={{ fontSize: '14px' }}>📋</span>
+                                <span style={{
+                                    fontWeight: 'bold',
+                                    fontSize: '11px',
+                                    color: '#92400e',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px'
+                                }}>
+                                    Current Selection
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '6px' }}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '6px 8px',
+                                    background: 'white',
+                                    borderRadius: '6px'
+                                }}>
+                                    <span style={{ fontSize: '11px', color: '#78350f' }}>Customer:</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '12px',
+                                        color: '#92400e',
+                                        fontFamily: 'monospace'
+                                    }}>
+                                        {selectionCriteria.customer_code}
+                                    </span>
+                                </div>
+
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '6px 8px',
+                                    background: 'white',
+                                    borderRadius: '6px'
+                                }}>
+                                    <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '12px',
+                                        color: '#92400e',
+                                        fontFamily: 'monospace'
+                                    }}>
+                                        {selectionCriteria.item_code}
+                                    </span>
+                                </div>
+
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '6px 8px',
+                                    background: '#10b981',
+                                    borderRadius: '6px',
+                                    color: 'white'
+                                }}>
+                                    <span style={{ fontSize: '11px' }}>Selected:</span>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '14px'
+                                    }}>
+                                        {selectedCount || 0}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Input Field */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '6px',
+                            fontWeight: '600',
+                            fontSize: '12px',
+                            color: '#374151'
+                        }}>
+                            ✏️ New Customer Code
+                        </label>
+                        <input
+                            type="text"
+                            value={localCustomerCode}
+                            onChange={handleInputChange}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleUpdate();
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                border: '2px solid #e5e7eb',
+                                borderRadius: '10px',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                transition: 'all 0.2s ease',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                fontFamily: 'monospace'
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = '#667eea';
+                                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#e5e7eb';
+                                e.target.style.boxShadow = 'none';
+                            }}
+                            autoFocus
+                            placeholder="e.g., CUST001"
+                        />
+                    </div>
+
+                    {/* Primary Action Button */}
+                    <button
+                        onClick={handleUpdate}
+                        className="modal-button"
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontSize: '14px',
+                            marginBottom: '0'
+                        }}
+                    >
+                        🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
+                    </button>
+                </div>
+
+                {/* Footer with Close Button */}
+                <div style={{
+                    padding: '12px 20px',
+                    background: '#f9fafb',
+                    borderBottomLeftRadius: '16px',
+                    borderBottomRightRadius: '16px',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'flex-end'
+                }}>
+                    <button
+                        onClick={handleClose}
+                        style={{
+                            padding: '6px 16px',
+                            background: 'transparent',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            color: '#6b7280',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.background = '#f3f4f6';
+                            e.target.style.borderColor = '#d1d5db';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.background = 'transparent';
+                            e.target.style.borderColor = '#e5e7eb';
+                        }}
+                    >
+                        Cancel (ESC)
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+});
+
 const initialFormData = { customer_code: "", customer_name: "", supplier_code: "", code: "", item_code: "", item_name: "", weight: "", price_per_kg: "", pack_due: "", total: "", packs: "", given_amount: "", pack_cost: "", telephone_no: "", kuliya: "", };
 const fieldOrder = ["telephone_no", "customer_code_input", "customer_code_select", "supplier_code", "item_code_select", "weight", "price_per_kg_grid_item", "packs", "kuliya"];
 const skipMap = { telephone_no: "customer_code_input", customer_code_input: "supplier_code", customer_code_select: "supplier_code", given_amount: "supplier_code", supplier_code: "item_code_select", item_code_select: "weight", price_per_kg: "packs", price_per_kg_grid_item: "packs", packs: "kuliya", kuliya: null };
@@ -334,12 +728,26 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     // Add this with your other state declarations
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [isLoadingAllSales, setIsLoadingAllSales] = useState(false);
+    // Last printed bill's final total, persisted in localStorage so it survives reloads/navigation
+    const [lastPrintedBill, setLastPrintedBill] = useState(() => {
+        try {
+            const saved = localStorage.getItem('lastPrintedBill');
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) {
+            return null;
+        }
+    });
+    // Newest-first view of allSalesRecords for the records table, without disturbing the
+    // original array's order (totals/reduce elsewhere don't care about order).
+    const sortedAllSalesRecords = useMemo(() => {
+        return [...allSalesRecords].sort((a, b) => (b.id || 0) - (a.id || 0));
+    }, [allSalesRecords]);
     // Add this function to fetch all sales records
     const fetchAllSalesRecords = async () => {
         try {
             setIsLoadingAllSales(true);
-            const response = await api.get('/sales/all-sales-data');
-            const salesData = response.data.sales || response.data.data || response.data;
+            const response = await api.get(routes.sales);
+            const salesData = response.data.data || response.data.sales || response.data;
 
             // Ensure we have an array
             const salesArray = Array.isArray(salesData) ? salesData : [];
@@ -369,6 +777,10 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         price_per_kg_grid_item: useRef(null), kuliya: useRef(null),
     };
     const adminViewRef = useRef(null);
+    // Tracks in-flight /sales save requests so printing (F1) can wait for them to land
+    // before snapshotting what to print — otherwise a record entered a split second
+    // before F1 could still be mid-request and get left out of the bill.
+    const pendingSaveRequestsRef = useRef([]);
 
     const [state, setState] = useState({
         allSales: [], selectedPrintedCustomer: null, selectedUnprintedCustomer: null, editingSaleId: null,
@@ -378,7 +790,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         forceUpdate: null, windowFocused: null, isPrinting: false, billSize: '3inch', priceManuallyChanged: false,
         gridPricePerKg: "", selectedSaleForBreakdown: null, showSavePhoneButton: false, isTelephoneValid: false,
         currentUser: null, bulkUpdateCustomerCode: "",
-        isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" }, selectedSalesIds: [], selectionCriteria: null, isBulkUpdateModalOpen: false, bulkUpdateSupplierCode: "", bulkUpdateContextMenu: { x: 0, y: 0, show: false }, isBulkPrintEnabled: true, isKuliyaManuallyChanged: false,
+        isGivenAmountManuallyTouched: false, filterOnlyCash: false, customerProfilePic: null, supplierProfilePic: null, customerNameDisplay: "", supplierNameDisplay: "", isImageModalOpen: false, selectedImageData: { profile: null, nic_front: null, nic_back: null, title: "" }, selectedSalesIds: [], selectionCriteria: null, isBulkUpdateModalOpen: false, bulkUpdateSupplierCode: "", bulkUpdateContextMenu: { x: 0, y: 0, show: false }, isBulkPrintEnabled: true, isKuliyaManuallyChanged: false, showBillPreview: false,
     });
 
     const setFormData = (updater) => setState(prev => ({ ...prev, formData: typeof updater === 'function' ? updater(prev.formData) : updater }));
@@ -479,6 +891,19 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 return;
             }
 
+            // Show a value instantly from the local formula so the field never sits empty
+            // while waiting on the network; the backend value below corrects it if different.
+            const instantKuliya = calculateKuliyaLocally(
+                formData.item_code,
+                formData.item_name,
+                parseFloat(formData.weight) || 0,
+                parseInt(formData.packs) || 0,
+                items
+            );
+            if (instantKuliya !== undefined) {
+                setFormData(prev => ({ ...prev, kuliya: instantKuliya }));
+            }
+
             try {
                 // Find the selected item to get bag_real_weight
                 const selectedItem = items.find(i => i.no === formData.item_code);
@@ -492,22 +917,12 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                     bag_real_weight: bagRealWeight
                 });
 
-                if (response.data.kuliya !== undefined) {
+                if (response.data.kuliya !== undefined && !state.isKuliyaManuallyChanged) {
                     setFormData(prev => ({ ...prev, kuliya: response.data.kuliya }));
                 }
             } catch (error) {
                 console.error("Failed to calculate Kuliya:", error);
-                // Fallback to manual calculation if API fails
-                const calculatedKuliya = calculateKuliyaLocally(
-                    formData.item_code,
-                    formData.item_name,
-                    parseFloat(formData.weight) || 0,
-                    parseInt(formData.packs) || 0,
-                    items
-                );
-                if (calculatedKuliya !== undefined) {
-                    setFormData(prev => ({ ...prev, kuliya: calculatedKuliya }));
-                }
+                // Local value set above already stands as the fallback
             }
         };
 
@@ -528,7 +943,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             if (incomingNetWeight >= 1 && incomingNetWeight <= 9) return 0;
             if (incomingNetWeight >= 10 && incomingNetWeight <= 19) return 20;
             if (incomingNetWeight >= 20 && incomingNetWeight <= 49) return 40;
-            if (incomingNetWeight >= 50) return 50;
+            if (incomingNetWeight >= 50 && incomingNetWeight <= 99) return 50;
+            if (incomingNetWeight >= 100) return incomingNetWeight;
             return 0;
         }
     };
@@ -563,32 +979,30 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             return;
         }
 
-        // Case 1: No records selected yet - select this one and set criteria
-        if (state.selectedSalesIds.length === 0) {
-            setState(prev => ({
-                ...prev,
-                selectedSalesIds: [saleId],
-                selectionCriteria: {
-                    customer_code: saleToSelect.customer_code,  // ← CHANGED from supplier_code
-                    item_code: saleToSelect.item_code
-                }
-            }));
+        // Any record can be selected; criteria just records the first selection for the bulk-update modal header
+        setState(prev => ({
+            ...prev,
+            selectedSalesIds: [...prev.selectedSalesIds, saleId],
+            selectionCriteria: prev.selectionCriteria || {
+                customer_code: saleToSelect.customer_code,
+                item_code: saleToSelect.item_code
+            }
+        }));
+    };
+
+    // Select-all checkbox: ticks/unticks every record currently shown in the table
+    const toggleSelectAllSales = () => {
+        const allDisplayedSelected = displayedSales.length > 0 && displayedSales.every(s => state.selectedSalesIds.includes(s.id));
+        if (allDisplayedSelected) {
+            setState(prev => ({ ...prev, selectedSalesIds: [], selectionCriteria: null }));
             return;
         }
-
-        // Case 2: Records already selected - validate if it matches criteria
-        const matchesCriteria =
-            saleToSelect.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
-            saleToSelect.item_code === state.selectionCriteria?.item_code;
-
-        if (matchesCriteria) {
-            setState(prev => ({
-                ...prev,
-                selectedSalesIds: [...prev.selectedSalesIds, saleId]
-            }));
-        } else {
-            alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Customer: ${state.selectionCriteria?.customer_code}\n   Item: ${state.selectionCriteria?.item_code}\n\n✗ This record has:\n   Customer: ${saleToSelect.customer_code}\n   Item: ${saleToSelect.item_code}\n\nPlease clear selection or select matching records.`);
-        }
+        const first = displayedSales[0];
+        setState(prev => ({
+            ...prev,
+            selectedSalesIds: displayedSales.map(s => s.id),
+            selectionCriteria: prev.selectionCriteria || { customer_code: first.customer_code, item_code: first.item_code }
+        }));
     };
     useEffect(() => {
         const handleEsc = (e) => {
@@ -608,30 +1022,14 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         const isSelected = state.selectedSalesIds.includes(sale.id);
 
         if (!isSelected) {
-            if (state.selectedSalesIds.length === 0) {
-                setState(prev => ({
-                    ...prev,
-                    selectedSalesIds: [sale.id],
-                    selectionCriteria: {
-                        customer_code: sale.customer_code,  // ← CHANGED from supplier_code
-                        item_code: sale.item_code
-                    }
-                }));
-            } else {
-                const matchesCriteria =
-                    sale.customer_code === state.selectionCriteria?.customer_code &&  // ← CHANGED
-                    sale.item_code === state.selectionCriteria?.item_code;
-
-                if (matchesCriteria) {
-                    setState(prev => ({
-                        ...prev,
-                        selectedSalesIds: [...prev.selectedSalesIds, sale.id]
-                    }));
-                } else {
-                    alert(`Cannot select this record!`);
-                    return;
+            setState(prev => ({
+                ...prev,
+                selectedSalesIds: [...prev.selectedSalesIds, sale.id],
+                selectionCriteria: prev.selectionCriteria || {
+                    customer_code: sale.customer_code,
+                    item_code: sale.item_code
                 }
-            }
+            }));
         }
 
         setState(prev => ({
@@ -661,23 +1059,22 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         try {
             updateState({ isSubmitting: true });
 
-            const response = await api.post(routes.bulkUpdateCustomer, {
-                sale_ids: state.selectedSalesIds,
+            // Same endpoint the Supplier Report bulk edit uses; it updates customer_code
+            // when given only that field. (POST /sales/bulk-update-customer 404s on the live server.)
+            await api.put(routes.bulkUpdateCustomer, {
+                transaction_ids: state.selectedSalesIds,
                 customer_code: finalCustomerCode
             });
 
-            if (response.data.success) {
-                await fetchAllSalesRecords();
+            await fetchAllSalesRecords();
 
-
-                // Full page refresh
-                window.location.reload();
-            } else {
-                throw new Error(response.data.message || "Update failed");
-            }
+            // Full page refresh
+            window.location.reload();
         } catch (error) {
             console.error("Bulk update error:", error);
-            alert("Failed to update customer codes. Please try again.");
+            const data = error.response?.data;
+            const reason = data?.errors ? Object.values(data.errors).flat().join('\n') : (data?.message || data?.error || error.message);
+            alert("Failed to update customer codes:\n" + reason);
             updateState({ isSubmitting: false });
         }
     };
@@ -799,6 +1196,14 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         return sales.slice().reverse();
     }, [newSales, unprintedSales, printedSales, selectedUnprintedCustomer, selectedPrintedCustomer]);
 
+    const allDisplayedSelected = displayedSales.length > 0 && displayedSales.every(s => state.selectedSalesIds.includes(s.id));
+    // Customers/items across every ticked record, for the bulk-update modal's "Current Selection" card
+    const selectedSalesSummary = useMemo(() => {
+        const selected = displayedSales.filter(s => state.selectedSalesIds.includes(s.id));
+        if (selected.length === 0) return null;
+        const unique = (key) => [...new Set(selected.map(s => s[key]).filter(Boolean))].join(', ');
+        return { customer_code: unique('customer_code'), item_code: unique('item_code') };
+    }, [displayedSales, state.selectedSalesIds]);
     const autoCustomerCode = useMemo(() => displayedSales.length > 0 && !isManualClear ? displayedSales[0].customer_code || "" : "", [displayedSales, isManualClear]);
     const currentBillNo = useMemo(() => {
         if (selectedPrintedCustomer && selectedPrintedCustomer.includes('-')) return selectedPrintedCustomer.split('-')[1] || "N/A";
@@ -845,6 +1250,25 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }
     };
 
+    // Lightweight refresh of just the sales list (used for real-time sidebar sync, no full page reload)
+    const fetchSalesOnly = async () => {
+        try {
+            const res = await api.get(routes.sales);
+            const salesData = res.data.data || res.data.sales || res.data || [];
+            updateState({ allSales: salesData });
+        } catch (error) {
+            console.error("Failed to refresh sales data:", error);
+        }
+    };
+
+    // Poll the database periodically so the printed/unprinted sidebars stay live without reloading the page
+    useEffect(() => {
+        const interval = setInterval(() => {
+            fetchSalesOnly();
+        }, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
     useEffect(() => {
         if (displayedSales.length > 0) {
             const totals = displayedSales.reduce((acc, s) => {
@@ -874,7 +1298,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             );
 
             if (customer) {
-                const baseUrl = "https://goviraju.lk/DBS_backend_30500/application/public";
+                const baseUrl = "https://wday.lk/DBS_backend_30500/application/public";
                 let fileName = customer.profile_pic;
                 let fullPath = null;
 
@@ -912,7 +1336,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
             if (supplier) {
                 // Root path where the 'storage' symlink is located
-                const baseUrl = "https://goviraju.lk/DBS_backend_30500/application/public";
+                const baseUrl = "https://wday.lk/DBS_backend_30500/application/public";
                 let fileName = supplier.profile_pic;
 
                 let fullPath = null;
@@ -954,7 +1378,10 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     }, [formData.weight, formData.price_per_kg, formData.packs, formData.pack_due]);
 
     useEffect(() => {
-        const handleWindowFocus = () => updateState(prev => ({ ...prev, windowFocused: Date.now() }));
+        const handleWindowFocus = () => {
+            updateState({ windowFocused: Date.now() });
+            fetchSalesOnly();
+        };
         window.addEventListener('focus', handleWindowFocus);
         return () => window.removeEventListener('focus', handleWindowFocus);
     }, []);
@@ -1010,26 +1437,20 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
             // 5. Logic for SUPPLIER CODE input
             if (currentFieldName === "supplier_code") {
-                const supplierCode = formData.supplier_code?.trim().toUpperCase();
-
                 // IF EMPTY or filled: Pass focus seamlessly to item selection container
-                setTimeout(() => {
-                    if (refs.item_code_select.current) {
-                        refs.item_code_select.current.focus();
-                    }
-                }, 50);
+                if (refs.item_code_select.current) {
+                    refs.item_code_select.current.focus();
+                }
                 return;
             }
 
-            // 6. Logic for ITEM SELECT 
+            // 6. Logic for ITEM SELECT
             if (currentFieldName === "item_code_select") {
                 // IF EMPTY or filled: Move straight into the weight input box
-                setTimeout(() => {
-                    if (refs.weight.current) {
-                        refs.weight.current.focus();
-                        refs.weight.current.select();
-                    }
-                }, 50);
+                if (refs.weight.current) {
+                    refs.weight.current.focus();
+                    refs.weight.current.select();
+                }
                 return;
             }
 
@@ -1040,12 +1461,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 // STOP RIGHT HERE: If weight is completely blank, enforce input
                 if (!weightValue) {
                     updateState({ errors: { form: "කරුණාකර බර ඇතුළත් කරන්න" } });
-                    setTimeout(() => {
-                        if (refs.weight.current) {
-                            refs.weight.current.focus();
-                            refs.weight.current.select();
-                        }
-                    }, 50);
+                    refs.weight.current?.focus();
+                    refs.weight.current?.select();
                     return; // Enforces the hold at the weight field
                 }
 
@@ -1053,44 +1470,34 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 const weightNum = parseFloat(weightValue);
                 if (isNaN(weightNum) || weightNum <= 0) {
                     updateState({ errors: { form: "කරුණාකර වලංගු බරක් ඇතුළත් කරන්න" } });
-                    setTimeout(() => {
-                        if (refs.weight.current) {
-                            refs.weight.current.focus();
-                            refs.weight.current.select();
-                        }
-                    }, 50);
+                    refs.weight.current?.focus();
+                    refs.weight.current?.select();
                     return;
                 }
 
                 // SUCCESS: If a correct weight value exists, step to the price element
-                setTimeout(() => {
-                    if (refs.price_per_kg_grid_item.current) {
-                        refs.price_per_kg_grid_item.current.focus();
-                        refs.price_per_kg_grid_item.current.select();
-                    }
-                }, 50);
+                if (refs.price_per_kg_grid_item.current) {
+                    refs.price_per_kg_grid_item.current.focus();
+                    refs.price_per_kg_grid_item.current.select();
+                }
                 return;
             }
 
             // 8. Logic for PRICE field
             if (currentFieldName === "price_per_kg_grid_item") {
-                setTimeout(() => {
-                    if (refs.packs.current) {
-                        refs.packs.current.focus();
-                        refs.packs.current.select();
-                    }
-                }, 50);
+                if (refs.packs.current) {
+                    refs.packs.current.focus();
+                    refs.packs.current.select();
+                }
                 return;
             }
 
             // 9. Logic for PACKS field
             if (currentFieldName === "packs") {
-                setTimeout(() => {
-                    if (refs.kuliya.current) {
-                        refs.kuliya.current.focus();
-                        refs.kuliya.current.select();
-                    }
-                }, 50);
+                if (refs.kuliya.current) {
+                    refs.kuliya.current.focus();
+                    refs.kuliya.current.select();
+                }
                 return;
             }
 
@@ -1110,12 +1517,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             if (nextFieldName) {
                 const nextRef = refs[nextFieldName];
                 if (nextRef?.current) {
-                    requestAnimationFrame(() => {
-                        setTimeout(() => {
-                            nextRef.current.focus();
-                            if (!nextFieldName.includes("select")) nextRef.current.select();
-                        }, 0);
-                    });
+                    nextRef.current.focus();
+                    if (!nextFieldName.includes("select")) nextRef.current.select();
                 }
             }
         }
@@ -1123,7 +1526,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
     const salesTotal = displayedSales.reduce((sum, s) => sum + ((parseFloat(s.weight) || 0) * (parseFloat(s.price_per_kg) || 0)), 0);
     const packCostTotal = displayedSales.reduce((sum, s) => sum + ((parseFloat(s.CustomerPackCost) || 0) * (parseFloat(s.packs) || 0)), 0);
-    const totalSalesValue = salesTotal + packCostTotal;
+    const kuliyaTotal = displayedSales.reduce((sum, s) => sum + (parseFloat(s.Kuliya) || 0), 0);
+    const totalSalesValue = salesTotal + packCostTotal + kuliyaTotal;
 
     const handleInputChange = (field, value) => {
         if (field === 'price_per_kg') {
@@ -1213,6 +1617,12 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
             // Trigger calculation immediately using parsed metrics
             if (parsedWeight > 0 && parsedPacks > 0) {
+                // Show a value instantly from the local formula, then confirm with the backend
+                const instantKuliya = calculateKuliyaLocally(item.no, item.type, parsedWeight, parsedPacks, items);
+                if (instantKuliya !== undefined) {
+                    setFormData(prev => ({ ...prev, kuliya: instantKuliya }));
+                }
+
                 const fetchKuliyaDirectly = async () => {
                     try {
                         const bagRealWeight = item?.bag_real_price || 0;
@@ -1228,22 +1638,13 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                             setFormData(prev => ({ ...prev, kuliya: response.data.kuliya }));
                         }
                     } catch (error) {
-                        const calculatedKuliya = calculateKuliyaLocally(
-                            item.no,
-                            item.type,
-                            parsedWeight,
-                            parsedPacks,
-                            items
-                        );
-                        if (calculatedKuliya !== undefined) {
-                            setFormData(prev => ({ ...prev, kuliya: calculatedKuliya }));
-                        }
+                        // Local value set above already stands as the fallback
                     }
                 };
                 fetchKuliyaDirectly();
             }
 
-            setTimeout(() => refs.weight.current?.focus(), 100);
+            refs.weight.current?.focus();
         } else {
             setFormData(prev => ({
                 ...prev,
@@ -1263,7 +1664,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         setFormData(prev => ({ ...prev, customer_code: short || "", customer_name: customer?.name || "", given_amount: existingGivenAmount }));
         fetchLoanAmount(short);
         updateState({ isManualClear: false });
-        setTimeout(() => { refs.price_per_kg.current?.focus(); refs.price_per_kg.current?.select(); }, 100);
+        refs.price_per_kg.current?.focus();
+        refs.price_per_kg.current?.select();
     };
     //function to display customer image
     const handleImageClick = (entityType) => {
@@ -1471,7 +1873,11 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     };
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (state.isSubmitting) return;
+        // NOTE: no isSubmitting guard here — each Enter press is a distinct, legitimate
+        // record. Rapid typing must let every one of them fire its own save request
+        // concurrently; blocking on a shared flag silently drops records that were
+        // never actually sent to the server. Safety against clobbering state when
+        // several saves resolve out of order is handled below via functional setState.
 
         // --- 1. VALIDATION LOGIC ---
         const requiredFields = [
@@ -1496,83 +1902,95 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         }
 
         // --- 2. PRE-FLIGHT PREPARATION ---
-        updateState({ errors: {}, isSubmitting: true });
-
         // Capture these now so they are available for the reset after the async gap
+        const isEditing = editingSaleId !== null;
+
+        // Printed bills are closed: existing records can still be edited, but no new ones added
+        if (!isEditing && selectedPrintedCustomer) {
+            updateState({ errors: { form: "මුද්‍රණය කළ බිලට නව වාර්තා එක් කළ නොහැක" } });
+            return;
+        }
         const customerCode = (formData.customer_code || autoCustomerCode).toUpperCase();
         const currentSupplierCode = formData.supplier_code;
         const currentCustomerName = formData.customer_name;
         const currentTelephone = formData.telephone_no;
         const shouldUpdateRelatedPrice = state.priceManuallyChanged;
 
-        try {
-            const isEditing = editingSaleId !== null;
-
-            // --- 3. BILLING LOGIC ---
-            let billPrintedStatus = undefined, billNoToUse = null;
-            if (!isEditing) {
-                if (state.currentBillNo) {
-                    billPrintedStatus = 'Y';
-                    billNoToUse = state.currentBillNo;
-                } else if (selectedPrintedCustomer) {
-                    billPrintedStatus = 'Y';
-                    billNoToUse = selectedPrintedCustomer.includes('-')
-                        ? selectedPrintedCustomer.split('-')[1]
-                        : printedSales.find(s => s.customer_code === selectedPrintedCustomer)?.bill_no;
-                } else if (selectedUnprintedCustomer) {
-                    billPrintedStatus = 'N';
-                }
+        // --- 3. BILLING LOGIC ---
+        let billPrintedStatus = undefined, billNoToUse = null;
+        if (!isEditing) {
+            if (state.currentBillNo) {
+                billPrintedStatus = 'Y';
+                billNoToUse = state.currentBillNo;
+            } else if (selectedPrintedCustomer) {
+                billPrintedStatus = 'Y';
+                billNoToUse = selectedPrintedCustomer.includes('-')
+                    ? selectedPrintedCustomer.split('-')[1]
+                    : printedSales.find(s => s.customer_code === selectedPrintedCustomer)?.bill_no;
+            } else if (selectedUnprintedCustomer) {
+                billPrintedStatus = 'N';
             }
+        }
 
-            // REMOVED: await fetchAllSalesRecords(); - DON'T fetch before API call!
+        const payload = {
+            supplier_code: currentSupplierCode.toUpperCase(),
+            customer_code: customerCode,
+            customer_name: currentCustomerName,
+            item_code: formData.item_code,
+            item_name: formData.item_name,
+            weight: parseFloat(formData.weight) || 0,
+            price_per_kg: parseFloat(formData.price_per_kg) || 0,
+            pack_due: parseFloat(formData.pack_due) || 0,
+            total: parseFloat(formData.total) || 0,
+            packs: parseFloat(formData.packs) || 0,
+            given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null,
+            kuliya: formData.kuliya ? parseFloat(formData.kuliya) : null,
+            ...(billPrintedStatus && { bill_printed: billPrintedStatus }),
+            ...(billNoToUse && { bill_no: billNoToUse }),
+            update_related_price: shouldUpdateRelatedPrice
+        };
 
-            const payload = {
-                supplier_code: currentSupplierCode.toUpperCase(),
-                customer_code: customerCode,
-                customer_name: currentCustomerName,
-                item_code: formData.item_code,
-                item_name: formData.item_name,
-                weight: parseFloat(formData.weight) || 0,
-                price_per_kg: parseFloat(formData.price_per_kg) || 0,
-                pack_due: parseFloat(formData.pack_due) || 0,
-                total: parseFloat(formData.total) || 0,
-                packs: parseFloat(formData.packs) || 0,
-                given_amount: formData.given_amount ? parseFloat(formData.given_amount) : null,
-                kuliya: formData.kuliya ? parseFloat(formData.kuliya) : null,
-                ...(billPrintedStatus && { bill_printed: billPrintedStatus }),
-                ...(billNoToUse && { bill_no: billNoToUse }),
-                update_related_price: shouldUpdateRelatedPrice
-            };
+        const url = isEditing ? `${routes.sales}/${editingSaleId}` : routes.sales;
+        const method = isEditing ? "put" : "post";
 
-            const url = isEditing ? `${routes.sales}/${editingSaleId}` : routes.sales;
-            const method = isEditing ? "put" : "post";
+        // --- INSTANT UI RESET: clear the form and jump the cursor to supplier_code right away
+        // so data entry isn't blocked — but the table itself only updates once the record is
+        // actually confirmed saved below, never before. ---
+        setFormData({ ...initialFormData, customer_code: customerCode, customer_name: currentCustomerName, telephone_no: currentTelephone, supplier_code: currentSupplierCode });
+        updateState({ errors: {}, editingSaleId: null, isManualClear: false, priceManuallyChanged: false, gridPricePerKg: "" });
+        if (refs.supplier_code.current) {
+            refs.supplier_code.current.focus();
+            refs.supplier_code.current.select();
+        }
 
-            // --- 4. API EXECUTION ---
-            const response = await api[method](url, payload);
+        // --- 4. API EXECUTION ---
+        const requestPromise = api[method](url, payload);
+        pendingSaveRequestsRef.current.push(requestPromise);
+        try {
+            const response = await requestPromise;
 
-            // --- 5. DATA SYNC ---
+            // --- 5. DATA SYNC: the record is now saved in the database — show it in the table.
+            // Uses a functional setState so this merges against whatever the LATEST allSales
+            // is at the moment this specific request resolves — not the allSales snapshot from
+            // when this submit started. With several saves in flight at once (fast typing),
+            // merging against a stale snapshot would let a later-resolving save silently
+            // overwrite/erase an earlier one's just-added record. ---
             let updatedSales = response.data.sales || [response.data.sale || response.data.data || response.data];
             const updatedIds = updatedSales.map(s => s.id);
-            const newAllSales = allSales.filter(s => !updatedIds.includes(s.id)).concat(updatedSales);
 
-            // We update everything in one cycle to prevent multiple re-renders
-            setFormData({ ...initialFormData, customer_code: customerCode, customer_name: currentCustomerName, telephone_no: currentTelephone, supplier_code: currentSupplierCode });
-            updateState({ allSales: newAllSales, editingSaleId: null, isManualClear: false, isSubmitting: false, priceManuallyChanged: false, gridPricePerKg: "" });
+            setState(prev => ({
+                ...prev,
+                allSales: prev.allSales.filter(s => !updatedIds.includes(s.id)).concat(updatedSales)
+            }));
 
-            // ✅ IMPORTANT: Refresh the all-sales table AFTER successful submission
-            await fetchAllSalesRecords();
-
-            // Immediate focus (no timeout) for faster data entry workflow
-            if (refs.supplier_code.current) {
-                refs.supplier_code.current.focus();
-                refs.supplier_code.current.select();
-            }
-
+            // Refresh the all-sales table in the background — no need to block on it
+            fetchAllSalesRecords();
         } catch (error) {
             updateState({
-                errors: { form: error.response?.data?.message || error.message || "An error occurred" },
-                isSubmitting: false
+                errors: { form: error.response?.data?.message || error.message || "An error occurred" }
             });
+        } finally {
+            pendingSaveRequestsRef.current = pendingSaveRequestsRef.current.filter(p => p !== requestPromise);
         }
     };
     const handleCustomerClick = async (type, customerCode, billNo = null, salesRecords = []) => {
@@ -1651,7 +2069,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 });
 
                 fetchLoanAmount(customerCode);
-                setTimeout(() => refs.supplier_code.current?.focus(), 50);
+                refs.supplier_code.current?.focus();
 
             } catch (error) {
                 setFormData({
@@ -1678,7 +2096,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 updateState({ allSales: allSales.map(s => salesToProcess.some(ps => ps.id === s.id) ? { ...s, bill_printed: "N" } : s) });
                 handleClearForm();
                 updateState({ selectedUnprintedCustomer: null, selectedPrintedCustomer: null });
-                [50, 100, 150, 200, 250].forEach(timeout => setTimeout(() => refs.customer_code_input.current?.focus(), timeout));
+                refs.customer_code_input.current?.focus();
             }
         } catch (err) { console.error("Failed to mark sales as processed:", err.message); }
     };
@@ -1707,10 +2125,104 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
     const buildA4ReceiptHTML = (salesData, billNo, customerName, mobile, globalLoanAmount = 0) => {
         return A4BillHTML({ salesData, billNo, customerName, mobile, globalLoanAmount });
     };
+
+    // F2 quick preview: shows the bill exactly as F1 would print it, built straight from
+    // the currently displayed sales (no server refetch), in a small modal — no print dialog.
+    const renderBillPreviewModal = () => {
+        if (!state.showBillPreview) return null;
+        if (displayedSales.length === 0) return null;
+
+        const onClose = () => updateState({ showBillPreview: false });
+
+        const printData = state.isBulkPrintEnabled ? combineSalesForPrinting(displayedSales) : displayedSales;
+        const customerName = displayedSales[0]?.customer_code || "N/A";
+        const mobile = formData.telephone_no || SHOP_PHONE;
+        const currentLoan = loanAmount || 0;
+        const isA4 = printMode === 'a4';
+        const previewHtml = isA4
+            ? buildA4ReceiptHTML(printData, currentBillNo || "N/A", customerName, mobile, currentLoan)
+            : buildFullReceiptHTML(printData, currentBillNo || "N/A", customerName, mobile, currentLoan, billSize);
+
+        return (
+            <div
+                style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}
+                onClick={onClose}
+            >
+                <div
+                    style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '95%', maxWidth: isA4 ? '650px' : '380px', maxHeight: '90vh', padding: '0', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#111439' }}>
+                        <span style={{ color: 'white', fontWeight: 'bold', fontSize: '14px' }}>
+                            බිල් පෙරදසුන (F2) — {customerName}
+                        </span>
+                        <button
+                            onClick={onClose}
+                            style={{ background: '#374151', border: 'none', color: 'white', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer', fontSize: '14px' }}
+                        > ✕ </button>
+                    </div>
+                    <div style={{ overflowY: 'auto', padding: '16px', backgroundColor: '#f1f1f1' }}>
+                        <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                    </div>
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        <button
+                            onClick={() => { onClose(); handlePrintAndClear(); }}
+                            style={{ padding: '8px 18px', backgroundColor: '#ffc107', color: '#343a40', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >🖨️ Print (F1)</button>
+                        <button
+                            onClick={onClose}
+                            style={{ padding: '8px 18px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >Close</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     // In your SalesEntry component, modify the handlePrintAndClear function:
 
     const handlePrintAndClear = async () => {
-        let salesData = displayedSales.filter(s => s.id);
+        // If any record submitted moments ago is still mid-request, wait for it to land
+        // before deciding what belongs on this bill — otherwise it can get left out.
+        const pendingSaves = pendingSaveRequestsRef.current.slice();
+        if (pendingSaves.length > 0) {
+            await Promise.allSettled(pendingSaves);
+        }
+
+        // Re-sync with the server rather than trusting the local `allSales` snapshot —
+        // this closure's `allSales` can still be stale relative to saves that just resolved.
+        let freshAllSales = allSales;
+        try {
+            const freshRes = await api.get(routes.sales);
+            freshAllSales = freshRes.data.data || freshRes.data.sales || freshRes.data || [];
+            updateState({ allSales: freshAllSales });
+        } catch (e) {
+            console.warn("Failed to refresh sales before printing, using local data:", e);
+        }
+
+        // Recompute the same selection the sidebar/table currently shows, against fresh data
+        const freshNewSales = freshAllSales.filter(s => s.id && s.bill_printed !== 'Y' && s.bill_printed !== 'N');
+        const freshUnprintedSales = freshAllSales.filter(s => s.bill_printed === 'N' || !s.bill_printed || s.bill_printed === '');
+        const freshPrintedSales = freshAllSales.filter(s => s.bill_printed === 'Y');
+
+        let salesData = freshNewSales;
+        if (selectedUnprintedCustomer) {
+            salesData = [...salesData, ...freshUnprintedSales.filter(s => s.customer_code === selectedUnprintedCustomer)];
+        } else if (selectedPrintedCustomer) {
+            if (selectedPrintedCustomer.includes('-')) {
+                const [cCode, bNo] = selectedPrintedCustomer.split('-');
+                salesData = [...salesData, ...freshPrintedSales.filter(s => s.customer_code === cCode && String(s.bill_no) === String(bNo))];
+            } else {
+                salesData = [...salesData, ...freshPrintedSales.filter(s => s.customer_code === selectedPrintedCustomer)];
+            }
+        }
+
+        const seenIds = new Set();
+        salesData = salesData.filter(s => {
+            if (!s.id || seenIds.has(s.id)) return false;
+            seenIds.add(s.id);
+            return true;
+        });
 
         if (!salesData.length) {
             alert("මුද්‍රණය කිරීමට දත්ත නොමැත!");
@@ -1721,6 +2233,10 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
         const shouldCombine = state.isBulkPrintEnabled;
         let printData = salesData;
 
+        console.log('[handlePrintAndClear] salesData before combine, Kuliya check:', salesData.map(s => ({
+            id: s.id, item_name: s.item_name, weight: s.weight, packs: s.packs, Kuliya: s.Kuliya
+        })));
+
         if (shouldCombine) {
             printData = combineSalesForPrinting(salesData);
             if (printData.length < salesData.length) {
@@ -1728,14 +2244,9 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             }
         }
 
-        // --- COMMISSION VALIDATION ---
-        for (const s of printData) {
-            if (parseFloat(s.price_per_kg) === parseFloat(s.SupplierPricePerKg)) {
-                const errorMsg = `කේතය: ${s.supplier_code} හි කොමිස් මුදල් අඩුකර නොමැත. කරුණාකර පාරිභෝගිකයා පද්ධතියට ඇතුළත් කර අදාළ ඡායාරූප (Profile, NIC) එක් කරන්න.`;
-                alert(errorMsg);
-                return;
-            }
-        }
+        console.log('[handlePrintAndClear] printData after combine, Kuliya check:', printData.map(s => ({
+            id: s.id, item_name: s.item_name, weight: s.weight, packs: s.packs, Kuliya: s.Kuliya
+        })));
 
         // --- ZERO PRICE VALIDATION ---
         const hasZeroPrice = printData.some(s => parseFloat(s.price_per_kg) === 0);
@@ -1749,17 +2260,12 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
             const customerCode = salesData[0].customer_code || "N/A";
             const customerName = salesData[0].customer_code || salesData[0].customer_code || customerCode;
-            const mobile = salesData[0].mobile || "0777672838 / 071437115";
+            const mobile = salesData[0].mobile || SHOP_PHONE;
 
-            let currentLoan = 0;
-            try {
-                const loanRes = await api.post(routes.getLoanAmount, {
-                    customer_short_name: customerCode
-                });
-                currentLoan = parseFloat(loanRes.data.total_loan_amount) || 0;
-            } catch (e) {
-                console.warn("Loan fetch failed");
-            }
+            // Reuse the loan amount already tracked in state (kept fresh as the customer is
+            // selected/typed via fetchLoanAmount) instead of re-fetching it here — this removes
+            // a full network round trip from the critical path so F1 reaches the print dialog faster.
+            const currentLoan = loanAmount || 0;
 
             // Get original IDs for marking as printed
             let idsToMark = salesData.map(s => s.id);
@@ -1779,7 +2285,44 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 throw new Error("මුද්‍රණය අසාර්ථකයි");
             }
 
-            const billNo = printResponse.data.bill_no || "";
+            let billNo = printResponse.data.bill_no
+                || printResponse.data.data?.bill_no
+                || printResponse.data.sale?.bill_no
+                || printResponse.data.sales?.[0]?.bill_no
+                || (Array.isArray(printResponse.data.data) && printResponse.data.data[0]?.bill_no)
+                || "";
+
+            if (!billNo) {
+                console.warn("mark-printed response did not include a bill_no, refetching sales to find it:", printResponse.data);
+                try {
+                    const freshRes = await api.get(routes.sales);
+                    const freshSales = freshRes.data.data || freshRes.data.sales || freshRes.data || [];
+                    const matched = freshSales.find(s => idsToMark.includes(s.id) && s.bill_no);
+                    billNo = matched?.bill_no || "";
+                } catch (refetchErr) {
+                    console.warn("Failed to refetch sales for bill_no fallback:", refetchErr);
+                }
+            }
+
+            // Compute the same bill total shown as "එකතුව" on the receipt (weight*price + pack cost + Kuliya,
+            // grouped by row id the same way ThermalBillHTML groups it) so the spoken amount matches the print.
+            const billFinalTotal = printData.reduce((sum, s) => {
+                const weight = parseFloat(s.weight) || 0;
+                const price = parseFloat(s.price_per_kg) || 0;
+                const packs = parseInt(s.packs) || 0;
+                const packCost = parseFloat(s.CustomerPackCost) || 0;
+                const kuliya = parseFloat(s.Kuliya) || 0;
+                return sum + (weight * price) + (packs * packCost) + kuliya;
+            }, 0);
+
+            // Persist the last printed bill's total so it's still shown after a page reload/navigation
+            const lastPrintedBillInfo = { billNo, customerName, total: billFinalTotal, timestamp: Date.now() };
+            try {
+                localStorage.setItem('lastPrintedBill', JSON.stringify(lastPrintedBillInfo));
+            } catch (e) {
+                console.warn("Failed to persist last printed bill to localStorage:", e);
+            }
+            setLastPrintedBill(lastPrintedBillInfo);
 
             // FIXED: Use the printMode prop to determine which template to use
             let receiptHtml;
@@ -1791,9 +2334,12 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 receiptHtml = buildFullReceiptHTML(printData, billNo, customerName, mobile, currentLoan, billSize);
             }
 
-            // Update local state before reload
-            updateState({
-                allSales: allSales.map(s =>
+            // Update local state immediately (optimistic, no page reload). Uses a functional
+            // setState so this doesn't clobber any save that resolved into allSales while
+            // this print request was in flight.
+            setState(prev => ({
+                ...prev,
+                allSales: prev.allSales.map(s =>
                     idsToMark.includes(s.id)
                         ? { ...s, bill_printed: "Y", bill_no: billNo }
                         : s
@@ -1801,31 +2347,47 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                 selectedPrintedCustomer: null,
                 selectedUnprintedCustomer: null,
                 isPrinting: false
-            });
+            }));
 
             handleClearForm(true);
 
-            // Open Print Window
-            const printWindow = window.open("", "_blank", "width=800,height=600");
-            if (!printWindow) {
-                alert("Please allow pop-ups for printing");
-                window.location.reload();
-                return;
-            }
+            // Print via a hidden iframe — jumps straight to the native print dialog,
+            // no visible preview window and no page reload.
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+            iframe.style.visibility = 'hidden';
+            document.body.appendChild(iframe);
 
-            printWindow.document.write(receiptHtml);
-            printWindow.document.close();
-
-            // Auto print and close
-            printWindow.onload = () => {
-                setTimeout(() => {
-                    printWindow.print();
-                    setTimeout(() => {
-                        printWindow.close();
-                        window.location.reload();
-                    }, 1000);
-                }, 100);
+            let cleanedUp = false;
+            const finishPrint = () => {
+                if (cleanedUp) return;
+                cleanedUp = true;
+                if (iframe.parentNode) document.body.removeChild(iframe);
+                refs.customer_code_input.current?.focus();
             };
+
+            const iframeDoc = iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(receiptHtml);
+            iframeDoc.close();
+
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            // Announce the bill total in Sinhala (x3) right as the print dialog opens
+            speakSinhalaBillTotal(billFinalTotal);
+            iframe.contentWindow.onafterprint = finishPrint;
+            // Safety fallback in case onafterprint doesn't fire in this browser
+            setTimeout(finishPrint, 5000);
+
+            // Keep the cursor in the customer code field right away
+            refs.customer_code_input.current?.focus();
+
+            // Sync with the server in the background so the sidebars reflect the DB immediately
+            fetchSalesOnly();
+            fetchAllSalesRecords();
 
         } catch (error) {
             console.error("Printing error:", error);
@@ -1860,6 +2422,10 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             else if (e.key === "F5") {
                 e.preventDefault();
                 if (typeof handleMarkAllProcessed === "function") handleMarkAllProcessed();
+            }
+            else if (e.key === "F2" && displayedSales.length > 0) {
+                e.preventDefault();
+                updateState({ showBillPreview: true });
             }
         };
         window.addEventListener("keydown", handleShortcut);
@@ -1908,325 +2474,6 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
     const hasData = allSales.length > 0 || customers.length > 0 || items.length > 0 || suppliers.length > 0;
     //context related to bulkupdate
-    const ContextMenu = React.memo(({ show, onClose, onUpdate, selectionCriteria, selectedCount }) => {
-        const [localCustomerCode, setLocalCustomerCode] = React.useState('');
-
-        React.useEffect(() => {
-            if (show) {
-                setLocalCustomerCode('');
-            }
-        }, [show]);
-
-        const handleInputChange = (e) => {
-            const value = e.target.value.toUpperCase();
-            setLocalCustomerCode(value);
-        };
-
-        const handleUpdate = () => {
-            if (localCustomerCode.trim()) {
-                onUpdate(localCustomerCode.trim().toUpperCase());
-                setLocalCustomerCode('');
-            } else {
-                alert("Please enter a customer code");
-            }
-        };
-
-        const handleClose = () => {
-            setLocalCustomerCode('');
-            onClose();
-        };
-
-        if (!show) return null;
-
-        return (
-            <>
-                {/* Backdrop Overlay */}
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                        backdropFilter: 'blur(4px)',
-                        zIndex: 9999
-                    }}
-                    onClick={handleClose}
-                />
-
-                {/* Modal Container */}
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        zIndex: 10000,
-                        width: '90%',
-                        maxWidth: '450px',
-                        maxHeight: '90vh',
-                        overflow: 'auto'
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <style>{`
-                    @keyframes fadeIn { 
-                        from { opacity: 0; } 
-                        to { opacity: 1; } 
-                    } 
-                    .modal-button { 
-                        transition: all 0.2s ease; 
-                        cursor: pointer; 
-                    } 
-                    .modal-button:hover { 
-                        transform: translateY(-1px); 
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
-                    } 
-                    .modal-button:active { 
-                        transform: translateY(0); 
-                    }
-                `}</style>
-
-                    {/* Header with Icon */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        padding: '12px 20px',
-                        borderTopLeftRadius: '16px',
-                        borderTopRightRadius: '16px',
-                        color: 'white'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{
-                                width: '32px',
-                                height: '32px',
-                                background: 'rgba(255, 255, 255, 0.2)',
-                                borderRadius: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '16px'
-                            }}>
-                                ⚡
-                            </div>
-                            <div>
-                                <h2 style={{
-                                    margin: 0,
-                                    fontSize: '16px',
-                                    fontWeight: 'bold',
-                                    letterSpacing: '-0.5px'
-                                }}>
-                                    Bulk Update Customer
-                                </h2>
-                                <p style={{
-                                    margin: '2px 0 0 0',
-                                    fontSize: '11px',
-                                    opacity: 0.9
-                                }}>
-                                    Update multiple customer codes at once
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Content */}
-                    <div style={{ padding: '16px 20px' }}>
-                        {/* Selection Criteria Card */}
-                        {selectionCriteria && (
-                            <div style={{
-                                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                                borderRadius: '10px',
-                                padding: '10px 12px',
-                                marginBottom: '16px',
-                                border: '1px solid #fbbf24'
-                            }}>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    marginBottom: '8px'
-                                }}>
-                                    <span style={{ fontSize: '14px' }}>📋</span>
-                                    <span style={{
-                                        fontWeight: 'bold',
-                                        fontSize: '11px',
-                                        color: '#92400e',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px'
-                                    }}>
-                                        Current Selection
-                                    </span>
-                                </div>
-
-                                <div style={{ display: 'grid', gap: '6px' }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '6px 8px',
-                                        background: 'white',
-                                        borderRadius: '6px'
-                                    }}>
-                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Customer:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            fontSize: '12px',
-                                            color: '#92400e',
-                                            fontFamily: 'monospace'
-                                        }}>
-                                            {selectionCriteria.customer_code}
-                                        </span>
-                                    </div>
-
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '6px 8px',
-                                        background: 'white',
-                                        borderRadius: '6px'
-                                    }}>
-                                        <span style={{ fontSize: '11px', color: '#78350f' }}>Item:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            fontSize: '12px',
-                                            color: '#92400e',
-                                            fontFamily: 'monospace'
-                                        }}>
-                                            {selectionCriteria.item_code}
-                                        </span>
-                                    </div>
-
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '6px 8px',
-                                        background: '#10b981',
-                                        borderRadius: '6px',
-                                        color: 'white'
-                                    }}>
-                                        <span style={{ fontSize: '11px' }}>Selected:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            fontSize: '14px'
-                                        }}>
-                                            {selectedCount || 0}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Input Field */}
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{
-                                display: 'block',
-                                marginBottom: '6px',
-                                fontWeight: '600',
-                                fontSize: '12px',
-                                color: '#374151'
-                            }}>
-                                ✏️ New Customer Code
-                            </label>
-                            <input
-                                type="text"
-                                value={localCustomerCode}
-                                onChange={handleInputChange}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleUpdate();
-                                    }
-                                }}
-                                style={{
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    border: '2px solid #e5e7eb',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    fontWeight: '500',
-                                    transition: 'all 0.2s ease',
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                    fontFamily: 'monospace'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#667eea';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                                autoFocus
-                                placeholder="e.g., CUST001"
-                            />
-                        </div>
-
-                        {/* Primary Action Button */}
-                        <button
-                            onClick={handleUpdate}
-                            className="modal-button"
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '10px',
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                                fontSize: '14px',
-                                marginBottom: '0'
-                            }}
-                        >
-                            🚀 Update {selectedCount || 0} Record{selectedCount !== 1 ? 's' : ''}
-                        </button>
-                    </div>
-
-                    {/* Footer with Close Button */}
-                    <div style={{
-                        padding: '12px 20px',
-                        background: '#f9fafb',
-                        borderBottomLeftRadius: '16px',
-                        borderBottomRightRadius: '16px',
-                        borderTop: '1px solid #e5e7eb',
-                        display: 'flex',
-                        justifyContent: 'flex-end'
-                    }}>
-                        <button
-                            onClick={handleClose}
-                            style={{
-                                padding: '6px 16px',
-                                background: 'transparent',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '6px',
-                                color: '#6b7280',
-                                fontSize: '12px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                fontWeight: '500'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.target.style.background = '#f3f4f6';
-                                e.target.style.borderColor = '#d1d5db';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.background = 'transparent';
-                                e.target.style.borderColor = '#e5e7eb';
-                            }}
-                        >
-                            Cancel (ESC)
-                        </button>
-                    </div>
-                </div>
-            </>
-        );
-    });
     return (
         <div className="sales-layout" style={{ maxWidth: '1400px', margin: '0 auto' }}>
             {isLoading && (<div className="fixed top-0 left-0 right-0 bg-blue-500 text-white py-1 text-center text-sm z-50">Refreshing data...</div>)}
@@ -2264,8 +2511,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                             <div className="flex-shrink-0">
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div className="w-full flex justify-between items-center">
-                                        <div style={{ position: 'relative', top: '-20px', display: 'flex', alignItems: 'center', zIndex: 20 }}>
-                                            <div className="font-bold text-lg" style={{ color: 'red', fontSize: '1.35rem' }}>
+                                        <div style={{ position: 'relative', top: '-20px', display: 'flex', alignItems: 'center', flexWrap: 'nowrap', flexShrink: 0, zIndex: 20 }}>
+                                            <div className="font-bold text-lg whitespace-nowrap" style={{ color: 'red', fontSize: '1.35rem' }}>
                                                 බිල් අං: {currentBillNo}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '100px' }}>
@@ -2283,6 +2530,11 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                     <label htmlFor="bulkPrintCheckbox" style={{ color: 'white', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                                         Bulk Printing
                                                     </label>
+                                                    {lastPrintedBill && (
+                                                        <div className="font-bold text-xl whitespace-nowrap" style={{ color: '#4ade80', fontSize: '1.15rem', marginLeft: '15px' }}>
+                                                            අවසන් බිල් එකතුව: Rs. {formatDecimal(lastPrintedBill.total)} (#{lastPrintedBill.billNo})
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -2377,10 +2629,8 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                             if (!selectedOption) return;
                                                             handleItemSelect(selectedOption);
                                                             updateState({ itemSearchInput: "" });
-                                                            setTimeout(() => {
-                                                                refs.weight.current?.focus();
-                                                                refs.weight.current?.select();
-                                                            }, 50);
+                                                            refs.weight.current?.focus();
+                                                            refs.weight.current?.select();
                                                         }}
                                                         onKeyDown={(e) => {
                                                             // Handle Enter key - Let react-select handle selection when menu is open
@@ -2517,9 +2767,9 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                     }}
                                                     onKeyDown={(e) => {
                                                         if (id === 'kuliya') {
-                                                            // Allow Enter key for form submission
+                                                            // Submit via handleKeyDown so focus moves to supplier_code afterward
                                                             if (e.key === 'Enter') {
-                                                                // Let handleKeyDown handle it
+                                                                handleKeyDown(e, id);
                                                                 return;
                                                             }
                                                             // Block number keys (0-9) and other keys except backspace, delete, tab, etc.
@@ -2569,7 +2819,9 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                         <table className="min-w-full border-gray-200 rounded-xl text-sm" style={{ backgroundColor: '#000000', color: 'white', borderCollapse: 'collapse', margin: '0px 0', width: '100%' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#000000' }}>
-                                                    <th className="px-2 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}></th>
+                                                    <th className="px-2 py-2 border text-center" style={{ backgroundColor: '#f5fafb', color: '#000000', width: '40px' }}>
+                                                        <input type="checkbox" checked={allDisplayedSelected} onChange={toggleSelectAllSales} disabled={displayedSales.length === 0} title="Select all" style={{ cursor: 'pointer' }} />
+                                                    </th>
                                                     {['Sup code', 'කේතය', 'අයිතමය', 'බර(kg)', 'මිල', 'අගය', 'මලු', 'Actions'].map((header, index) => (
                                                         <th key={index} className="px-4 py-2 border" style={{ backgroundColor: '#f5fafb', color: '#000000' }}>{header}</th>
                                                     ))}
@@ -2601,7 +2853,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                             </tbody>
                                         </table>
 
-                                        <ContextMenu show={state.bulkUpdateContextMenu.show} onClose={closeContextMenu} onUpdate={handleBulkUpdateCustomer} selectionCriteria={state.selectionCriteria} selectedCount={state.selectedSalesIds.length} />
+                                        <ContextMenu show={state.bulkUpdateContextMenu.show} onClose={closeContextMenu} onUpdate={handleBulkUpdateCustomer} selectionCriteria={selectedSalesSummary} selectedCount={state.selectedSalesIds.length} />
 
                                         {displayedSales.length > 0 && (<SalesSummaryFooter sales={displayedSales} formatDecimal={formatDecimal} />)}
 
@@ -2613,7 +2865,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                         <div className="flex items-center justify-between mb-4" style={{ marginTop: "35px" }}>
                                             {displayedSales.length > 0 && (
                                                 <div className="text-2xl font-bold" style={{ color: 'red' }}>
-                                                    (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} )
+                                                    (විකුණුම්: Rs. {formatDecimal(salesTotal)} + මල්ලක අගය: Rs. {formatDecimal(packCostTotal)} + කුලිය: Rs. {formatDecimal(kuliyaTotal)} )
                                                 </div>
                                             )}
                                         </div>
@@ -2738,7 +2990,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        allSalesRecords.map((sale, index) => (
+                                                        sortedAllSalesRecords.map((sale, index) => (
                                                             <tr
                                                                 key={sale.id || index}
                                                                 onClick={() => handleEditClick(sale)}
@@ -2900,6 +3152,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
                     )}
                 </div>
             </div>
+            {renderBillPreviewModal()}
         </div>
     );
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../Sidebar';
 import api from "../../api"; // ✅ axios wrapper
+import { SHOP_NAME, SHOP_PHONE } from '../../config/shop';
 
 const SalesReport = () => {
     const [sales, setSales] = useState([]);
@@ -92,12 +93,12 @@ const SalesReport = () => {
                 <div style="font-size:24px;">
                 <span style="font-size: 14px; margin-left: -160px; margin-right: 40px; color: #666;">පරණ බිල්</span>xxxx
                 </div>
-                <div style="font-size:20px; margin-bottom:5px;font-weight:bold;">colombage lanka (Pvt) Ltd</div>
+                <div style="font-size:20px; margin-bottom:5px;font-weight:bold;">${SHOP_NAME}</div>
                 <div style="display:flex; justify-content:center; gap:15px; margin:12px 0;"><span style="border:2.5px solid #000; padding:5px 12px; font-size:22px;">xx</span><span style="border:2.5px solid #000; padding:5px 12px; font-size:22px;">${customerName.toUpperCase()}</span></div>
                 <div style="font-size:16px;">එළවළු,පළතුරු තොග වෙළෙන්දෝ</div>
                 <div style="display:flex; justify-content:space-between; font-size:14px; margin-top:6px; padding:0 5px;"><span>බණ්ඩාරවෙල</span><span>${time}</span></div>
             </div>
-            <div style="font-size:19px; margin-top:10px; padding:0 5px;"><div style="font-weight: bold;">දුර: 0777672838 / 071437115</div><div style="display:flex; justify-content:space-between; margin-top:3px;"><span>බිල් අංකය:${billNo}</span><span>දිනය:${date}</span></div></div>
+            <div style="font-size:19px; margin-top:10px; padding:0 5px;"><div style="font-weight: bold;">දුර: ${SHOP_PHONE}</div><div style="display:flex; justify-content:space-between; margin-top:3px;"><span>බිල් අංකය:${billNo}</span><span>දිනය:${date}</span></div></div>
             <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
             <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">${colGroups}<thead><tr style="border-bottom:2.5px solid #000; font-weight:bold;"><th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th><th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th><th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px;top: 24px;">මිල</th><th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">අයිතිය<br>අගය</th></tr></thead><tbody>${itemsHtml}</tbody><tfoot><tr style="border-top:2.5px solid #000; font-weight:bold;"><td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td><td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${Number(totalSales).toFixed(2)}</div></td></tr></tfoot></table>
             <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;"><tr><td>මලු:</td><td style="text-align:right; font-weight:bold;">${formatNumber(totalPackCost.toFixed(2))}</td></tr><tr><td style="font-size:20px; padding-top:8px;">එකතුව:</td><td style="text-align:right; padding-top:8px;"><span style="border-bottom:5px double #000; border-top:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(Number(finalGrandTotal).toFixed(2))}</span></td></tr>${loanRow}${givenAmount > 0 ? '<tr><td>දුන් මුදල:</td><td style="text-align:right;">' + formatNumber(parseFloat(givenAmount).toFixed(2)) + '</td></tr><tr><td>ඉතිරිය:</td><td style="text-align:right; font-size:26px;">' + formatNumber(remaining.toFixed(2)) + '</td></tr>' : ''}</table>
@@ -109,7 +110,7 @@ const SalesReport = () => {
     // --- 2. FARMER RECEIPT LOGIC ---
     const buildFarmerBillHTML = (supplierDetails, currentBillNo, selectedSupplier) => {
         const date = new Date().toLocaleDateString('si-LK');
-        const mobile = '0777672838/071437115';
+        const mobile = SHOP_PHONE;
         const receiptMaxWidth = '350px';
         const fontSizeBody = '25px';
         const fontSizeHeader = '23px';

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
+import { SHOP_NAME, SHOP_PHONE } from '../config/shop';
 
 // Copy the exact ThermalBillHTML function here
 const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billSize = '3inch' }) => {
@@ -23,8 +24,8 @@ const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAm
     const time = new Date().toLocaleTimeString();
 
     const groupedById = new Map();
-    salesData.forEach(s => {
-        const id = s.id;
+    salesData.forEach((s, index) => {
+        const id = s.id ?? `__row_${index}`;
         if (!groupedById.has(id)) {
             groupedById.set(id, {
                 ...s,
@@ -130,7 +131,7 @@ const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAm
     <body>
         <div class="receipt-main">
             <div class="header">
-                <div style="font-size: 22px; font-weight: bold;">මහතුන් වෙළඳසැල</div>
+                <div style="font-size: 22px; font-weight: bold;">${SHOP_NAME}</div>
                 <div style="margin: 10px 0;">
                     <span class="badge">F2-1</span>
                     <span class="badge">${customerName.toUpperCase()}</span>
@@ -139,7 +140,7 @@ const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAm
             </div>
 
             <div class="info-section">
-                <div style="font-weight: bold; font-size: 14px;">Tel: 0777672838 / 0714371115</div>
+                <div style="font-weight: bold; font-size: 14px;">Tel: ${SHOP_PHONE}</div>
                 <div style="display:flex; justify-content:space-between; font-size: 13px; margin-top: 5px;">
                     <span>බිල් අංකය: ${billNo}</span>
                     <div style="text-align:right;">
@@ -181,7 +182,7 @@ const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAm
 
             <table class="total-table">
                 ${totalPackCost > 0 ? `<tr><td style="padding-top:5px;">මලු:</td><td style="text-align:right;">${formatNumber(totalPackCost.toFixed(2))}</td></tr>` : ''}
-                ${totalKuliyaSum > 0 ? `<tr><td style="padding-top:5px;">කුලිය:</td><td style="text-align:right;">${formatNumber(totalKuliyaSum.toFixed(2))}</td></tr>` : ''}
+                <tr><td style="padding-top:5px;">කුලිය:</td><td style="text-align:right;">${formatNumber(totalKuliyaSum.toFixed(2))}</td></tr>
                 <tr>
                     <td style="padding-top:10px;">එකතුව:</td>
                     <td style="text-align:right; padding-top:10px;">
@@ -215,7 +216,7 @@ const PublicBill = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        axios.get(`https://goviraju.lk/DBS_backend_30500/api/public/bill/${token}`)
+        axios.get(`https://wday.lk/DBS_backend_30500/api/public/bill/${token}`)
             .then(res => {
                 setBillData(res.data);
                 setLoading(false);
@@ -265,7 +266,7 @@ const PublicBill = () => {
                         salesData: salesArray,
                         billNo: billData.bill_no,
                         customerName: billData.customer_name,
-                        mobile: billData.customer_mobile || "0777672838 / 0714371115",
+                        mobile: billData.customer_mobile || SHOP_PHONE,
                         globalLoanAmount: billData.loan_amount || 0,
                         billSize: '3inch'
                     })

@@ -157,7 +157,7 @@ const SupplierReport = () => {
     const renderFullReportView = () => {
         if (!fullReportData) return null;
         const { profile, loans, sales } = fullReportData;
-        const storageUrl = "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
+        const storageUrl = "https://wday.lk/DBS_backend_30500/application/public/storage/";
 
         return (
             <div style={dashboardOverlay}>
@@ -253,7 +253,7 @@ const SupplierReport = () => {
                 </div>
             )}
 
-            <nav style={navBarStyle}>
+            <nav className="sr-nav" style={navBarStyle}>
                 <h1 style={{ color: 'white', fontSize: '1.5rem', margin: 0 }}>සැපයුම්කරු වාර්තාව</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <button 
@@ -268,10 +268,10 @@ const SupplierReport = () => {
                 </div>
             </nav>
 
-            <div style={reportContainerStyle}>
-                <div style={sectionsContainerStyle}>
-                    <div style={printedContainerStyle}>
-                        <div style={printedSectionStyle}>
+            <div className="sr-container" style={reportContainerStyle}>
+                <div className="sr-sections" style={sectionsContainerStyle}>
+                    <div className="sr-side" style={printedContainerStyle}>
+                        <div className="sr-side-section" style={printedSectionStyle}>
                             <h2 style={sectionHeader}>මුද්‍රණය කළ</h2>
                             <input type="text" placeholder="🔍 සෙවීම..." value={printedSearchTerm} onChange={(e) => setPrintedSearchTerm(e.target.value)} style={searchBarStyle} />
                             <div style={listContainerStyle}>
@@ -282,11 +282,11 @@ const SupplierReport = () => {
                         </div>
                     </div>
 
-                    <div style={centerPanelContainerStyle}>
+                    <div className="sr-center" style={centerPanelContainerStyle}>
                         <div style={mainDetailsPanel}>
                             <div style={headerStyle}>
                                 <h2 style={{ color: 'white' }}>බිල්පත් විස්තර: {selectedBillNo || '...'}</h2>
-                                {profilePic && <img src={`https://goviraju.lk/DBS_backend_30500/application/public/storage/${profilePic}`} style={profilePicStyle} alt="S" />}
+                                {profilePic && <img src={`https://wday.lk/DBS_backend_30500/application/public/storage/${profilePic}`} style={profilePicStyle} alt="S" />}
                             </div>
                             <table style={dataTable}>
                                 <thead><tr style={{ backgroundColor: '#4e73df', color: 'white' }}><th>බිල්</th><th>ගනුදෙ</th><th>අයිතමය</th><th>බර</th><th>එකතුව</th></tr></thead>
@@ -303,8 +303,8 @@ const SupplierReport = () => {
                         </div>
                     </div>
 
-                    <div style={unprintedContainerStyle}>
-                        <div style={unprintedSectionStyle}>
+                    <div className="sr-side" style={unprintedContainerStyle}>
+                        <div className="sr-side-section" style={unprintedSectionStyle}>
                             <h2 style={sectionHeader}>ණය ලබාගත්</h2>
                             <div style={listContainerStyle}>
                                 {loanSummary.map((loan, index) => (

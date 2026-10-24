@@ -376,12 +376,12 @@ const SupplierDetailsPanel = ({
     };
 
     if (isLoading) {
-        return <div style={panelContainerStyle}><p style={{ textAlign: 'center', fontSize: '1.2em', color: '#007bff' }}>{isUnprintedBill ? 'Generating Bill No and Loading...' : 'Loading bill details...'}</p></div>;
+        return <div className="sr-panel" style={panelContainerStyle}><p style={{ textAlign: 'center', fontSize: '1.2em', color: '#007bff' }}>{isUnprintedBill ? 'Generating Bill No and Loading...' : 'Loading bill details...'}</p></div>;
     }
 
     if (error || details.length === 0) {
         return (
-            <div style={panelContainerStyle}>
+            <div className="sr-panel" style={panelContainerStyle}>
                 <button onClick={onDone} style={backButtonStyle}>&larr; Back to Summary</button>
                 <p style={{ color: '#6c757d' }}>{error ? `Error: ${error}` : 'No records found for this supplier or bill.'}</p>
             </div>
@@ -390,7 +390,7 @@ const SupplierDetailsPanel = ({
 
     // --- MAIN RENDER ---
     return (
-        <div style={panelContainerStyle}>
+        <div className="sr-panel" style={panelContainerStyle}>
             <button onClick={onDone} style={backButtonStyle}>&larr; Back to Summary</button>
 
             {/* --- SUPPLIER CODE IN HEADER (Displays currently known billNo) --- */}

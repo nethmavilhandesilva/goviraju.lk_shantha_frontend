@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import Layout from '../Layout/Layout';
 import './FinancialReport.css';
+import { SHOP_NAME } from '../../config/shop';
 
 const FinancialReport = () => {
     const [reportData, setReportData] = useState([]);
@@ -26,7 +27,7 @@ const FinancialReport = () => {
         lastBillTime: '',
         firstBillNo: '',
         lastBillNo: '',
-        companyName: 'Loading...',
+        companyName: SHOP_NAME,
         reportDate: new Date().toLocaleString(),
     });
 
@@ -42,7 +43,7 @@ const FinancialReport = () => {
             if (response.data) {
                 setFinancialData(prev => ({
                     ...prev,
-                    companyName: response.data.company || 'Default Company',
+                    companyName: SHOP_NAME,
                     reportDate: response.data.value || new Date().toLocaleString()
                 }));
             }

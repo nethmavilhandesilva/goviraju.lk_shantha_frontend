@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import { SHOP_NAME } from '../../config/shop';
 
 const BACKEND_URL = 'http://localhost:8000/api';
 
 const GrnSalesOverviewReport = ({ isOpen, onClose }) => {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [companyName, setCompanyName] = useState('Default Company');
+  const [companyName, setCompanyName] = useState(SHOP_NAME);
   const [settingDate, setSettingDate] = useState('');
   const [isClient, setIsClient] = useState(false);
   const printRef = useRef();
@@ -52,7 +53,7 @@ const GrnSalesOverviewReport = ({ isOpen, onClose }) => {
 
       console.log('🟢 Setting report data...');
       setReportData(data.reportData || []);
-      setCompanyName(data.companyName || 'Default Company');
+      setCompanyName(SHOP_NAME);
       setSettingDate(data.settingDate || new Date().toLocaleDateString('en-CA'));
       
     } catch (err) {

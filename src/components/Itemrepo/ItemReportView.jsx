@@ -1,12 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import api from '../../api'; // axios instance
+import { SHOP_NAME } from '../../config/shop';
 
 const ItemReportView = ({ reportData, onClose }) => {
 
     const printRef = useRef();
     const [isClient, setIsClient] = useState(false);
-    const [companyName, setCompanyName] = useState('???');
+    const [companyName, setCompanyName] = useState(SHOP_NAME);
     const [reportDate, setReportDate] = useState('N/A');
 
     const { sales, filters } = reportData;
@@ -19,7 +20,7 @@ const ItemReportView = ({ reportData, onClose }) => {
             try {
                 const response = await api.get('/settings');
                 if (response.data) {
-                    setCompanyName(response.data.company || '???');
+                    setCompanyName(SHOP_NAME);
                     setReportDate(response.data.value || 'N/A');
                 }
             } catch (error) {

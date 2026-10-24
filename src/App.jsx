@@ -45,7 +45,7 @@ import Layout from './components/Layout/Layout';
 const getBasename = () => {
     const { hostname } = window.location;
     // Check if we're on the hosted domain
-    if (hostname.includes('goviraju.lk')) {
+    if (hostname.includes('wday.lk')) {
         return '/DBS_frontend_30500';
     }
     // Local development or other environments

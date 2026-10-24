@@ -1,1559 +1,42 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import api from "../../api";
 import { useNavigate } from 'react-router-dom';
-
-const SupplierReport = () => {
-    const navigate = useNavigate();
-
-    // State for all data
-    const [summary, setSummary] = useState({ printed: [], unprinted: [] });
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false); // New state for auto-refresh indicator
-
-    // 🚀 BULK SELECTION STATE (add these with your other state variables)
-    const [selectedTransactionIds, setSelectedTransactionIds] = useState([]);
-    const [selectionCriteria, setSelectionCriteria] = useState(null);
-    const [bulkUpdateContextMenu, setBulkUpdateContextMenu] = useState({ show: false, x: 0, y: 0 });
-    const [bulkUpdateSupplierCode, setBulkUpdateSupplierCode] = useState('');
-    const [bulkUpdateCustomerCode, setBulkUpdateCustomerCode] = useState('');
-
-    // 🚀 NEW STATE: Bill size selector (3mm or 4mm) - PERSISTED
-    const [billSize, setBillSize] = useState(() => {
-        const saved = localStorage.getItem('supplier_bill_size');
-        return saved || '3mm';
-    });
-
-    // 🚀 NEW STATE: Print Format selector (Thermal or A4) - PERSISTED
-    const [printFormat, setPrintFormat] = useState(() => {
-        const saved = localStorage.getItem('supplier_print_format');
-        return saved || 'thermal';
-    });
-
-    // Save billSize to localStorage whenever it changes
-    useEffect(() => {
-        localStorage.setItem('supplier_bill_size', billSize);
-    }, [billSize]);
-
-    // Save printFormat to localStorage whenever it changes
-    useEffect(() => {
-        localStorage.setItem('supplier_print_format', printFormat);
-    }, [printFormat]);
-
-    const [printedSearchTerm, setPrintedSearchTerm] = useState('');
-    const [unprintedSearchTerm, setUnprintedSearchTerm] = useState('');
-    const [isPhoneManuallyChanged, setIsPhoneManuallyChanged] = useState(false);
-    //new states  in adding telephone no
-    const [phoneNo, setPhoneNo] = useState('');
-    const [phoneStatus, setPhoneStatus] = useState(''); // For feedback
-    const [enteredAmount, setEnteredAmount] = useState(0);
-
-    // 🚀 NEW STATE: For loan/paying amount
-    const [payingAmount, setPayingAmount] = useState('');
-    const [loanStatus, setLoanStatus] = useState(''); // For feedback
-
-    const [currentView, setCurrentView] = useState('summary');
-    const [profilePic, setProfilePic] = useState(null);
-    // Add these with your other state variables
-    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-    const [supplierDocs, setSupplierDocs] = useState({ title: '', profile: null, nic_front: null, nic_back: null });
-    //useeffects to store the option in local storage and retrieve it on component mount
-    // Add these after your existing useState declarations (around line 30-35)
-
-    // Load saved values from localStorage on component mount
-    useEffect(() => {
-        const savedBillSize = localStorage.getItem('supplier_bill_size');
-        if (savedBillSize) {
-            setBillSize(savedBillSize);
-        }
-
-        const savedPrintFormat = localStorage.getItem('supplier_print_format');
-        if (savedPrintFormat) {
-            setPrintFormat(savedPrintFormat);
-        }
-    }, []);
-
-    // Save billSize to localStorage whenever it changes
-    useEffect(() => {
-        localStorage.setItem('supplier_bill_size', billSize);
-    }, [billSize]);
-
-    // Save printFormat to localStorage whenever it changes
-    useEffect(() => {
-        localStorage.setItem('supplier_print_format', printFormat);
-    }, [printFormat]);
-    // State for Details Panel
-    const [selectedSupplier, setSelectedSupplier] = useState(null);
-    const [selectedBillNo, setSelectedBillNo] = useState(null);
-    const [isUnprintedBill, setIsUnprintedBill] = useState(false);
-    const [supplierDetails, setSupplierDetails] = useState([]);
-    const [isDetailsLoading, setIsDetailsLoading] = useState(false);
-
-    // 🚀 NEW STATE: To hold the advance amount from the suppliers table
-    const [advanceAmount, setAdvanceAmount] = useState(0);
-
-    // 🚀 NEW STATE: For the Advance Entry Form Logic
-    const [advancePayload, setAdvancePayload] = useState({ code: '', advance_amount: '' });
-    const [advanceLoading, setAdvanceLoading] = useState(false);
-    const [advanceStatus, setAdvanceStatus] = useState({ type: '', text: '' });
-
-    // 🚀 NEW STATE: For Editing Records
-    const [editingRecord, setEditingRecord] = useState(null);
-    const [newFarmerCode, setNewFarmerCode] = useState('');
-    const [newCustomerCode, setNewCustomerCode] = useState('');
-    // 🚀 BULK EDIT STATE
-    const [applyToAllSameItems, setApplyToAllSameItems] = useState(true);
-
-    // 🚀 AUTO-REFRESH: Store interval reference
-    const refreshIntervalRef = useRef(null);
-    const isPrintingOrUpdatingRef = useRef(false);
-
-    // --- Function to fetch the summary data ---
-    const fetchSummary = useCallback(async (isAutoRefresh = false) => {
-        // Don't fetch if we're in the middle of printing or updating
-        if (isPrintingOrUpdatingRef.current) {
-            console.log("⏸️ Skipping refresh - printing or updating in progress");
-            return;
-        }
-
-        // Set refreshing state for auto-refresh, but not for initial load
-        if (isAutoRefresh) {
-            setIsRefreshing(true);
-        } else {
-            setIsLoading(true);
-        }
-
-        setCurrentView('summary');
-        console.log("➡️ Attempting to fetch supplier summary data from backend...");
-        try {
-            const response = await api.get('/suppliers/bill-status-summary');
-
-            if (response.data) {
-                console.log("✅ Summary data received.");
-                setSummary({
-                    printed: response.data.printed || [],
-                    unprinted: response.data.unprinted || [],
-                });
-            } else {
-                console.warn("⚠️ Received empty response body or data structure from /suppliers/bill-status-summary.");
-                setSummary({ printed: [], unprinted: [] });
-            }
-
-        } catch (error) {
-            console.error('❌ Error fetching summary data:', error.message, error.response?.data);
-            setSummary({ printed: [], unprinted: [] });
-        } finally {
-            if (isAutoRefresh) {
-                setIsRefreshing(false);
-            } else {
-                setIsLoading(false);
-            }
-        }
-    }, []);
-
-    // 🚀 NEW: Function to refresh supplier profile data
-    // 🚀 NEW: Function to refresh supplier profile data (preserves manual phone changes)
-    const fetchSupplierProfile = useCallback(async (supplierCode) => {
-        if (!supplierCode || isPrintingOrUpdatingRef.current) return;
-
-        try {
-            const supRes = await api.get(`/suppliers/search-by-code/${supplierCode}`);
-            if (supRes.data) {
-                setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
-                setProfilePic(supRes.data.profile_pic);
-
-                // Only update phone number if it hasn't been manually changed by user
-                if (!isPhoneManuallyChanged) {
-                    setPhoneNo(supRes.data.telephone_no || '');
-                }
-
-                setSupplierDocs({
-                    title: supRes.data.name || supplierCode,
-                    profile: supRes.data.profile_pic,
-                    nic_front: supRes.data.nic_front,
-                    nic_back: supRes.data.nic_back
-                });
-            }
-        } catch (error) {
-            console.error("Error refreshing supplier profile:", error);
-        }
-    }, [isPhoneManuallyChanged]);
-
-    // 🚀 NEW: Function to refresh bill details
-    const refreshBillDetails = useCallback(async () => {
-        if (!selectedSupplier || isPrintingOrUpdatingRef.current) return;
-
-        try {
-            if (isUnprintedBill) {
-                const response = await api.get(`/suppliers/${selectedSupplier}/unprinted-details`);
-                setSupplierDetails(response.data);
-            } else if (selectedBillNo) {
-                const response = await api.get(`/suppliers/bill/${selectedBillNo}/details`);
-                setSupplierDetails(response.data);
-            }
-        } catch (error) {
-            console.error("Error refreshing bill details:", error);
-        }
-    }, [selectedSupplier, selectedBillNo, isUnprintedBill]);
-
-    // 🚀 AUTO-REFRESH: Setup interval to refresh all data every 3 seconds
-    useEffect(() => {
-        // Start auto-refresh
-        refreshIntervalRef.current = setInterval(async () => {
-            console.log("🔄 Auto-refreshing data...");
-
-            // Refresh summary (pass true to indicate auto-refresh)
-            await fetchSummary(true);
-
-            // Refresh current bill details if a supplier is selected
-            if (selectedSupplier) {
-                await refreshBillDetails();
-                await fetchSupplierProfile(selectedSupplier);
-            }
-        }, 3000); // 3 seconds
-
-        // Cleanup on component unmount
-        return () => {
-            if (refreshIntervalRef.current) {
-                clearInterval(refreshIntervalRef.current);
-                refreshIntervalRef.current = null;
-            }
-        };
-    }, [fetchSummary, refreshBillDetails, fetchSupplierProfile, selectedSupplier]);
-
-    // --- Initial Fetch ---
-    useEffect(() => {
-        fetchSummary();
-    }, [fetchSummary]);
-
-    // --- Navigation Handler ---
-    const goToSalesEntry = () => {
-        navigate('/sales');
-    };
-
-    // 🚀 NEW: Handle Advance Entry Form Submission
-    const handleAdvanceSubmit = async (e) => {
-        e.preventDefault();
-        setAdvanceLoading(true);
-        setAdvanceStatus({ type: '', text: '' });
-
-        // Pause auto-refresh during update
-        isPrintingOrUpdatingRef.current = true;
-
-        try {
-            const response = await api.post('/suppliers/advance', advancePayload);
-            setAdvanceStatus({ type: 'success', text: `සාර්ථකයි! අත්තිකාරම් යාවත්කාලීන විය.` });
-
-            // Immediately update the display advance amount
-            setAdvanceAmount(parseFloat(response.data.data.advance_amount) || 0);
-            setAdvancePayload({ ...advancePayload, advance_amount: '' });
-
-            // Refresh data after update
-            await fetchSummary();
-            if (selectedSupplier) {
-                await fetchSupplierProfile(selectedSupplier);
-            }
-        } catch (error) {
-            console.error("Advance Update Error:", error);
-            setAdvanceStatus({ type: 'error', text: 'යාවත්කාලීන කිරීම අසාර්ථක විය.' });
-        } finally {
-            setAdvanceLoading(false);
-            setTimeout(() => {
-                isPrintingOrUpdatingRef.current = false;
-            }, 500);
-        }
-    };
-
-    // --- 🚀 NEW: Update Farmer Logic (Enhanced for Bulk) ---
-    const handleUpdateFarmer = async () => {
-        const finalSupplierCode = newFarmerCode || editingRecord.supplier_code;
-        const finalCustomerCode = newCustomerCode || editingRecord.customer_code;
-
-        // Logic to determine which IDs to update
-        let idsToUpdate = [editingRecord.id];
-        if (applyToAllSameItems) {
-            idsToUpdate = supplierDetails
-                .filter(item => item.item_name === editingRecord.item_name)
-                .map(item => item.id);
-        }
-
-        // Pause auto-refresh during update
-        isPrintingOrUpdatingRef.current = true;
-
-        try {
-            setIsDetailsLoading(true);
-            // Using a generic update endpoint that handles arrays or multiple IDs
-            const response = await api.put(`/sales/bulk-update-supplier`, {
-                transaction_ids: idsToUpdate,
-                supplier_code: finalSupplierCode,
-                customer_code: finalCustomerCode
-            });
-
-            if (response.status === 200) {
-                setEditingRecord(null);
-                setNewFarmerCode('');
-                setNewCustomerCode('');
-                setApplyToAllSameItems(true);
-
-                // Refresh current view
-                if (isUnprintedBill) {
-                    await handleUnprintedBillClick(selectedSupplier, null);
-                } else {
-                    await handlePrintedBillClick(selectedSupplier, selectedBillNo);
-                }
-                await fetchSummary();
-            }
-        } catch (error) {
-            console.error("Update failed:", error);
-            alert("Failed to update records.");
-        } finally {
-            setIsDetailsLoading(false);
-            setTimeout(() => {
-                isPrintingOrUpdatingRef.current = false;
-            }, 500);
-        }
-    };
-
-    // --- Filtering Logic ---
-    const filteredPrintedItems = useMemo(() => {
-        const lowerCaseSearch = printedSearchTerm.toLowerCase();
-        const filtered = summary.printed.filter(item =>
-            item.supplier_code.toLowerCase().includes(lowerCaseSearch) ||
-            (item.supplier_bill_no && item.supplier_bill_no.toLowerCase().includes(lowerCaseSearch))
-        );
-        return filtered;
-    }, [printedSearchTerm, summary.printed]);
-
-    const filteredUnprintedItems = useMemo(() => {
-        const lowerCaseSearch = unprintedSearchTerm.toLowerCase();
-        const filtered = summary.unprinted.filter(item =>
-            item.supplier_code.toLowerCase().includes(lowerCaseSearch)
-        );
-        return filtered;
-    }, [unprintedSearchTerm, summary.unprinted]);
-
-    // --- Handle Unprinted Bill Click ---
-    // --- Handle Printed Bill Click ---
-    const handlePrintedBillClick = async (supplierCode, billNo) => {
-        // Pause auto-refresh while loading new data
-        isPrintingOrUpdatingRef.current = true;
-
-        setSelectedSupplier(supplierCode);
-        setSelectedBillNo(billNo);
-        setIsUnprintedBill(false);
-        setSupplierDetails([]);
-        setAdvanceAmount(0);
-        setProfilePic(null);
-        setPhoneNo(''); // Reset before fetch
-        setIsPhoneManuallyChanged(false); // 🔄 RESET manual change flag for new bill
-        setPayingAmount(''); // Reset paying amount
-        setAdvancePayload({ code: supplierCode, advance_amount: '' });
-        setIsDetailsLoading(true);
-
-        try {
-            const response = await api.get(`/suppliers/bill/${billNo}/details`);
-            setSupplierDetails(response.data);
-
-            // Fetch supplier profile to get the saved telephone number
-            const supRes = await api.get(`/suppliers/search-by-code/${supplierCode}`);
-            if (supRes.data) {
-                setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
-                setProfilePic(supRes.data.profile_pic);
-                // 🚀 MATCHING & FETCHING: This gets the phone from the DB record
-                setPhoneNo(supRes.data.telephone_no || '');
-
-                setSupplierDocs({
-                    title: supRes.data.name || supplierCode,
-                    profile: supRes.data.profile_pic,
-                    nic_front: supRes.data.nic_front,
-                    nic_back: supRes.data.nic_back
-                });
-            }
-        } catch (error) {
-            console.error(`❌ Error fetching printed details:`, error.message);
-        } finally {
-            setIsDetailsLoading(false);
-            setTimeout(() => {
-                isPrintingOrUpdatingRef.current = false;
-            }, 500);
-        }
-    };
-
-    // --- Updated: Handle Unprinted Bill Click ---
-    const handleUnprintedBillClick = async (supplierCode, billNo) => {
-        // Pause auto-refresh while loading new data
-        isPrintingOrUpdatingRef.current = true;
-
-        setSelectedSupplier(supplierCode);
-        setSelectedBillNo(billNo);
-        setIsUnprintedBill(true);
-        setSupplierDetails([]);
-        setAdvanceAmount(0);
-        setProfilePic(null);
-        setPhoneNo(''); // Reset before fetch
-        setIsPhoneManuallyChanged(false); // 🔄 RESET manual change flag for new bill
-        setPayingAmount(''); // Reset paying amount
-        setAdvancePayload({ code: supplierCode, advance_amount: '' });
-        setIsDetailsLoading(true);
-
-        try {
-            const response = await api.get(`/suppliers/${supplierCode}/unprinted-details`);
-            setSupplierDetails(response.data);
-
-            // Fetch supplier profile to get the saved telephone number
-            const supRes = await api.get(`/suppliers/search-by-code/${supplierCode}`);
-            if (supRes.data) {
-                setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
-                setProfilePic(supRes.data.profile_pic);
-                // 🚀 MATCHING & FETCHING: This gets the phone from the DB record
-                setPhoneNo(supRes.data.telephone_no || '');
-
-                setSupplierDocs({
-                    title: supRes.data.name || supplierCode,
-                    profile: supRes.data.profile_pic,
-                    nic_front: supRes.data.nic_front,
-                    nic_back: supRes.data.nic_back
-                });
-            }
-        } catch (error) {
-            console.error(`❌ Error fetching unprinted details:`, error.message);
-        } finally {
-            setIsDetailsLoading(false);
-            setTimeout(() => {
-                isPrintingOrUpdatingRef.current = false;
-            }, 500);
-        }
-    };
-
-    // --- Function to reset details ---
-    const resetDetails = () => {
-        setSelectedSupplier(null);
-        setSelectedBillNo(null);
-        setIsUnprintedBill(false);
-        setSupplierDetails([]);
-        setAdvanceAmount(0);
-        setAdvancePayload({ code: '', advance_amount: '' });
-        setProfilePic(null);
-        fetchSummary();
-    };
-
-    // --- Helper function for details panel ---
-    const formatDecimal = (value, decimals = 2) => (parseFloat(value) || 0).toLocaleString(undefined, {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    });
-
-    //function to add telephone number
-    const handlePhoneSubmit = async (e) => {
-        if (e.key === 'Enter') {
-            if (!selectedSupplier) return;
-
-            // Pause auto-refresh during update
-            isPrintingOrUpdatingRef.current = true;
-
-            setPhoneStatus('Updating...');
-            try {
-                await api.post('/suppliers/update-phone', {
-                    code: selectedSupplier,
-                    telephone_no: phoneNo
-                });
-                setPhoneStatus('✅ Saved');
-                setTimeout(() => setPhoneStatus(''), 2000);
-
-                // Refresh supplier profile after update
-                await fetchSupplierProfile(selectedSupplier);
-            } catch (error) {
-                console.error("Phone Update Error:", error);
-                setPhoneStatus('❌ Error');
-            } finally {
-                setTimeout(() => {
-                    isPrintingOrUpdatingRef.current = false;
-                }, 500);
-            }
-        }
-    };
-    // 🚀 BULK SELECTION: Toggle individual row selection - STRICT ENFORCEMENT
-    const toggleTransactionSelection = (transactionId, e) => {
-        if (e) {
-            e.stopPropagation();
-            e.preventDefault();
-        }
-
-        const transactionToSelect = supplierDetails.find(t => t.id === transactionId);
-        if (!transactionToSelect) return;
-
-        const isCurrentlySelected = selectedTransactionIds.includes(transactionId);
-
-        // If already selected, just unselect it
-        if (isCurrentlySelected) {
-            const newSelectedIds = selectedTransactionIds.filter(id => id !== transactionId);
-            setSelectedTransactionIds(newSelectedIds);
-            if (newSelectedIds.length === 0) {
-                setSelectionCriteria(null);
-            }
-            return;
-        }
-
-        // IMPORTANT: If there are already selected records, we MUST enforce the rule
-        if (selectedTransactionIds.length > 0) {
-            // Check if selectionCriteria exists
-            if (!selectionCriteria) {
-                alert("⚠️ Selection error. Please clear selection and try again.");
-                clearSelections();
-                return;
-            }
-
-            // STRICT CHECK: Use item_name instead of item_code
-            const supplierMatches = transactionToSelect.supplier_code === selectionCriteria.supplier_code;
-            const itemMatches = transactionToSelect.item_name === selectionCriteria.item_name;
-            const customerMatches = transactionToSelect.customer_code === selectionCriteria.customer_code;
-
-            const matchesCriteria = supplierMatches && itemMatches && customerMatches;
-
-            if (!matchesCriteria) {
-                // Show detailed error message
-                let mismatchDetails = [];
-                if (!supplierMatches) mismatchDetails.push(`   Supplier: ${selectionCriteria.supplier_code} (selected) vs ${transactionToSelect.supplier_code} (current)`);
-                if (!itemMatches) mismatchDetails.push(`   Item: ${selectionCriteria.item_name} (selected) vs ${transactionToSelect.item_name} (current)`);
-                if (!customerMatches) mismatchDetails.push(`   Customer: ${selectionCriteria.customer_code} (selected) vs ${transactionToSelect.customer_code} (current)`);
-
-                alert(`❌ Cannot select this record!\n\n✓ Current selection allows only records with EXACTLY:\n   Supplier: ${selectionCriteria.supplier_code}\n   Item: ${selectionCriteria.item_name}\n   Customer: ${selectionCriteria.customer_code}\n\n✗ This record has:\n   Supplier: ${transactionToSelect.supplier_code || 'N/A'}\n   Item: ${transactionToSelect.item_name || 'N/A'}\n   Customer: ${transactionToSelect.customer_code || 'N/A'}\n\n⚠️ Mismatch in:\n${mismatchDetails.join('\n')}\n\n📌 Tip: Click 'Clear Selection' button at the bottom to start a new selection.`);
-                return;
-            }
-
-            // If matches, add to selection
-            setSelectedTransactionIds([...selectedTransactionIds, transactionId]);
-            return;
-        }
-
-        // Case: No records selected yet - this becomes the template (use item_name)
-        setSelectedTransactionIds([transactionId]);
-        setSelectionCriteria({
-            supplier_code: transactionToSelect.supplier_code,
-            item_name: transactionToSelect.item_name,  // Changed from item_code to item_name
-            customer_code: transactionToSelect.customer_code
-        });
-    };
-
-    // 🚀 BULK SELECTION: Handle right-click on row - STRICT ENFORCEMENT
-    const handleRowRightClick = (e, transaction) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const isSelected = selectedTransactionIds.includes(transaction.id);
-
-        if (!isSelected) {
-            // If no records selected yet, select this one as template
-            if (selectedTransactionIds.length === 0) {
-                setSelectedTransactionIds([transaction.id]);
-                setSelectionCriteria({
-                    supplier_code: transaction.supplier_code,
-                    item_name: transaction.item_name,  // Changed from item_code to item_name
-                    customer_code: transaction.customer_code
-                });
-            } else {
-                // Check if this transaction matches the existing selection criteria
-                if (!selectionCriteria) {
-                    alert("⚠️ Selection error. Please clear selection and try again.");
-                    clearSelections();
-                    return;
-                }
-
-                const supplierMatches = transaction.supplier_code === selectionCriteria.supplier_code;
-                const itemMatches = transaction.item_name === selectionCriteria.item_name;  // Changed from item_code
-                const customerMatches = transaction.customer_code === selectionCriteria.customer_code;
-
-                const matchesCriteria = supplierMatches && itemMatches && customerMatches;
-
-                if (matchesCriteria) {
-                    setSelectedTransactionIds([...selectedTransactionIds, transaction.id]);
-                } else {
-                    // Show detailed error message
-                    let mismatchDetails = [];
-                    if (!supplierMatches) mismatchDetails.push(`   Supplier: ${selectionCriteria.supplier_code} vs ${transaction.supplier_code}`);
-                    if (!itemMatches) mismatchDetails.push(`   Item: ${selectionCriteria.item_name} vs ${transaction.item_name}`);
-                    if (!customerMatches) mismatchDetails.push(`   Customer: ${selectionCriteria.customer_code} vs ${transaction.customer_code}`);
-
-                    alert(`❌ Cannot select this record!\n\n✓ Current selection allows only:\n   Supplier: ${selectionCriteria.supplier_code}\n   Item: ${selectionCriteria.item_name}\n   Customer: ${selectionCriteria.customer_code}\n\n✗ This record has:\n   Supplier: ${transaction.supplier_code || 'N/A'}\n   Item: ${transaction.item_name || 'N/A'}\n   Customer: ${transaction.customer_code || 'N/A'}\n\n⚠️ Mismatch in:\n${mismatchDetails.join('\n')}\n\n📌 Tip: Click 'Clear Selection' button to start over.`);
-                    return;
-                }
-            }
-        }
-
-        // Only show context menu if there are selected records
-        if (selectedTransactionIds.length > 0 || isSelected) {
-            setBulkUpdateContextMenu({
-                show: true,
-                x: e.clientX,
-                y: e.clientY
-            });
-            setBulkUpdateSupplierCode('');
-            setBulkUpdateCustomerCode('');
-        }
-    };
-    // 🚀 BULK SELECTION: Close context menu
-    const closeContextMenu = () => {
-        setBulkUpdateContextMenu({ show: false, x: 0, y: 0 });
-        setBulkUpdateSupplierCode('');
-        setBulkUpdateCustomerCode('');
-    };
-
-    // 🚀 BULK SELECTION: Handle Escape key
-    useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape' && bulkUpdateContextMenu.show) {
-                closeContextMenu();
-            }
-        };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [bulkUpdateContextMenu.show]);
-
-    // 🚀 BULK UPDATE: Update selected transactions
-    const handleBulkUpdate = async () => {
-        const finalSupplierCode = bulkUpdateSupplierCode.trim().toUpperCase();
-        const finalCustomerCode = bulkUpdateCustomerCode.trim().toUpperCase();
-
-        if (!finalSupplierCode && !finalCustomerCode) {
-            alert("Please enter at least one code to update (Supplier or Customer)");
-            return;
-        }
-
-        if (selectedTransactionIds.length === 0) {
-            alert("No transactions selected");
-            return;
-        }
-
-        // Pause auto-refresh during update
-        isPrintingOrUpdatingRef.current = true;
-
-        try {
-            const payload = {
-                transaction_ids: selectedTransactionIds,
-                ...(finalSupplierCode && { supplier_code: finalSupplierCode }),
-                ...(finalCustomerCode && { customer_code: finalCustomerCode })
-            };
-
-            const response = await api.put(`/sales/bulk-update-supplier`, payload);
-
-            if (response.status === 200) {
-                // Clear selection
-                setSelectedTransactionIds([]);
-                setSelectionCriteria(null);
-                closeContextMenu();
-
-                // Refresh current view
-                if (isUnprintedBill) {
-                    await handleUnprintedBillClick(selectedSupplier, null);
-                } else if (selectedBillNo) {
-                    await handlePrintedBillClick(selectedSupplier, selectedBillNo);
-                }
-                await fetchSummary();
-
-               
-            }
-        } catch (error) {
-            console.error("Bulk update failed:", error);
-            alert("Failed to update records. Please try again.");
-        } finally {
-            setTimeout(() => {
-                isPrintingOrUpdatingRef.current = false;
-            }, 500);
-        }
-    };
-
-    // 🚀 BULK SELECTION: Clear all selections
-    const clearSelections = () => {
-        setSelectedTransactionIds([]);
-        setSelectionCriteria(null);
-        closeContextMenu();
-    };
-
-    // 🚀 NEW: Handle loan amount submission and trigger print
-    const handleLoanSubmit = async (e) => {
-        if (e.key === 'Enter') {
-            if (!selectedSupplier || !payingAmount || parseFloat(payingAmount) <= 0) {
-                setLoanStatus('⚠️ Invalid amount');
-                setTimeout(() => setLoanStatus(''), 2000);
-                return;
-            }
-
-            // Pause auto-refresh during loan processing
-            isPrintingOrUpdatingRef.current = true;
-            setLoanStatus('Processing...');
-
-            try {
-                // Calculate total amount (SupplierTotal - payingAmount)
-                const totalAmount = totalsupplierSales - parseFloat(payingAmount);
-
-                // Save the loan amount
-                await api.post('/supplier-loan', {
-                    code: selectedSupplier,
-                    loan_amount: parseFloat(payingAmount),
-                    total_amount: totalAmount,
-                    bill_no: selectedBillNo || null
-                });
-
-                setLoanStatus('✅ Loan saved');
-
-                // Clear the input
-                setPayingAmount('');
-
-                // Small delay to ensure the loan is saved before printing
-                setTimeout(() => {
-                    // Trigger the print function
-                    handlePrint();
-                }, 300);
-
-            } catch (error) {
-                console.error("Loan Update Error:", error);
-
-                if (error.response && error.response.status === 422) {
-                    setLoanStatus('⚠️ Invalid supplier code');
-                } else {
-                    setLoanStatus('❌ Error');
-                }
-
-                setTimeout(() => setLoanStatus(''), 2000);
-            } finally {
-                setTimeout(() => {
-                    isPrintingOrUpdatingRef.current = false;
-                }, 1000);
-            }
-        }
-    };
-
-    const getRowStyle = (index) => index % 2 === 0 ? { backgroundColor: '#f8f9fa' } : { backgroundColor: '#ffffff' };
-
-    // --- CALCULATIONS (Updated to include CustomerPackCost) ---
-    const {
-        totalWeight,
-        totalCommission,
-        amountPayable,
-        itemSummaryData,
-        totalPacksSum,
-        totalsupplierSales,
-        totalSupplierPackCost,
-        totalCusGross,
-        totalCustomerPackCost, // <-- NEW: Sum of CustomerPackCost
-    } = useMemo(() => {
-        let totalWeight = 0, totalsupplierSales = 0, totalCommission = 0, totalPacksSum = 0, totalSupplierPackCost = 0, totalCusGross = 0, totalCustomerPackCost = 0;
-        const itemSummary = {};
-
-        supplierDetails.forEach(record => {
-            const weight = parseFloat(record.weight) || 0;
-            const commission = parseFloat(record.commission_amount) || 0;
-            const packs = parseInt(record.packs) || 0;
-            const SupplierTotal = parseFloat(record.SupplierTotal) || 0;
-            const itemName = record.item_name || 'Unknown Item';
-            const rowCusGross = (parseFloat(record?.total) || 0) - (parseFloat(record?.CustomerPackLabour) || 0);
-            const packCost = parseFloat(record?.CustomerPackCost) || 0; // <-- NEW: Get pack cost
-
-            totalWeight += weight;
-            totalsupplierSales += SupplierTotal;
-            totalCommission += commission;
-            totalPacksSum += packs;
-            totalCusGross += rowCusGross;
-            totalCustomerPackCost += packCost; // <-- NEW: Add to total
-
-            if (!itemSummary[itemName]) {
-                itemSummary[itemName] = { totalWeight: 0, totalPacks: 0 };
-            }
-            itemSummary[itemName].totalWeight += weight;
-            itemSummary[itemName].totalPacks += packs;
-        });
-
-        return {
-            totalWeight, totalCommission, amountPayable: totalsupplierSales, itemSummaryData: itemSummary,
-            totalPacksSum, totalsupplierSales, totalSupplierPackCost, totalCusGross,
-            totalCustomerPackCost, // <-- NEW: Return the total
-        };
-    }, [supplierDetails]);
-
-    // 🚀 FIXED: Customizable width bill with center alignment and ultra-clear high-visibility styling
-    const getA4Content = useCallback((currentBillNo, billWidth = "101mm", topMargin = "13mm") => {
-        const date = new Date().toLocaleDateString('si-LK');
-        const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        const paidAmountValue = parseFloat(payingAmount) || 0;
-        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
-
-        // Format numbers WITHOUT unnecessary decimal places
-        const formatNumber = (num) => {
-            if (typeof num !== 'number' && typeof num !== 'string') return '0';
-            const number = parseFloat(num);
-            if (isNaN(number)) return '0';
-
-            if (Number.isInteger(number)) {
-                return number.toLocaleString('en-US');
-            }
-
-            const roundedToWhole = Math.round(number);
-            if (Math.abs(number - roundedToWhole) < 0.001) {
-                return roundedToWhole.toLocaleString('en-US');
-            }
-
-            return number.toLocaleString('en-US', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 2
-            });
-        };
-
-        // ALL SIZES MULTIPLIED BY 0.65 (65% of original)
-        const getStyles = (width) => {
-            const widthNum = parseInt(width);
-
-            let headerFontSize, shopFontSize, normalFontSize, smallFontSize, tinyFontSize;
-            let tableHeaderFontSize, totalRowFontSize, netTotalFontSize;
-
-            if (widthNum <= 58) {
-                headerFontSize = '2.9mm';    // 4.5mm × 0.65
-                shopFontSize = '2.3mm';      // 3.5mm × 0.65
-                normalFontSize = '2.3mm';    // 3.5mm × 0.65
-                smallFontSize = '2.1mm';     // 3.2mm × 0.65
-                tinyFontSize = '2mm';        // 3mm × 0.65
-                tableHeaderFontSize = '2.1mm'; // 3.2mm × 0.65
-                totalRowFontSize = '2.5mm';    // 3.8mm × 0.65
-                netTotalFontSize = '2.9mm';    // 4.5mm × 0.65
-            } else if (widthNum <= 80) {
-                headerFontSize = '3.6mm';    // 5.5mm × 0.65
-                shopFontSize = '2.6mm';      // 4mm × 0.65
-                normalFontSize = '2.6mm';    // 4mm × 0.65
-                smallFontSize = '2.4mm';     // 3.7mm × 0.65
-                tinyFontSize = '2.3mm';      // 3.5mm × 0.65
-                tableHeaderFontSize = '2.4mm'; // 3.7mm × 0.65
-                totalRowFontSize = '2.7mm';    // 4.2mm × 0.65
-                netTotalFontSize = '3.3mm';    // 5mm × 0.65
-            } else {
-                headerFontSize = '4.6mm';    // 7mm × 0.65
-                shopFontSize = '2.9mm';      // 4.5mm × 0.65
-                normalFontSize = '2.7mm';    // 4.2mm × 0.65
-                smallFontSize = '2.6mm';     // 4mm × 0.65
-                tinyFontSize = '2.4mm';      // 3.7mm × 0.65
-                tableHeaderFontSize = '2.6mm'; // 4mm × 0.65
-                totalRowFontSize = '2.9mm';    // 4.5mm × 0.65
-                netTotalFontSize = '3.6mm';    // 5.5mm × 0.65
-            }
-
-            return {
-                containerWidth: width,
-                headerFontSize,
-                shopFontSize,
-                normalFontSize,
-                smallFontSize,
-                tinyFontSize,
-                tableHeaderFontSize,
-                totalRowFontSize,
-                netTotalFontSize,
-                padding: widthNum <= 58 ? '2mm' : '2.6mm',      // 3mm/4mm × 0.65
-                cellPadding: widthNum <= 58 ? '1mm' : '1.3mm'  // 1.5mm/2mm × 0.65
-            };
-        };
-
-        const styles = getStyles(billWidth);
-
-        // Split supplier details into pages with 9 items per page
-        const ITEMS_PER_PAGE = 9;
-
-        const splitItemsIntoPages = (items, itemsPerPage = 9) => {
-            const pages = [];
-            for (let i = 0; i < items.length; i += itemsPerPage) {
-                pages.push(items.slice(i, i + itemsPerPage));
-            }
-            return pages;
-        };
-
-        const itemPages = splitItemsIntoPages(supplierDetails, ITEMS_PER_PAGE);
-
-        // Calculate grand totals once for all pages
-        const grandTotalPacks = supplierDetails.reduce((sum, record) => sum + (parseInt(record.packs) || 0), 0);
-        const grandTotalSales = totalsupplierSales;
-        const grandTotalPackCost = totalCustomerPackCost;
-        const grandAdvanceAmount = advanceAmount;
-        const grandPaidAmount = paidAmountValue;
-        const grandNetPayable = netPayable;
-
-        // Generate HTML for each page
-        const generatePage = (pageItems, pageNumber, isLastPage) => {
-            // Calculate page-specific totals
-            let pageTotalSales = 0;
-            let pageTotalPacks = 0;
-
-            pageItems.forEach(record => {
-                pageTotalSales += parseFloat(record.SupplierTotal) || 0;
-                pageTotalPacks += parseInt(record.packs) || 0;
-            });
-
-            return `
-        <div class="bill-border" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
-            ${pageNumber === 1 ? `
-            <div class="header">
-                <div class="shop-name">මහතුන් වෙළඳ සැල</div>
-                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-            </div>
-            
-            <div class="info-row" style="display: flex; flex-wrap: nowrap; gap: 3.3mm; white-space: nowrap;">
-                <div>ගොවියා: ${(selectedSupplier || '').toUpperCase()}</div>
-                <div>අං: ${currentBillNo || ''}</div>
-                <div>දිනය: ${date}</div>
-                <div>${time}</div>
-            </div>
-            ` : `
-            <div class="header-continued">
-                <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
-            </div>
-            `}
-
-            ${itemPages.length > 1 ? `
-            <div style="margin-bottom: 1.3mm; font-size: ${styles.tinyFontSize}; text-align: center; font-weight: bold;">
-                පිටුව ${pageNumber} / ${itemPages.length}
-            </div>
-            ` : ''}
-
-            <table>
-                <colgroup>
-                    <col style="width: 30%">
-                    <col style="width: 10%">
-                    <col style="width: 15%">
-                    <col style="width: 15%">
-                    <col style="width: 15%">
-                    <col style="width: 15%">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th style="text-align: left; font-size: ${styles.tableHeaderFontSize};">වර්ගය</th>
-                        <th style="font-size: ${styles.tableHeaderFontSize};">මලු</th>
-                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">බර</th>
-                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">මිල</th>
-                        <th style="text-align: center; font-size: ${styles.tableHeaderFontSize};">ගනු</th>
-                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">එකතුව</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${pageItems.map(record => `
-                        <tr style="page-break-inside: avoid;">
-                            <td style="text-align: left; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${record.item_name || ''}</td>
-                            <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${record.packs || 0}</td>
-                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.weight)}</td>
-                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierPricePerKg)}</td>
-                            <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${(record.customer_code || '').toUpperCase()}</td>
-                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierTotal)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-                <tfoot>
-                    <tr style="background: #f0f0f0;">
-                        <td colspan="2" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">මෙම පිටුවේ එකතුව</td>
-                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">  </td>
-                        <td style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">  </td>
-                        <td class="text-center" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${pageTotalPacks}</td>
-                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${formatNumber(pageTotalSales)}</td>
-                    </tr>
-                </tfoot>
-            </table>
-
-            ${isLastPage ? `
-            <div class="totals-section">
-                <div class="total-row"><span>මුළු එකතුව:</span><span>රු. ${formatNumber(grandTotalSales)}</span></div>
-                <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(grandTotalPackCost)}</span></div>
-                <div class="total-row"><span>අත්තිකාරම්:</span><span style="color: red !important;">රු. -${formatNumber(grandAdvanceAmount)}</span></div>
-                ${grandPaidAmount > 0 ? `<div class="total-row"><span>ගෙවූ මුදල:</span><span>රු. -${formatNumber(grandPaidAmount)}</span></div>` : ''}
-                <div class="net-total">
-                    <span>ගෙවිය යුතු මුදල:</span>
-                    <span>රු. ${formatNumber(grandNetPayable)}</span>
-                </div>
-            </div>
-            
-            <div class="footer">
-                *** ස්තුතියි! නැවත පැමිණෙන්න ***
-                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
-            </div>
-            ` : `
-            <div class="footer" style="margin-top: 2.6mm; text-align: center; font-size: ${styles.smallFontSize}; border-top: 0.3mm dashed #000; padding-top: 1.6mm;">
-                *** කරුණාකර පහත පිටුවට හැරෙන්න ***
-            </div>
-            `}
-        </div>
-    `;
-        };
-
-        // Generate all pages
-        let allPagesHTML = '';
-        if (supplierDetails.length === 0) {
-            allPagesHTML = `
-        <div class="bill-border">
-            <div class="header">
-                <div class="shop-name">මහතුන් වෙළඳ සැල</div>
-                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
-            </div>
-            
-            <div class="info-row">
-                <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
-                <div>අංකය: ${currentBillNo || ''}</div>
-                <div>දිනය: ${date}</div>
-                <div>වේලාව: ${time}</div>
-            </div>
-            
-            <div style="text-align: center; padding: 6.5mm; font-size: ${styles.headerFontSize}; font-weight: bold;">
-                අයිතම නොමැත
-            </div>
-            
-            <div class="footer">
-                *** ස්තුතියි! නැවත පැමිණෙන්න ***
-                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
-            </div>
-        </div>
-    `;
-        } else {
-            itemPages.forEach((page, idx) => {
-                allPagesHTML += generatePage(page, idx + 1, idx === itemPages.length - 1);
-            });
-        }
-
-        return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        
-        body { 
-            font-family: 'Iskoola Pota', Arial, sans-serif; 
-            background: #f0f0f0; 
-            padding: 0;
-            margin: 0;
-        }
-
-        .bill-border { 
-            width: ${styles.containerWidth}; 
-            max-width: ${styles.containerWidth};
-            min-width: ${styles.containerWidth};
-            background: white;
-            padding: ${styles.padding};
-            margin: ${topMargin} auto 0 auto;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            page-break-after: always;
-            page-break-inside: avoid;
-        }
-
-        @media print {
-            body { 
-                background: white; 
-                padding: 0; 
-                margin: 0;
-            }
-            .bill-border { 
-                box-shadow: none; 
-                margin: 0 auto !important;
-                page-break-after: always;
-                page-break-inside: avoid;
-            }
-            @page { 
-                size: ${styles.containerWidth} auto;
-                margin: 0mm;
-            }
-        }
-
-        div, span, p, td, th, strong, .shop-name, .shop-address, .shop-phone, 
-        .info-row, .total-row, .net-total, .footer, .header-continued { 
-            color: #000 !important; 
-            font-weight: bold !important; 
-        }
-
-        .header { 
-            text-align: center; 
-            border-bottom: 0.5mm solid #000; 
-            padding-bottom: 1.6mm; 
-            margin-bottom: 1.6mm; 
-        }
-        
-        .header-continued {
-            text-align: center;
-            border-bottom: 0.3mm solid #000;
-            padding-bottom: 1.3mm;
-            margin-bottom: 1.6mm;
-        }
-        
-        .continued-label {
-            font-size: ${styles.smallFontSize};
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .shop-name { 
-            font-size: ${styles.headerFontSize}; 
-            margin-bottom: 1mm; 
-            font-weight: bold;
-        }
-        .shop-address, .shop-phone { 
-            font-size: ${styles.shopFontSize}; 
-            margin: 0.7mm 0; 
-            font-weight: bold;
-        }
-
-        .info-row { 
-            display: flex; 
-            justify-content: space-between; 
-            margin-bottom: 1.6mm; 
-            padding: 1.3mm; 
-            border: 0.3mm solid #000; 
-            font-size: ${styles.normalFontSize};
-            font-weight: bold;
-        }
-
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 1.6mm;
-            table-layout: fixed;
-        }
-        
-        th { 
-            border: 0.3mm solid #000; 
-            padding: ${styles.cellPadding}; 
-            background: #eee; 
-            font-weight: bold;
-        }
-        
-        td { 
-            border: 0.2mm solid #000; 
-            vertical-align: top;
-            font-weight: bold;
-        }
-
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-
-        .totals-section { 
-            margin-top: 1.6mm; 
-            border-top: 0.3mm solid #000; 
-            padding-top: 1.6mm;
-        }
-        
-        .total-row { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 1mm 0; 
-            font-size: ${styles.totalRowFontSize};
-            font-weight: bold;
-        }
-        
-        .net-total { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 1.6mm 1mm; 
-            border-top: 0.5mm solid #000; 
-            border-bottom: 0.5mm solid #000;
-            font-size: ${styles.netTotalFontSize};
-            margin-top: 1.3mm; 
-            background: #f9f9f9;
-            font-weight: bold;
-        }
-
-        .footer { 
-            margin-top: 2.6mm; 
-            text-align: center; 
-            font-size: ${styles.smallFontSize}; 
-            border-top: 0.3mm dashed #000; 
-            padding-top: 1.6mm; 
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    ${allPagesHTML}
-</body>
-</html>`;
-    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
-
-    const getBillContent = useCallback((currentBillNo) => {
-        const date = new Date().toLocaleDateString('si-LK');
-        const mobile = '0777672838/071437115';
-        const is4Inch = billSize === '4inch';
-        const receiptMaxWidth = is4Inch ? '4in' : '350px';
-        const fontSizeBody = '18px';
-        const fontSizeHeader = '18px';
-        const fontSizeTotal = '28px';
-
-        // 🚀 NEW: Calculation for Loan/Partial Payment
-        const paidAmountValue = parseFloat(payingAmount) || 0;
-        const remainingAfterPayment = totalsupplierSales - paidAmountValue;
-
-        const colGroups = `
-    <colgroup>
-        <col style="width:32%;"> 
-        <col style="width:21%;">
-        <col style="width:21%;">
-        <col style="width:26%;">
-    </colgroup>`;
-
-        const formatNumber = (value, maxDecimals = 3) => {
-            if (typeof value !== 'number' && typeof value !== 'string') return '0';
-            const number = parseFloat(value);
-            if (isNaN(number)) return '0';
-            if (Number.isInteger(number)) return number.toLocaleString('en-US');
-            const parts = number.toFixed(maxDecimals).replace(/\.?0+$/, '').split('.');
-            const wholePart = parseInt(parts[0]).toLocaleString('en-US');
-            return parts[1] ? `${wholePart}.${parts[1]}` : wholePart;
-        };
-
-        const detailedItemsHtml = supplierDetails.map(record => {
-            const weight = parseFloat(record.weight) || 0;
-            const packs = parseInt(record.packs) || 0;
-            const price = parseFloat(record.SupplierPricePerKg) || 0;
-            const total = parseFloat(record.SupplierTotal) || 0;
-            const itemName = record.item_name || '';
-            const customerCode = record.customer_code?.toUpperCase() || '';
-
-            return `
-        <tr style="font-size:${fontSizeBody}; font-weight:bold; vertical-align: bottom;">
-            <td style="text-align:left; padding:10px 0; white-space: nowrap;">${itemName}<br>${formatNumber(packs)}</td>
-            <td style="text-align:right; padding:10px 2px; position: relative; left: -70px;">${formatNumber(weight.toFixed(2))}</td>
-            <td style="text-align:right; padding:10px 2px; position: relative; left: -65px;">${formatNumber(price.toFixed(2))}</td>
-            <td style="padding:10px 0; display:flex; flex-direction:column; align-items:flex-end;">
-                <div style="font-size:25px; white-space:nowrap;">${customerCode}</div>
-                <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
-            </td>
-          </tr>`;
-        }).join("");
-
-        const summaryEntries = Object.entries(itemSummaryData);
-        let itemSummaryHtml = '';
-        for (let i = 0; i < summaryEntries.length; i += 2) {
-            const [name1, d1] = summaryEntries[i];
-            const [name2, d2] = summaryEntries[i + 1] || [null, null];
-            const text1 = `${name1}:${formatNumber(d1.totalWeight)}/${formatNumber(d1.totalPacks)}`;
-            const text2 = d2 ? `${name2}:${formatNumber(d2.totalWeight)}/${formatNumber(d2.totalPacks)}` : '';
-            itemSummaryHtml += `<tr><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text1}</td><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text2}</td></tr>`;
-        }
-
-        // 🚀 CALCULATION FOR FINAL NET AMOUNT
-        // We subtract both Advance and any current payment made
-        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
-
-        return `
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-    @page {
-        size: 80mm auto;
-        margin: 0mm;
+import { SHOP_NAME, SHOP_PHONE } from '../../config/shop';
+
+// Surfaces the real backend error (Laravel validation errors, custom error/message
+// fields, etc.) instead of a hardcoded generic string, so failures are diagnosable
+// from the alert itself rather than requiring a guess-and-check round trip.
+const extractApiErrorMessage = (error, fallback) => {
+    const data = error?.response?.data;
+    if (!data) return error?.message || fallback;
+    if (data.errors) {
+        return Object.values(data.errors).flat().join('\n');
     }
-    @media print {
-        body {
-            margin: 0;
-            padding: 0;
-        }
-        html, body {
-            width: 80mm;
-            margin: 0;
-            padding: 0;
-        }
-        div, table, tr, td, tbody, thead, tfoot {
-            page-break-inside: avoid;
-            page-break-after: avoid;
-            page-break-before: avoid;
-        }
-    }
-</style>
-</head>
-<body>
-<div style="width:${receiptMaxWidth}; margin:0 auto; padding:10px; font-family:'Courier New', monospace; color:#000; background:#fff;">
-    <div style="text-align:center; font-weight:bold;">
-        <div style="font-size:24px;">මහතුන් වෙළඳසැල </div>
-        <div style="display:flex; justify-content:center; align-items:center; gap:15px; margin:12px 0;">
-            <span style="border:2.5px solid #000; padding:5px 12px; font-size:22px;">F2-1</span>
-            <div style="font-size:18px;">ගොවියා: <span style="border:2.5px solid #000; padding:5px 10px; font-size:22px;">${selectedSupplier}</span></div>
-        </div>
-      <div style="font-size:16px; white-space: nowrap;">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
-    </div>
-    <div style="font-size:19px; margin-top:10px; padding:0 5px;">
-        <div style="font-weight: bold;">දුර:${mobile}</div>
-        <div style="display:flex; justify-content:space-between; margin-top:3px;">
-            <span>බිල් අංකය:${currentBillNo}</span>
-            <span>දිනය:${date}</span>
-        </div>
-    </div>
-    <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
-    <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
-        ${colGroups}
-        <thead>
-            <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
-                <th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th>
-                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
-                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
-                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
-              </tr>
-        </thead>
-        <tbody>${detailedItemsHtml}</tbody>
-        <tfoot>
-            <tr style="border-top:2.5px solid #000; font-weight:bold;">
-                <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
-                <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${(totalsupplierSales.toFixed(2))}</div></td>
-              </tr>
-        </tfoot>
-      </table>
+    return data.message || data.error || fallback;
+};
 
-    <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
-         <tr>
-          <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
-          <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
-         </tr>
-        <tr>
-          <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මලු වියදම:</td>
-          <td style="text-align:right;"><span style="font-size:${fontSizeTotal}; padding:5px 10px;">${totalCustomerPackCost.toFixed(2)}</span></td>
-        </tr>
-        
-        ${paidAmountValue > 0 ? `
-        <tr style="font-size:18px;">
-            <td style="font-size:15px; padding-top:10px;">ගෙවූ මුදල (Paid):</td>
-            <td style="text-align:right; padding-top:10px; color:#000;">
-                - ${paidAmountValue.toFixed(2)}
-              </td>
-          </tr>
-        <tr style="font-size:18px;">
-            <td style="font-size:15px; padding-top:5px;">ඉතිරි මුදල (Remaining):</td>
-            <td style="text-align:right; padding-top:5px; color:#000;">
-                ${remainingAfterPayment.toFixed(2)}
-              </td>
-          </tr>
-        <tr><td colspan="2" style="border-top:1px dashed #000; padding: 5px 0;"></td></tr>
-        ` : ''}
-
-        <tr style="font-size:18px;">
-          <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
-          <td style="text-align:right; padding-top:5px; color:#000;">
-            - ${advanceAmount.toFixed(2)}
-           </td>
-          </tr>
-
-        <tr style="font-weight:900;">
-          <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
-          <td style="text-align:right; padding-top:10px;">
-            <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
-              ${netPayable.toFixed(2)}
-            </span>
-           </td>
-        </tr>
-    </table>
-
-    <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;"><table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}</table></div>
-</div>
-</body>
-</html>`;
-    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount, totalCustomerPackCost]);
-
-    const handlePrint = useCallback(async () => {
-        if (!supplierDetails || supplierDetails.length === 0) return;
-
-        // Pause auto-refresh during print process
-        isPrintingOrUpdatingRef.current = true;
-
-        let finalBillNo = selectedBillNo;
-
-        // If it's a new bill (Unprinted), we must finalize and send SMS
-        if (isUnprintedBill) {
-            setIsDetailsLoading(true);
-            try {
-                const response = await api.post('/suppliers/mark-as-printed', {
-                    transaction_ids: supplierDetails.map(r => r.id),
-                    telephone_no: phoneNo,
-                    advance_amount: advanceAmount,
-                    supplier_code: selectedSupplier
-                });
-
-                finalBillNo = response.data.new_bill_no;
-                setSelectedBillNo(finalBillNo);
-
-                if (phoneNo) {
-                    console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
-                }
-            } catch (err) {
-                console.error('Finalize/SMS Error:', err);
-                alert('Finalize failed. SMS could not be sent.');
-                setIsDetailsLoading(false);
-                isPrintingOrUpdatingRef.current = false;
-                return;
-            } finally {
-                setIsDetailsLoading(false);
-            }
-        } else {
-            // For printed bills, send SMS without finalizing
-            if (phoneNo) {
-                setIsDetailsLoading(true);
-                try {
-                    const smsResponse = await api.post('/suppliers/resend-sms', {
-                        bill_no: selectedBillNo,
-                        telephone_no: phoneNo,
-                        supplier_code: selectedSupplier,
-                        transaction_ids: supplierDetails.map(r => r.id),
-                        advance_amount: advanceAmount,
-                        is_reprint: true
-                    });
-
-                    console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
-
-                    setPhoneStatus('📱 SMS resent');
-                    setTimeout(() => setPhoneStatus(''), 2000);
-
-                } catch (err) {
-                    console.error('SMS Resend Error:', err);
-                    setPhoneStatus('⚠️ SMS failed');
-                    setTimeout(() => setPhoneStatus(''), 2000);
-                } finally {
-                    setIsDetailsLoading(false);
-                }
-            } else {
-                setPhoneStatus('⚠️ No phone number');
-                setTimeout(() => setPhoneStatus(''), 2000);
-            }
-        }
-
-        // 🎯 ONLY apply top margin for A4 format
-        const isA4 = printFormat === 'a4';
-        const topMargin = "20mm"; // Only used for A4
-
-        // Create content for printing
-        const content = isA4 ? getA4Content(finalBillNo, "155mm", topMargin) : getBillContent(finalBillNo);
-
-        // Create an iframe for printing (hidden) to avoid opening a new window
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0px';
-        iframe.style.height = '0px';
-        iframe.style.border = '0';
-        document.body.appendChild(iframe);
-
-        const iframeDoc = iframe.contentWindow.document;
-        iframeDoc.open();
-        iframeDoc.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Print Bill</title>
-                <style>
-                    /* CRITICAL FIX: Force margins in print */
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    
-                    @media print {
-                        @page {
-                            margin: 0;
-                            size: ${isA4 ? 'A4' : '80mm auto'};
-                        }
-                        body {
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            -webkit-print-color-adjust: exact;
-                            print-color-adjust: exact;
-                        }
-                        /* 🎯 ONLY apply margin-top when printing A4 */
-                        ${isA4 ? `
-                        .print-container {
-                            margin-top: ${topMargin} !important;
-                            padding-top: 0 !important;
-                        }
-                        ` : `
-                        .print-container {
-                            margin-top: 0 !important;
-                            padding-top: 0 !important;
-                        }
-                        `}
-                    }
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        background: white;
-                        font-family: 'Iskoola Pota', 'Courier New', monospace;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="print-container">
-                    ${content}
-                </div>
-            </body>
-        </html>
-    `);
-        iframeDoc.close();
-
-        // Rest of the function remains the same...
-        // Focus and print the iframe content
-        iframe.contentWindow.focus();
-
-        // Use setTimeout to ensure content is fully loaded
-        setTimeout(() => {
-            iframe.contentWindow.print();
-
-            // Remove iframe after print dialog closes
-            const checkPrintDone = setInterval(() => {
-                try {
-                    if (iframe.contentWindow.document && iframe.contentWindow.document.hasFocus()) {
-                        // Print dialog might still be open
-                    } else {
-                        clearInterval(checkPrintDone);
-                        setTimeout(() => {
-                            if (iframe && iframe.parentNode) {
-                                document.body.removeChild(iframe);
-                            }
-                            // Reload the page after printing
-                            window.location.reload();
-                        }, 500);
-                    }
-                } catch (e) {
-                    // If we can't access the iframe, remove it
-                    clearInterval(checkPrintDone);
-                    setTimeout(() => {
-                        if (iframe && iframe.parentNode) {
-                            document.body.removeChild(iframe);
-                        }
-                        window.location.reload();
-                    }, 500);
-                }
-            }, 1000);
-
-            // Safety timeout - force cleanup after 10 seconds
-            setTimeout(() => {
-                clearInterval(checkPrintDone);
-                if (iframe && iframe.parentNode) {
-                    document.body.removeChild(iframe);
-                }
-                window.location.reload();
-            }, 10000);
-
-            // Re-enable auto-refresh
-            setTimeout(() => {
-                isPrintingOrUpdatingRef.current = false;
-            }, 1000);
-        }, 300);
-
-    }, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
-
-    // --- Keyboard event listener ---
-    useEffect(() => {
-        const handleKeyDown = (event) => {
-            if (event.key === 'F1' || event.keyCode === 112) { event.preventDefault(); return false; }
-            if ((event.key === 'F4' || event.keyCode === 115) && supplierDetails.length > 0 && !isDetailsLoading) {
-                event.preventDefault();
-                handlePrint();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [supplierDetails, handlePrint, isDetailsLoading]);
-    // 🚀 CONTEXT MENU COMPONENT FOR BULK UPDATE
-  const BulkUpdateContextMenu = () => {
+// Hoisted to module scope (and memoized) so it keeps a stable identity across
+// SupplierReport re-renders (e.g. the 3s auto-refresh poll). When this was defined
+// inline inside SupplierReport, React treated it as a brand-new component type on
+// every render and fully remounted it — which reset its auto-focus effect and
+// stole focus out of whichever input the user was typing in every few seconds.
+const BulkUpdateContextMenu = React.memo(({
+    show,
+    selectionCriteria,
+    selectedTransactionIds,
+    bulkUpdateSupplierCode,
+    setBulkUpdateSupplierCode,
+    bulkUpdateCustomerCode,
+    setBulkUpdateCustomerCode,
+    handleBulkUpdate,
+    closeContextMenu
+}) => {
     const supplierInputRef = useRef(null);
     const customerInputRef = useRef(null);
 
     // Auto-focus on the first input when modal opens
     useEffect(() => {
-        if (bulkUpdateContextMenu.show) {
+        if (show) {
             // Small delay to ensure modal is rendered
             setTimeout(() => {
                 if (supplierInputRef.current) {
@@ -1561,9 +44,9 @@ const SupplierReport = () => {
                 }
             }, 100);
         }
-    }, [bulkUpdateContextMenu.show]);
+    }, [show]);
 
-    if (!bulkUpdateContextMenu.show) return null;
+    if (!show) return null;
 
     return (
         <>
@@ -1827,7 +310,1539 @@ const SupplierReport = () => {
             </div>
         </>
     );
-};
+});
+
+const SupplierReport = () => {
+    const navigate = useNavigate();
+
+    // State for all data
+    const [summary, setSummary] = useState({ printed: [], unprinted: [] });
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false); // New state for auto-refresh indicator
+
+    // 🚀 BULK SELECTION STATE (add these with your other state variables)
+    const [selectedTransactionIds, setSelectedTransactionIds] = useState([]);
+    const [selectionCriteria, setSelectionCriteria] = useState(null);
+    const [bulkUpdateContextMenu, setBulkUpdateContextMenu] = useState({ show: false, x: 0, y: 0 });
+    const [bulkUpdateSupplierCode, setBulkUpdateSupplierCode] = useState('');
+    const [bulkUpdateCustomerCode, setBulkUpdateCustomerCode] = useState('');
+
+    // 🚀 NEW STATE: Bill size selector (3mm or 4mm) - PERSISTED
+    const [billSize, setBillSize] = useState(() => {
+        const saved = localStorage.getItem('supplier_bill_size');
+        return saved || '3mm';
+    });
+
+    // 🚀 NEW STATE: Print Format selector (Thermal or A4) - PERSISTED
+    const [printFormat, setPrintFormat] = useState(() => {
+        const saved = localStorage.getItem('supplier_print_format');
+        return saved || 'thermal';
+    });
+
+    // Save billSize to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_bill_size', billSize);
+    }, [billSize]);
+
+    // Save printFormat to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_print_format', printFormat);
+    }, [printFormat]);
+
+    const [printedSearchTerm, setPrintedSearchTerm] = useState('');
+    const [unprintedSearchTerm, setUnprintedSearchTerm] = useState('');
+    const [isPhoneManuallyChanged, setIsPhoneManuallyChanged] = useState(false);
+    //new states  in adding telephone no
+    const [phoneNo, setPhoneNo] = useState('');
+    const [phoneStatus, setPhoneStatus] = useState(''); // For feedback
+    const [enteredAmount, setEnteredAmount] = useState(0);
+
+    // 🚀 NEW STATE: For loan/paying amount
+    const [payingAmount, setPayingAmount] = useState('');
+    const [loanStatus, setLoanStatus] = useState(''); // For feedback
+
+    const [currentView, setCurrentView] = useState('summary');
+    const [profilePic, setProfilePic] = useState(null);
+    // Add these with your other state variables
+    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+    const [supplierDocs, setSupplierDocs] = useState({ title: '', profile: null, nic_front: null, nic_back: null });
+    // F2 quick bill preview (small modal, no print dialog)
+    const [showBillPreview, setShowBillPreview] = useState(false);
+    //useeffects to store the option in local storage and retrieve it on component mount
+    // Add these after your existing useState declarations (around line 30-35)
+
+    // Load saved values from localStorage on component mount
+    useEffect(() => {
+        const savedBillSize = localStorage.getItem('supplier_bill_size');
+        if (savedBillSize) {
+            setBillSize(savedBillSize);
+        }
+
+        const savedPrintFormat = localStorage.getItem('supplier_print_format');
+        if (savedPrintFormat) {
+            setPrintFormat(savedPrintFormat);
+        }
+    }, []);
+
+    // Save billSize to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_bill_size', billSize);
+    }, [billSize]);
+
+    // Save printFormat to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('supplier_print_format', printFormat);
+    }, [printFormat]);
+    // State for Details Panel
+    const [selectedSupplier, setSelectedSupplier] = useState(null);
+    const [selectedBillNo, setSelectedBillNo] = useState(null);
+    const [isUnprintedBill, setIsUnprintedBill] = useState(false);
+    const [supplierDetails, setSupplierDetails] = useState([]);
+    const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
+    // 🚀 NEW STATE: To hold the advance amount from the suppliers table
+    const [advanceAmount, setAdvanceAmount] = useState(0);
+
+    // 🚀 NEW STATE: For the Advance Entry Form Logic
+    const [advancePayload, setAdvancePayload] = useState({ code: '', advance_amount: '' });
+    const [advanceLoading, setAdvanceLoading] = useState(false);
+    const [advanceStatus, setAdvanceStatus] = useState({ type: '', text: '' });
+
+    // 🚀 NEW STATE: For Editing Records
+    const [editingRecord, setEditingRecord] = useState(null);
+    const [newFarmerCode, setNewFarmerCode] = useState('');
+    const [newCustomerCode, setNewCustomerCode] = useState('');
+    // 🚀 BULK EDIT STATE
+    const [applyToAllSameItems, setApplyToAllSameItems] = useState(true);
+
+    // 🚀 AUTO-REFRESH: Store interval reference
+    const refreshIntervalRef = useRef(null);
+    const isPrintingOrUpdatingRef = useRef(false);
+    // Identifies the bill currently selected, so late responses for a previously
+    // clicked bill (or an in-flight auto-refresh) can't overwrite the details panel.
+    const activeBillKeyRef = useRef(null);
+
+    // --- Function to fetch the summary data ---
+    const fetchSummary = useCallback(async (isAutoRefresh = false) => {
+        // Don't fetch if we're in the middle of printing or updating
+        if (isPrintingOrUpdatingRef.current) {
+            console.log("⏸️ Skipping refresh - printing or updating in progress");
+            return;
+        }
+
+        // Set refreshing state for auto-refresh, but not for initial load
+        if (isAutoRefresh) {
+            setIsRefreshing(true);
+        } else {
+            setIsLoading(true);
+        }
+
+        setCurrentView('summary');
+        console.log("➡️ Attempting to fetch supplier summary data from backend...");
+        try {
+            const response = await api.get('/suppliers/bill-status-summary');
+
+            if (response.data) {
+                console.log("✅ Summary data received.");
+                setSummary({
+                    printed: response.data.printed || [],
+                    unprinted: response.data.unprinted || [],
+                });
+            } else {
+                console.warn("⚠️ Received empty response body or data structure from /suppliers/bill-status-summary.");
+                setSummary({ printed: [], unprinted: [] });
+            }
+
+        } catch (error) {
+            console.error('❌ Error fetching summary data:', error.message, error.response?.data);
+            setSummary({ printed: [], unprinted: [] });
+        } finally {
+            if (isAutoRefresh) {
+                setIsRefreshing(false);
+            } else {
+                setIsLoading(false);
+            }
+        }
+    }, []);
+
+    // 🚀 NEW: Function to refresh supplier profile data
+    // 🚀 NEW: Function to refresh supplier profile data (preserves manual phone changes)
+    const fetchSupplierProfile = useCallback(async (supplierCode) => {
+        if (!supplierCode || isPrintingOrUpdatingRef.current) return;
+
+        try {
+            const supRes = await api.get(`/suppliers/search-by-code/${supplierCode}`);
+            if (supRes.data) {
+                setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
+                setProfilePic(supRes.data.profile_pic);
+
+                // Only update phone number if it hasn't been manually changed by user
+                if (!isPhoneManuallyChanged) {
+                    setPhoneNo(supRes.data.telephone_no || '');
+                }
+
+                setSupplierDocs({
+                    title: supRes.data.name || supplierCode,
+                    profile: supRes.data.profile_pic,
+                    nic_front: supRes.data.nic_front,
+                    nic_back: supRes.data.nic_back
+                });
+            }
+        } catch (error) {
+            console.error("Error refreshing supplier profile:", error);
+        }
+    }, [isPhoneManuallyChanged]);
+
+    // 🚀 NEW: Function to refresh bill details
+    const refreshBillDetails = useCallback(async () => {
+        if (!selectedSupplier || isPrintingOrUpdatingRef.current) return;
+
+        const requestKey = activeBillKeyRef.current;
+        try {
+            if (isUnprintedBill) {
+                const response = await api.get(`/suppliers/${selectedSupplier}/unprinted-details`);
+                if (activeBillKeyRef.current === requestKey) setSupplierDetails(response.data);
+            } else if (selectedBillNo) {
+                const response = await api.get(`/suppliers/bill/${selectedBillNo}/details`);
+                if (activeBillKeyRef.current === requestKey) setSupplierDetails(response.data);
+            }
+        } catch (error) {
+            console.error("Error refreshing bill details:", error);
+        }
+    }, [selectedSupplier, selectedBillNo, isUnprintedBill]);
+
+    // 🚀 AUTO-REFRESH: Setup interval to refresh all data periodically, keeping the
+    // dashboard near-real-time without a manual page reload. Skipped entirely while
+    // the bulk-update modal is open — BulkUpdateContextMenu is now hoisted/memoized
+    // (see top of file) so this no longer remounts it and steals input focus.
+    useEffect(() => {
+        refreshIntervalRef.current = setInterval(async () => {
+            if (bulkUpdateContextMenu.show) return;
+
+            console.log("🔄 Auto-refreshing data...");
+
+            // Refresh summary (pass true to indicate auto-refresh)
+            await fetchSummary(true);
+
+            // Refresh current bill details if a supplier is selected
+            if (selectedSupplier) {
+                await refreshBillDetails();
+                await fetchSupplierProfile(selectedSupplier);
+            }
+        }, 3000); // 3 seconds
+
+        // Cleanup on component unmount
+        return () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+                refreshIntervalRef.current = null;
+            }
+        };
+    }, [fetchSummary, refreshBillDetails, fetchSupplierProfile, selectedSupplier, bulkUpdateContextMenu.show]);
+
+    // --- Initial Fetch ---
+    useEffect(() => {
+        fetchSummary();
+    }, [fetchSummary]);
+
+    // --- Navigation Handler ---
+    const goToSalesEntry = () => {
+        navigate('/sales');
+    };
+
+    // 🚀 NEW: Handle Advance Entry Form Submission
+    const handleAdvanceSubmit = async (e) => {
+        e.preventDefault();
+        setAdvanceLoading(true);
+        setAdvanceStatus({ type: '', text: '' });
+
+        // Pause auto-refresh during update
+        isPrintingOrUpdatingRef.current = true;
+
+        try {
+            const response = await api.post('/suppliers/advance', advancePayload);
+            setAdvanceStatus({ type: 'success', text: `සාර්ථකයි! අත්තිකාරම් යාවත්කාලීන විය.` });
+
+            // Immediately update the display advance amount
+            setAdvanceAmount(parseFloat(response.data.data.advance_amount) || 0);
+            setAdvancePayload({ ...advancePayload, advance_amount: '' });
+
+            // Refresh data after update
+            await fetchSummary();
+            if (selectedSupplier) {
+                await fetchSupplierProfile(selectedSupplier);
+            }
+        } catch (error) {
+            console.error("Advance Update Error:", error);
+            setAdvanceStatus({ type: 'error', text: 'යාවත්කාලීන කිරීම අසාර්ථක විය.' });
+        } finally {
+            setAdvanceLoading(false);
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
+        }
+    };
+
+    // --- 🚀 NEW: Update Farmer Logic (Enhanced for Bulk) ---
+    const handleUpdateFarmer = async () => {
+        const finalSupplierCode = newFarmerCode || editingRecord.supplier_code;
+        const finalCustomerCode = newCustomerCode || editingRecord.customer_code;
+
+        // Logic to determine which IDs to update
+        let idsToUpdate = [editingRecord.id];
+        if (applyToAllSameItems) {
+            idsToUpdate = supplierDetails
+                .filter(item => item.item_name === editingRecord.item_name)
+                .map(item => item.id);
+        }
+
+        // Pause auto-refresh during update
+        isPrintingOrUpdatingRef.current = true;
+
+        try {
+            setIsDetailsLoading(true);
+            // Using a generic update endpoint that handles arrays or multiple IDs
+            const response = await api.put(`/sales/bulk-update-supplier`, {
+                transaction_ids: idsToUpdate,
+                supplier_code: finalSupplierCode,
+                customer_code: finalCustomerCode
+            });
+
+            if (response.status === 200) {
+                setEditingRecord(null);
+                setNewFarmerCode('');
+                setNewCustomerCode('');
+                setApplyToAllSameItems(true);
+
+                // Refresh current view
+                if (isUnprintedBill) {
+                    await handleUnprintedBillClick(selectedSupplier, null);
+                } else {
+                    await handlePrintedBillClick(selectedSupplier, selectedBillNo);
+                }
+                await fetchSummary();
+            }
+        } catch (error) {
+            console.error("Update failed:", error);
+            alert("Failed to update records:\n" + extractApiErrorMessage(error, "Please try again."));
+        } finally {
+            setIsDetailsLoading(false);
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
+        }
+    };
+
+    // --- Filtering Logic ---
+    const filteredPrintedItems = useMemo(() => {
+        const lowerCaseSearch = printedSearchTerm.toLowerCase();
+        const filtered = summary.printed.filter(item =>
+            item.supplier_code.toLowerCase().includes(lowerCaseSearch) ||
+            (item.supplier_bill_no && item.supplier_bill_no.toLowerCase().includes(lowerCaseSearch))
+        );
+        return filtered;
+    }, [printedSearchTerm, summary.printed]);
+
+    const filteredUnprintedItems = useMemo(() => {
+        const lowerCaseSearch = unprintedSearchTerm.toLowerCase();
+        const filtered = summary.unprinted.filter(item =>
+            item.supplier_code.toLowerCase().includes(lowerCaseSearch)
+        );
+        return filtered;
+    }, [unprintedSearchTerm, summary.unprinted]);
+
+    // --- Shared loader for both side bars ---
+    // Details and supplier profile are fetched independently: the details table is
+    // filled as soon as its own request returns, and a failed profile lookup (e.g. a
+    // supplier code missing from the suppliers table) no longer discards the details.
+    const loadBill = async (supplierCode, billNo, isUnprinted) => {
+        const requestKey = `${isUnprinted ? 'U' : 'P'}|${supplierCode}|${billNo}`;
+        activeBillKeyRef.current = requestKey;
+        const isStale = () => activeBillKeyRef.current !== requestKey;
+
+        // Pause auto-refresh while loading new data
+        isPrintingOrUpdatingRef.current = true;
+
+        setSelectedSupplier(supplierCode);
+        setSelectedBillNo(billNo);
+        setIsUnprintedBill(isUnprinted);
+        setSupplierDetails([]);
+        setSelectedTransactionIds([]); // Ticks belong to the previous bill's rows
+        setSelectionCriteria(null);
+        setAdvanceAmount(0);
+        setProfilePic(null);
+        setPhoneNo(''); // Reset before fetch
+        setIsPhoneManuallyChanged(false); // 🔄 RESET manual change flag for new bill
+        setPayingAmount(''); // Reset paying amount
+        setAdvancePayload({ code: supplierCode, advance_amount: '' });
+        setIsDetailsLoading(true);
+
+        const detailsUrl = isUnprinted
+            ? `/suppliers/${supplierCode}/unprinted-details`
+            : `/suppliers/bill/${billNo}/details`;
+
+        const detailsPromise = api.get(detailsUrl)
+            .then(res => {
+                if (isStale()) return;
+                setSupplierDetails(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+            })
+            .catch(error => console.error(`❌ Error fetching ${isUnprinted ? 'unprinted' : 'printed'} details:`, error.message, error.response?.data))
+            .finally(() => {
+                if (!isStale()) setIsDetailsLoading(false);
+            });
+
+        const profilePromise = api.get(`/suppliers/search-by-code/${supplierCode}`)
+            .then(supRes => {
+                if (isStale() || !supRes.data) return;
+                setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
+                setProfilePic(supRes.data.profile_pic);
+                // 🚀 MATCHING & FETCHING: This gets the phone from the DB record
+                setPhoneNo(supRes.data.telephone_no || '');
+
+                setSupplierDocs({
+                    title: supRes.data.name || supplierCode,
+                    profile: supRes.data.profile_pic,
+                    nic_front: supRes.data.nic_front,
+                    nic_back: supRes.data.nic_back
+                });
+            })
+            .catch(error => console.error(`❌ Error fetching supplier profile:`, error.message));
+
+        await Promise.allSettled([detailsPromise, profilePromise]);
+        setTimeout(() => {
+            if (!isStale()) isPrintingOrUpdatingRef.current = false;
+        }, 500);
+    };
+
+    // --- Handle Printed Bill Click ---
+    const handlePrintedBillClick = (supplierCode, billNo) => loadBill(supplierCode, billNo, false);
+
+    // --- Handle Unprinted Bill Click ---
+    const handleUnprintedBillClick = (supplierCode, billNo) => loadBill(supplierCode, billNo, true);
+
+    // --- Function to reset details ---
+    const resetDetails = () => {
+        activeBillKeyRef.current = null;
+        setSelectedSupplier(null);
+        setSelectedBillNo(null);
+        setIsUnprintedBill(false);
+        setSupplierDetails([]);
+        setAdvanceAmount(0);
+        setAdvancePayload({ code: '', advance_amount: '' });
+        setProfilePic(null);
+        fetchSummary();
+    };
+
+    // --- Helper function for details panel ---
+    const formatDecimal = (value, decimals = 2) => (parseFloat(value) || 0).toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+
+    //function to add telephone number
+    const handlePhoneSubmit = async (e) => {
+        if (e.key === 'Enter') {
+            if (!selectedSupplier) return;
+
+            // Pause auto-refresh during update
+            isPrintingOrUpdatingRef.current = true;
+
+            setPhoneStatus('Updating...');
+            try {
+                await api.post('/suppliers/update-phone', {
+                    code: selectedSupplier,
+                    telephone_no: phoneNo
+                });
+                setPhoneStatus('✅ Saved');
+                setTimeout(() => setPhoneStatus(''), 2000);
+
+                // Refresh supplier profile after update
+                await fetchSupplierProfile(selectedSupplier);
+            } catch (error) {
+                console.error("Phone Update Error:", error);
+                setPhoneStatus('❌ Error');
+            } finally {
+                setTimeout(() => {
+                    isPrintingOrUpdatingRef.current = false;
+                }, 500);
+            }
+        }
+    };
+    // 🚀 BULK SELECTION: Toggle individual row selection - any record can be selected
+    const toggleTransactionSelection = (transactionId, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+
+        const transactionToSelect = supplierDetails.find(t => t.id === transactionId);
+        if (!transactionToSelect) return;
+
+        // If already selected, just unselect it
+        if (selectedTransactionIds.includes(transactionId)) {
+            const newSelectedIds = selectedTransactionIds.filter(id => id !== transactionId);
+            setSelectedTransactionIds(newSelectedIds);
+            if (newSelectedIds.length === 0) {
+                setSelectionCriteria(null);
+            }
+            return;
+        }
+
+        setSelectedTransactionIds([...selectedTransactionIds, transactionId]);
+        // Criteria only records the first selected record, for the bulk-update modal header
+        if (!selectionCriteria) {
+            setSelectionCriteria({
+                supplier_code: transactionToSelect.supplier_code,
+                item_name: transactionToSelect.item_name,
+                customer_code: transactionToSelect.customer_code
+            });
+        }
+    };
+
+    // 🚀 BULK SELECTION: Select-all checkbox - ticks/unticks every record in the details table
+    const allDetailsSelected = supplierDetails.length > 0 && supplierDetails.every(t => selectedTransactionIds.includes(t.id));
+    const toggleSelectAllTransactions = () => {
+        if (allDetailsSelected) {
+            setSelectedTransactionIds([]);
+            setSelectionCriteria(null);
+            return;
+        }
+        setSelectedTransactionIds(supplierDetails.map(t => t.id));
+        if (!selectionCriteria) {
+            const first = supplierDetails[0];
+            setSelectionCriteria({
+                supplier_code: first.supplier_code,
+                item_name: first.item_name,
+                customer_code: first.customer_code
+            });
+        }
+    };
+
+    // 🚀 BULK SELECTION: Handle right-click on row - selects it (no restriction) and opens the bulk-update menu
+    const handleRowRightClick = (e, transaction) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!selectedTransactionIds.includes(transaction.id)) {
+            setSelectedTransactionIds([...selectedTransactionIds, transaction.id]);
+            if (!selectionCriteria) {
+                setSelectionCriteria({
+                    supplier_code: transaction.supplier_code,
+                    item_name: transaction.item_name,
+                    customer_code: transaction.customer_code
+                });
+            }
+        }
+
+        setBulkUpdateContextMenu({
+            show: true,
+            x: e.clientX,
+            y: e.clientY
+        });
+        setBulkUpdateSupplierCode('');
+        setBulkUpdateCustomerCode('');
+    };
+    // 🚀 BULK SELECTION: Close context menu
+    const closeContextMenu = () => {
+        setBulkUpdateContextMenu({ show: false, x: 0, y: 0 });
+        setBulkUpdateSupplierCode('');
+        setBulkUpdateCustomerCode('');
+    };
+
+    // 🚀 BULK SELECTION: Handle Escape key
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && bulkUpdateContextMenu.show) {
+                closeContextMenu();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [bulkUpdateContextMenu.show]);
+
+    // 🚀 BULK UPDATE: Update selected transactions
+    const handleBulkUpdate = async () => {
+        const finalSupplierCode = bulkUpdateSupplierCode.trim().toUpperCase();
+        const finalCustomerCode = bulkUpdateCustomerCode.trim().toUpperCase();
+
+        if (!finalSupplierCode && !finalCustomerCode) {
+            alert("Please enter at least one code to update (Supplier or Customer)");
+            return;
+        }
+
+        if (selectedTransactionIds.length === 0) {
+            alert("No transactions selected");
+            return;
+        }
+
+        // Pause auto-refresh during update
+        isPrintingOrUpdatingRef.current = true;
+
+        try {
+            const payload = {
+                transaction_ids: selectedTransactionIds,
+                ...(finalSupplierCode && { supplier_code: finalSupplierCode }),
+                ...(finalCustomerCode && { customer_code: finalCustomerCode })
+            };
+
+            const response = await api.put(`/sales/bulk-update-supplier`, payload);
+
+            if (response.status === 200) {
+                // Clear selection
+                setSelectedTransactionIds([]);
+                setSelectionCriteria(null);
+                closeContextMenu();
+
+                // Refresh current view
+                if (isUnprintedBill) {
+                    await handleUnprintedBillClick(selectedSupplier, null);
+                } else if (selectedBillNo) {
+                    await handlePrintedBillClick(selectedSupplier, selectedBillNo);
+                }
+                await fetchSummary();
+
+               
+            }
+        } catch (error) {
+            console.error("Bulk update failed:", error);
+            alert("Failed to update records:\n" + extractApiErrorMessage(error, "Please try again."));
+        } finally {
+            setTimeout(() => {
+                isPrintingOrUpdatingRef.current = false;
+            }, 500);
+        }
+    };
+
+    // 🚀 BULK SELECTION: Clear all selections
+    const clearSelections = () => {
+        setSelectedTransactionIds([]);
+        setSelectionCriteria(null);
+        closeContextMenu();
+    };
+
+    // 🚀 NEW: Handle loan amount submission and trigger print
+    const handleLoanSubmit = async (e) => {
+        if (e.key === 'Enter') {
+            if (!selectedSupplier || !payingAmount || parseFloat(payingAmount) <= 0) {
+                setLoanStatus('⚠️ Invalid amount');
+                setTimeout(() => setLoanStatus(''), 2000);
+                return;
+            }
+
+            // Pause auto-refresh during loan processing
+            isPrintingOrUpdatingRef.current = true;
+            setLoanStatus('Processing...');
+
+            try {
+                // Calculate total amount (SupplierTotal - payingAmount)
+                const totalAmount = totalsupplierSales - parseFloat(payingAmount);
+
+                // Save the loan amount
+                await api.post('/supplier-loan', {
+                    code: selectedSupplier,
+                    loan_amount: parseFloat(payingAmount),
+                    total_amount: totalAmount,
+                    bill_no: selectedBillNo || null
+                });
+
+                setLoanStatus('✅ Loan saved');
+
+                // Clear the input
+                setPayingAmount('');
+
+                // Small delay to ensure the loan is saved before printing
+                setTimeout(() => {
+                    // Trigger the print function
+                    handlePrint();
+                }, 300);
+
+            } catch (error) {
+                console.error("Loan Update Error:", error);
+
+                if (error.response && error.response.status === 422) {
+                    setLoanStatus('⚠️ Invalid supplier code');
+                } else {
+                    setLoanStatus('❌ Error');
+                }
+
+                setTimeout(() => setLoanStatus(''), 2000);
+            } finally {
+                setTimeout(() => {
+                    isPrintingOrUpdatingRef.current = false;
+                }, 1000);
+            }
+        }
+    };
+
+    const getRowStyle = (index) => index % 2 === 0 ? { backgroundColor: '#f8f9fa' } : { backgroundColor: '#ffffff' };
+
+    // --- CALCULATIONS (Updated to include CustomerPackCost) ---
+    const {
+        totalWeight,
+        totalCommission,
+        amountPayable,
+        itemSummaryData,
+        totalPacksSum,
+        totalsupplierSales,
+        totalSupplierPackCost,
+        totalCusGross,
+        totalCustomerPackCost, // <-- NEW: Sum of CustomerPackCost
+    } = useMemo(() => {
+        let totalWeight = 0, totalsupplierSales = 0, totalCommission = 0, totalPacksSum = 0, totalSupplierPackCost = 0, totalCusGross = 0, totalCustomerPackCost = 0;
+        const itemSummary = {};
+
+        supplierDetails.forEach(record => {
+            const weight = parseFloat(record.weight) || 0;
+            const commission = parseFloat(record.commission_amount) || 0;
+            const packs = parseInt(record.packs) || 0;
+            const SupplierTotal = parseFloat(record.SupplierTotal) || 0;
+            const itemName = record.item_name || 'Unknown Item';
+            const rowCusGross = (parseFloat(record?.total) || 0) - (parseFloat(record?.CustomerPackLabour) || 0);
+            const packCost = parseFloat(record?.CustomerPackCost) || 0; // <-- NEW: Get pack cost
+
+            totalWeight += weight;
+            totalsupplierSales += SupplierTotal;
+            totalCommission += commission;
+            totalPacksSum += packs;
+            totalCusGross += rowCusGross;
+            totalCustomerPackCost += packCost; // <-- NEW: Add to total
+
+            if (!itemSummary[itemName]) {
+                itemSummary[itemName] = { totalWeight: 0, totalPacks: 0 };
+            }
+            itemSummary[itemName].totalWeight += weight;
+            itemSummary[itemName].totalPacks += packs;
+        });
+
+        return {
+            totalWeight, totalCommission, amountPayable: totalsupplierSales, itemSummaryData: itemSummary,
+            totalPacksSum, totalsupplierSales, totalSupplierPackCost, totalCusGross,
+            totalCustomerPackCost, // <-- NEW: Return the total
+        };
+    }, [supplierDetails]);
+
+    // 🚀 FIXED: Customizable width bill with center alignment and ultra-clear high-visibility styling
+    const getA4Content = useCallback((currentBillNo, billWidth = "101mm", topMargin = "13mm") => {
+        const date = new Date().toLocaleDateString('si-LK');
+        const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const paidAmountValue = parseFloat(payingAmount) || 0;
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
+
+        // Format numbers WITHOUT unnecessary decimal places
+        const formatNumber = (num) => {
+            if (typeof num !== 'number' && typeof num !== 'string') return '0';
+            const number = parseFloat(num);
+            if (isNaN(number)) return '0';
+
+            if (Number.isInteger(number)) {
+                return number.toLocaleString('en-US');
+            }
+
+            const roundedToWhole = Math.round(number);
+            if (Math.abs(number - roundedToWhole) < 0.001) {
+                return roundedToWhole.toLocaleString('en-US');
+            }
+
+            return number.toLocaleString('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+            });
+        };
+
+        // ALL SIZES MULTIPLIED BY 0.65 (65% of original)
+        const getStyles = (width) => {
+            const widthNum = parseInt(width);
+
+            let headerFontSize, shopFontSize, normalFontSize, smallFontSize, tinyFontSize;
+            let tableHeaderFontSize, totalRowFontSize, netTotalFontSize;
+
+            if (widthNum <= 58) {
+                headerFontSize = '2.9mm';    // 4.5mm × 0.65
+                shopFontSize = '2.3mm';      // 3.5mm × 0.65
+                normalFontSize = '2.3mm';    // 3.5mm × 0.65
+                smallFontSize = '2.1mm';     // 3.2mm × 0.65
+                tinyFontSize = '2mm';        // 3mm × 0.65
+                tableHeaderFontSize = '2.1mm'; // 3.2mm × 0.65
+                totalRowFontSize = '2.5mm';    // 3.8mm × 0.65
+                netTotalFontSize = '2.9mm';    // 4.5mm × 0.65
+            } else if (widthNum <= 80) {
+                headerFontSize = '3.6mm';    // 5.5mm × 0.65
+                shopFontSize = '2.6mm';      // 4mm × 0.65
+                normalFontSize = '2.6mm';    // 4mm × 0.65
+                smallFontSize = '2.4mm';     // 3.7mm × 0.65
+                tinyFontSize = '2.3mm';      // 3.5mm × 0.65
+                tableHeaderFontSize = '2.4mm'; // 3.7mm × 0.65
+                totalRowFontSize = '2.7mm';    // 4.2mm × 0.65
+                netTotalFontSize = '3.3mm';    // 5mm × 0.65
+            } else {
+                headerFontSize = '4.6mm';    // 7mm × 0.65
+                shopFontSize = '2.9mm';      // 4.5mm × 0.65
+                normalFontSize = '2.7mm';    // 4.2mm × 0.65
+                smallFontSize = '2.6mm';     // 4mm × 0.65
+                tinyFontSize = '2.4mm';      // 3.7mm × 0.65
+                tableHeaderFontSize = '2.6mm'; // 4mm × 0.65
+                totalRowFontSize = '2.9mm';    // 4.5mm × 0.65
+                netTotalFontSize = '3.6mm';    // 5.5mm × 0.65
+            }
+
+            return {
+                containerWidth: width,
+                headerFontSize,
+                shopFontSize,
+                normalFontSize,
+                smallFontSize,
+                tinyFontSize,
+                tableHeaderFontSize,
+                totalRowFontSize,
+                netTotalFontSize,
+                padding: widthNum <= 58 ? '2mm' : '2.6mm',      // 3mm/4mm × 0.65
+                cellPadding: widthNum <= 58 ? '1mm' : '1.3mm'  // 1.5mm/2mm × 0.65
+            };
+        };
+
+        const styles = getStyles(billWidth);
+
+        // Split supplier details into pages with 9 items per page
+        const ITEMS_PER_PAGE = 9;
+
+        const splitItemsIntoPages = (items, itemsPerPage = 9) => {
+            const pages = [];
+            for (let i = 0; i < items.length; i += itemsPerPage) {
+                pages.push(items.slice(i, i + itemsPerPage));
+            }
+            return pages;
+        };
+
+        const itemPages = splitItemsIntoPages(supplierDetails, ITEMS_PER_PAGE);
+
+        // Calculate grand totals once for all pages
+        const grandTotalPacks = supplierDetails.reduce((sum, record) => sum + (parseInt(record.packs) || 0), 0);
+        const grandTotalSales = totalsupplierSales;
+        const grandTotalPackCost = totalCustomerPackCost;
+        const grandAdvanceAmount = advanceAmount;
+        const grandPaidAmount = paidAmountValue;
+        const grandNetPayable = netPayable;
+
+        // Generate HTML for each page
+        const generatePage = (pageItems, pageNumber, isLastPage) => {
+            // Calculate page-specific totals
+            let pageTotalSales = 0;
+            let pageTotalPacks = 0;
+
+            pageItems.forEach(record => {
+                pageTotalSales += parseFloat(record.SupplierTotal) || 0;
+                pageTotalPacks += parseInt(record.packs) || 0;
+            });
+
+            return `
+        <div class="bill-border" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
+            ${pageNumber === 1 ? `
+            <div class="header">
+                <div class="shop-name">${SHOP_NAME}</div>
+                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                <div class="shop-phone">දුරකථන: ${SHOP_PHONE}</div>
+            </div>
+            
+            <div class="info-row" style="display: flex; flex-wrap: nowrap; gap: 3.3mm; white-space: nowrap;">
+                <div>ගොවියා: ${(selectedSupplier || '').toUpperCase()}</div>
+                <div>අං: ${currentBillNo || ''}</div>
+                <div>දිනය: ${date}</div>
+                <div>${time}</div>
+            </div>
+            ` : `
+            <div class="header-continued">
+                <div class="continued-label">(පිටුව ${pageNumber} / ${itemPages.length} - කරුණාකර දිගටම කියවන්න)</div>
+            </div>
+            `}
+
+            ${itemPages.length > 1 ? `
+            <div style="margin-bottom: 1.3mm; font-size: ${styles.tinyFontSize}; text-align: center; font-weight: bold;">
+                පිටුව ${pageNumber} / ${itemPages.length}
+            </div>
+            ` : ''}
+
+            <table>
+                <colgroup>
+                    <col style="width: 30%">
+                    <col style="width: 10%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                    <col style="width: 15%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th style="text-align: left; font-size: ${styles.tableHeaderFontSize};">වර්ගය</th>
+                        <th style="font-size: ${styles.tableHeaderFontSize};">මලු</th>
+                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">බර</th>
+                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">මිල</th>
+                        <th style="text-align: center; font-size: ${styles.tableHeaderFontSize};">ගනු</th>
+                        <th style="text-align: right; font-size: ${styles.tableHeaderFontSize};">එකතුව</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pageItems.map(record => `
+                        <tr style="page-break-inside: avoid;">
+                            <td style="text-align: left; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${record.item_name || ''}</td>
+                            <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${record.packs || 0}</td>
+                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.weight)}</td>
+                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierPricePerKg)}</td>
+                            <td style="text-align: center; padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${(record.customer_code || '').toUpperCase()}</td>
+                            <td class="text-right" style="padding: ${styles.cellPadding}; font-size: ${styles.normalFontSize};">${formatNumber(record.SupplierTotal)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0;">
+                        <td colspan="2" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">මෙම පිටුවේ එකතුව</td>
+                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">  </td>
+                        <td style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">  </td>
+                        <td class="text-center" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${pageTotalPacks}</td>
+                        <td class="text-right" style="font-size: ${styles.smallFontSize}; font-weight: bold; padding: ${styles.cellPadding};">${formatNumber(pageTotalSales)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            ${isLastPage ? `
+            <div class="totals-section">
+                <div class="total-row"><span>මුළු එකතුව:</span><span>රු. ${formatNumber(grandTotalSales)}</span></div>
+                <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(grandTotalPackCost)}</span></div>
+                <div class="total-row"><span>අත්තිකාරම්:</span><span style="color: red !important;">රු. -${formatNumber(grandAdvanceAmount)}</span></div>
+                ${grandPaidAmount > 0 ? `<div class="total-row"><span>ගෙවූ මුදල:</span><span>රු. -${formatNumber(grandPaidAmount)}</span></div>` : ''}
+                <div class="net-total">
+                    <span>ගෙවිය යුතු මුදල:</span>
+                    <span>රු. ${formatNumber(grandNetPayable)}</span>
+                </div>
+            </div>
+            
+            <div class="footer">
+                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+            </div>
+            ` : `
+            <div class="footer" style="margin-top: 2.6mm; text-align: center; font-size: ${styles.smallFontSize}; border-top: 0.3mm dashed #000; padding-top: 1.6mm;">
+                *** කරුණාකර පහත පිටුවට හැරෙන්න ***
+            </div>
+            `}
+        </div>
+    `;
+        };
+
+        // Generate all pages
+        let allPagesHTML = '';
+        if (supplierDetails.length === 0) {
+            allPagesHTML = `
+        <div class="bill-border">
+            <div class="header">
+                <div class="shop-name">${SHOP_NAME}</div>
+                <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
+                <div class="shop-phone">දුරකථන: ${SHOP_PHONE}</div>
+            </div>
+            
+            <div class="info-row">
+                <div>කේතය: ${(selectedSupplier || '').toUpperCase()}</div>
+                <div>අංකය: ${currentBillNo || ''}</div>
+                <div>දිනය: ${date}</div>
+                <div>වේලාව: ${time}</div>
+            </div>
+            
+            <div style="text-align: center; padding: 6.5mm; font-size: ${styles.headerFontSize}; font-weight: bold;">
+                අයිතම නොමැත
+            </div>
+            
+            <div class="footer">
+                *** ස්තුතියි! නැවත පැමිණෙන්න ***
+                <div style="margin-top: 1mm; font-size: ${styles.tinyFontSize};">${date} | ${time}</div>
+            </div>
+        </div>
+    `;
+        } else {
+            itemPages.forEach((page, idx) => {
+                allPagesHTML += generatePage(page, idx + 1, idx === itemPages.length - 1);
+            });
+        }
+
+        return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        
+        body { 
+            font-family: 'Iskoola Pota', Arial, sans-serif; 
+            background: #f0f0f0; 
+            padding: 0;
+            margin: 0;
+        }
+
+        .bill-border { 
+            width: ${styles.containerWidth}; 
+            max-width: ${styles.containerWidth};
+            min-width: ${styles.containerWidth};
+            background: white;
+            padding: ${styles.padding};
+            margin: ${topMargin} auto 0 auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+
+        @media print {
+            body { 
+                background: white; 
+                padding: 0; 
+                margin: 0;
+            }
+            .bill-border { 
+                box-shadow: none; 
+                margin: 0 auto !important;
+                page-break-after: always;
+                page-break-inside: avoid;
+            }
+            @page { 
+                size: ${styles.containerWidth} auto;
+                margin: 0mm;
+            }
+        }
+
+        div, span, p, td, th, strong, .shop-name, .shop-address, .shop-phone, 
+        .info-row, .total-row, .net-total, .footer, .header-continued { 
+            color: #000 !important; 
+            font-weight: bold !important; 
+        }
+
+        .header { 
+            text-align: center; 
+            border-bottom: 0.5mm solid #000; 
+            padding-bottom: 1.6mm; 
+            margin-bottom: 1.6mm; 
+        }
+        
+        .header-continued {
+            text-align: center;
+            border-bottom: 0.3mm solid #000;
+            padding-bottom: 1.3mm;
+            margin-bottom: 1.6mm;
+        }
+        
+        .continued-label {
+            font-size: ${styles.smallFontSize};
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .shop-name { 
+            font-size: ${styles.headerFontSize}; 
+            margin-bottom: 1mm; 
+            font-weight: bold;
+        }
+        .shop-address, .shop-phone { 
+            font-size: ${styles.shopFontSize}; 
+            margin: 0.7mm 0; 
+            font-weight: bold;
+        }
+
+        .info-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 1.6mm; 
+            padding: 1.3mm; 
+            border: 0.3mm solid #000; 
+            font-size: ${styles.normalFontSize};
+            font-weight: bold;
+        }
+
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 1.6mm;
+            table-layout: fixed;
+        }
+        
+        th { 
+            border: 0.3mm solid #000; 
+            padding: ${styles.cellPadding}; 
+            background: #eee; 
+            font-weight: bold;
+        }
+        
+        td { 
+            border: 0.2mm solid #000; 
+            vertical-align: top;
+            font-weight: bold;
+        }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        .totals-section { 
+            margin-top: 1.6mm; 
+            border-top: 0.3mm solid #000; 
+            padding-top: 1.6mm;
+        }
+        
+        .total-row { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 1mm 0; 
+            font-size: ${styles.totalRowFontSize};
+            font-weight: bold;
+        }
+        
+        .net-total { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 1.6mm 1mm; 
+            border-top: 0.5mm solid #000; 
+            border-bottom: 0.5mm solid #000;
+            font-size: ${styles.netTotalFontSize};
+            margin-top: 1.3mm; 
+            background: #f9f9f9;
+            font-weight: bold;
+        }
+
+        .footer { 
+            margin-top: 2.6mm; 
+            text-align: center; 
+            font-size: ${styles.smallFontSize}; 
+            border-top: 0.3mm dashed #000; 
+            padding-top: 1.6mm; 
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    ${allPagesHTML}
+</body>
+</html>`;
+    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
+
+    const getBillContent = useCallback((currentBillNo) => {
+        const date = new Date().toLocaleDateString('si-LK');
+        const mobile = SHOP_PHONE;
+        const is4Inch = billSize === '4inch';
+        const receiptMaxWidth = is4Inch ? '4in' : '350px';
+        const fontSizeBody = '18px';
+        const fontSizeHeader = '18px';
+        const fontSizeTotal = '28px';
+
+        // 🚀 NEW: Calculation for Loan/Partial Payment
+        const paidAmountValue = parseFloat(payingAmount) || 0;
+        const remainingAfterPayment = totalsupplierSales - paidAmountValue;
+
+        const colGroups = `
+    <colgroup>
+        <col style="width:32%;"> 
+        <col style="width:21%;">
+        <col style="width:21%;">
+        <col style="width:26%;">
+    </colgroup>`;
+
+        const formatNumber = (value, maxDecimals = 3) => {
+            if (typeof value !== 'number' && typeof value !== 'string') return '0';
+            const number = parseFloat(value);
+            if (isNaN(number)) return '0';
+            if (Number.isInteger(number)) return number.toLocaleString('en-US');
+            const parts = number.toFixed(maxDecimals).replace(/\.?0+$/, '').split('.');
+            const wholePart = parseInt(parts[0]).toLocaleString('en-US');
+            return parts[1] ? `${wholePart}.${parts[1]}` : wholePart;
+        };
+
+        const detailedItemsHtml = supplierDetails.map(record => {
+            const weight = parseFloat(record.weight) || 0;
+            const packs = parseInt(record.packs) || 0;
+            const price = parseFloat(record.SupplierPricePerKg) || 0;
+            const total = parseFloat(record.SupplierTotal) || 0;
+            const itemName = record.item_name || '';
+            const customerCode = record.customer_code?.toUpperCase() || '';
+
+            return `
+        <tr style="font-size:${fontSizeBody}; font-weight:bold; vertical-align: bottom;">
+            <td style="text-align:left; padding:10px 0; white-space: nowrap;">${itemName}<br>${formatNumber(packs)}</td>
+            <td style="text-align:right; padding:10px 2px; position: relative; left: -70px;">${formatNumber(weight.toFixed(2))}</td>
+            <td style="text-align:right; padding:10px 2px; position: relative; left: -65px;">${formatNumber(price.toFixed(2))}</td>
+            <td style="padding:10px 0; display:flex; flex-direction:column; align-items:flex-end;">
+                <div style="font-size:25px; white-space:nowrap;">${customerCode}</div>
+                <div style="font-weight:900; white-space:nowrap;">${formatNumber(total.toFixed(2))}</div>
+            </td>
+          </tr>`;
+        }).join("");
+
+        const summaryEntries = Object.entries(itemSummaryData);
+        let itemSummaryHtml = '';
+        for (let i = 0; i < summaryEntries.length; i += 2) {
+            const [name1, d1] = summaryEntries[i];
+            const [name2, d2] = summaryEntries[i + 1] || [null, null];
+            const text1 = `${name1}:${formatNumber(d1.totalWeight)}/${formatNumber(d1.totalPacks)}`;
+            const text2 = d2 ? `${name2}:${formatNumber(d2.totalWeight)}/${formatNumber(d2.totalPacks)}` : '';
+            itemSummaryHtml += `<tr><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text1}</td><td style="padding:6px; width:50%; font-weight:bold; white-space:nowrap; font-size:14px;">${text2}</td></tr>`;
+        }
+
+        // 🚀 CALCULATION FOR FINAL NET AMOUNT
+        // We subtract both Advance and any current payment made
+        const netPayable = totalsupplierSales - advanceAmount - paidAmountValue + totalCustomerPackCost;
+
+        return `
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: 80mm auto;
+        margin: 0mm;
+    }
+    @media print {
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            width: 80mm;
+            margin: 0;
+            padding: 0;
+        }
+        div, table, tr, td, tbody, thead, tfoot {
+            page-break-inside: avoid;
+            page-break-after: avoid;
+            page-break-before: avoid;
+        }
+    }
+</style>
+</head>
+<body>
+<div style="width:${receiptMaxWidth}; margin:0 auto; padding:10px; font-family:'Courier New', monospace; color:#000; background:#fff;">
+    <div style="text-align:center; font-weight:bold;">
+        <div style="font-size:24px;">${SHOP_NAME}</div>
+        <div style="display:flex; justify-content:center; align-items:center; gap:15px; margin:12px 0;">
+            <span style="border:2.5px solid #000; padding:5px 12px; font-size:22px;">F2-1</span>
+            <div style="font-size:18px;">ගොවියා: <span style="border:2.5px solid #000; padding:5px 10px; font-size:22px;">${selectedSupplier}</span></div>
+        </div>
+      <div style="font-size:16px; white-space: nowrap;">විශේෂ ආර්ථික මධ්‍යස්ථානය දඹුල්ල</div>
+    </div>
+    <div style="font-size:19px; margin-top:10px; padding:0 5px;">
+        <div style="font-weight: bold;">දුර:${mobile}</div>
+        <div style="display:flex; justify-content:space-between; margin-top:3px;">
+            <span>බිල් අංකය:${currentBillNo}</span>
+            <span>දිනය:${date}</span>
+        </div>
+    </div>
+    <hr style="border:none; border-top:2.5px solid #000; margin:10px 0;">
+    <table style="width:100%; border-collapse:collapse; font-size:${fontSizeBody}; table-layout: fixed;">
+        ${colGroups}
+        <thead>
+            <tr style="border-bottom:2.5px solid #000; font-weight:bold;">
+                <th style="text-align:left; padding-bottom:8px; font-size:${fontSizeHeader};">වර්ගය<br>මලු</th>
+                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -50px; top: 24px;"> කිලෝ </th>
+                 <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader}; position: relative; left: -45px; top: 24px;">මිල</th>
+                <th style="text-align:right; padding-bottom:8px; font-size:${fontSizeHeader};">කේතය<br>අගය</th>
+              </tr>
+        </thead>
+        <tbody>${detailedItemsHtml}</tbody>
+        <tfoot>
+            <tr style="border-top:2.5px solid #000; font-weight:bold;">
+                <td style="padding-top:12px; font-size:${fontSizeTotal};">${formatNumber(totalPacksSum)}</td>
+                <td colspan="3" style="padding-top:12px; font-size:${fontSizeTotal};"><div style="text-align:right; float:right; white-space:nowrap;">${(totalsupplierSales.toFixed(2))}</div></td>
+              </tr>
+        </tfoot>
+      </table>
+
+    <table style="width:100%; margin-top:20px; font-weight:bold; font-size:22px; padding:0 5px;">
+         <tr>
+          <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මෙම බිලට මුළු අගය:</td>
+          <td style="text-align:right;"><span style="border-bottom:2px solid #000; font-size:${fontSizeTotal}; padding:5px 10px;">${(totalsupplierSales.toFixed(2))}</span></td>
+         </tr>
+        <tr>
+          <td style="font-size:15px; white-space:nowrap; position:relative; left:-15px;">මලු වියදම:</td>
+          <td style="text-align:right;"><span style="font-size:${fontSizeTotal}; padding:5px 10px;">${totalCustomerPackCost.toFixed(2)}</span></td>
+        </tr>
+        
+        ${paidAmountValue > 0 ? `
+        <tr style="font-size:18px;">
+            <td style="font-size:15px; padding-top:10px;">ගෙවූ මුදල (Paid):</td>
+            <td style="text-align:right; padding-top:10px; color:#000;">
+                - ${paidAmountValue.toFixed(2)}
+              </td>
+          </tr>
+        <tr style="font-size:18px;">
+            <td style="font-size:15px; padding-top:5px;">ඉතිරි මුදල (Remaining):</td>
+            <td style="text-align:right; padding-top:5px; color:#000;">
+                ${remainingAfterPayment.toFixed(2)}
+              </td>
+          </tr>
+        <tr><td colspan="2" style="border-top:1px dashed #000; padding: 5px 0;"></td></tr>
+        ` : ''}
+
+        <tr style="font-size:18px;">
+          <td style="font-size:15px; padding-top:5px;">අත්තිකාරම්</td>
+          <td style="text-align:right; padding-top:5px; color:#000;">
+            - ${advanceAmount.toFixed(2)}
+           </td>
+          </tr>
+
+        <tr style="font-weight:900;">
+          <td style="font-size:18px; padding-top:10px;">ශුද්ධ ඉතිරි ශේෂය:</td>
+          <td style="text-align:right; padding-top:10px;">
+            <span style="color:#000; font-size:${fontSizeTotal}; border-bottom:5px double #000; border-top:2px solid #000;">
+              ${netPayable.toFixed(2)}
+            </span>
+           </td>
+        </tr>
+    </table>
+
+    <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;"><table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}</table></div>
+</div>
+</body>
+</html>`;
+    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount, totalCustomerPackCost]);
+
+    const handlePrint = useCallback(async () => {
+        if (!supplierDetails || supplierDetails.length === 0) return;
+
+        // Pause auto-refresh during print process
+        isPrintingOrUpdatingRef.current = true;
+
+        let finalBillNo = selectedBillNo;
+
+        // If it's a new bill (Unprinted), we must finalize and send SMS
+        if (isUnprintedBill) {
+            setIsDetailsLoading(true);
+            try {
+                const response = await api.post('/suppliers/mark-as-printed', {
+                    transaction_ids: supplierDetails.map(r => r.id),
+                    telephone_no: phoneNo,
+                    advance_amount: advanceAmount,
+                    supplier_code: selectedSupplier
+                });
+
+                finalBillNo = response.data.new_bill_no;
+                setSelectedBillNo(finalBillNo);
+
+                if (phoneNo) {
+                    console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
+                }
+            } catch (err) {
+                console.error('Finalize/SMS Error:', err);
+                alert('Finalize failed. SMS could not be sent.');
+                setIsDetailsLoading(false);
+                isPrintingOrUpdatingRef.current = false;
+                return;
+            } finally {
+                setIsDetailsLoading(false);
+            }
+        } else {
+            // For printed bills, send SMS without finalizing
+            if (phoneNo) {
+                setIsDetailsLoading(true);
+                try {
+                    const smsResponse = await api.post('/suppliers/resend-sms', {
+                        bill_no: selectedBillNo,
+                        telephone_no: phoneNo,
+                        supplier_code: selectedSupplier,
+                        transaction_ids: supplierDetails.map(r => r.id),
+                        advance_amount: advanceAmount,
+                        is_reprint: true
+                    });
+
+                    console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
+
+                    setPhoneStatus('📱 SMS resent');
+                    setTimeout(() => setPhoneStatus(''), 2000);
+
+                } catch (err) {
+                    console.error('SMS Resend Error:', err);
+                    setPhoneStatus('⚠️ SMS failed');
+                    setTimeout(() => setPhoneStatus(''), 2000);
+                } finally {
+                    setIsDetailsLoading(false);
+                }
+            } else {
+                setPhoneStatus('⚠️ No phone number');
+                setTimeout(() => setPhoneStatus(''), 2000);
+            }
+        }
+
+        // 🎯 ONLY apply top margin for A4 format
+        const isA4 = printFormat === 'a4';
+        const topMargin = "20mm"; // Only used for A4
+
+        // Create content for printing
+        const content = isA4 ? getA4Content(finalBillNo, "155mm", topMargin) : getBillContent(finalBillNo);
+
+        // Create an iframe for printing (hidden) to avoid opening a new window
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Print Bill</title>
+                <style>
+                    /* CRITICAL FIX: Force margins in print */
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
+                    @media print {
+                        @page {
+                            margin: 0;
+                            size: ${isA4 ? 'A4' : '80mm auto'};
+                        }
+                        body {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        /* 🎯 ONLY apply margin-top when printing A4 */
+                        ${isA4 ? `
+                        .print-container {
+                            margin-top: ${topMargin} !important;
+                            padding-top: 0 !important;
+                        }
+                        ` : `
+                        .print-container {
+                            margin-top: 0 !important;
+                            padding-top: 0 !important;
+                        }
+                        `}
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: white;
+                        font-family: 'Iskoola Pota', 'Courier New', monospace;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="print-container">
+                    ${content}
+                </div>
+            </body>
+        </html>
+    `);
+        iframeDoc.close();
+
+        // Print immediately — iframeDoc.write()/close() above are synchronous, so the
+        // content is already in place; the old 300ms "wait for it to load" delay before
+        // calling print() was pure dead time on every F4 press.
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+
+        // Remove iframe after print dialog closes
+        const checkPrintDone = setInterval(() => {
+            try {
+                if (iframe.contentWindow.document && iframe.contentWindow.document.hasFocus()) {
+                    // Print dialog might still be open
+                } else {
+                    clearInterval(checkPrintDone);
+                    setTimeout(() => {
+                        if (iframe && iframe.parentNode) {
+                            document.body.removeChild(iframe);
+                        }
+                        // Reload the page after printing
+                        window.location.reload();
+                    }, 500);
+                }
+            } catch (e) {
+                // If we can't access the iframe, remove it
+                clearInterval(checkPrintDone);
+                setTimeout(() => {
+                    if (iframe && iframe.parentNode) {
+                        document.body.removeChild(iframe);
+                    }
+                    window.location.reload();
+                }, 500);
+            }
+        }, 1000);
+
+        // Safety timeout - force cleanup after 10 seconds
+        setTimeout(() => {
+            clearInterval(checkPrintDone);
+            if (iframe && iframe.parentNode) {
+                document.body.removeChild(iframe);
+            }
+            window.location.reload();
+        }, 10000);
+
+        // Re-enable auto-refresh
+        setTimeout(() => {
+            isPrintingOrUpdatingRef.current = false;
+        }, 1000);
+
+    }, [supplierDetails, selectedBillNo, isUnprintedBill, phoneNo, advanceAmount, selectedSupplier, getBillContent, getA4Content, printFormat]);
+
+    // --- Keyboard event listener ---
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key === 'F1' || event.keyCode === 112) { event.preventDefault(); return false; }
+            if ((event.key === 'F4' || event.keyCode === 115) && supplierDetails.length > 0 && !isDetailsLoading) {
+                event.preventDefault();
+                handlePrint();
+            }
+            if ((event.key === 'F2' || event.keyCode === 113) && supplierDetails.length > 0 && !isDetailsLoading) {
+                event.preventDefault();
+                setShowBillPreview(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [supplierDetails, handlePrint, isDetailsLoading]);
+    // F2 quick preview: shows the same bill content handlePrint would send to the
+    // printer, in a small scrollable modal, without opening the print dialog.
+    const renderBillPreviewModal = () => {
+        if (!showBillPreview) return null;
+
+        const onClose = () => setShowBillPreview(false);
+        const isA4 = printFormat === 'a4';
+        const previewHtml = isA4 ? getA4Content(selectedBillNo, "155mm", "20mm") : getBillContent(selectedBillNo);
+
+        return (
+            <div
+                style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}
+                onClick={onClose}
+            >
+                <div
+                    style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '95%', maxWidth: isA4 ? '650px' : '380px', maxHeight: '90vh', padding: '0', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#343a40' }}>
+                        <span style={{ color: 'white', fontWeight: 'bold', fontSize: '14px' }}>
+                            බිල් පෙරදසුන (F2) — #{selectedBillNo || 'N/A'}
+                        </span>
+                        <button
+                            onClick={onClose}
+                            style={{ background: '#495057', border: 'none', color: 'white', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer', fontSize: '14px' }}
+                        > ✕ </button>
+                    </div>
+                    <div style={{ overflowY: 'auto', padding: '16px', backgroundColor: '#f1f1f1' }}>
+                        <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                    </div>
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        <button
+                            onClick={() => { onClose(); handlePrint(); }}
+                            style={{ padding: '8px 18px', backgroundColor: '#ffc107', color: '#343a40', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >🖨️ Print (F4)</button>
+                        <button
+                            onClick={onClose}
+                            style={{ padding: '8px 18px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >Close</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     //new profile pic view modal
     const renderImageModal = () => {
@@ -1836,7 +1851,7 @@ const SupplierReport = () => {
         // Helper to format URLs correctly
         const formatUrl = (path) => {
             if (!path) return null;
-            return path.startsWith('http') ? path : `https://goviraju.lk/DBS_backend_30500/application/public/storage/${path}`;
+            return path.startsWith('http') ? path : `https://wday.lk/DBS_backend_30500/application/public/storage/${path}`;
         };
 
         const onClose = () => setIsImageModalOpen(false);
@@ -2098,7 +2113,7 @@ const SupplierReport = () => {
         );
 
         return (
-            <div style={panelContainerStyle}>
+            <div className="sr-panel" style={panelContainerStyle}>
                 <div style={headerStyle}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                         <h2 style={{ fontSize: "1.5rem", color: "white", margin: 0 }}>
@@ -2147,7 +2162,7 @@ const SupplierReport = () => {
                     {profilePic && (
                         <div style={{ marginLeft: '20px' }}>
                             <img
-                                src={profilePic.startsWith('http') ? profilePic : `https://goviraju.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
+                                src={profilePic.startsWith('http') ? profilePic : `https://wday.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
                                 alt="Supplier"
                                 onClick={() => setIsImageModalOpen(true)}
                                 style={{
@@ -2169,7 +2184,7 @@ const SupplierReport = () => {
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '250px', fontSize: '0.9rem', marginBottom: '30px' }}>
                         <thead>
                             <tr>
-                                <th style={thStyle}>☑</th>
+                                <th style={{ ...thStyle, textAlign: 'center' }}><input type="checkbox" checked={allDetailsSelected} onChange={toggleSelectAllTransactions} disabled={supplierDetails.length === 0} title="Select all" style={{ cursor: 'pointer', width: '16px', height: '16px' }} /></th>
                                 <th style={thStyle}>බිල් අං:</th>
                                 <th style={thStyle}>ගනුදෙ</th>
                                 <th style={thStyle}>අයිත</th>
@@ -2254,10 +2269,32 @@ const SupplierReport = () => {
                         </div>
                     </>
                 )}
+                {selectedSupplier && supplierDetails.length > 0 && (
+                    <div style={{
+                        marginTop: '20px',
+                        padding: '14px 20px',
+                        borderRadius: '8px',
+                        border: '2px solid #28a745',
+                        backgroundColor: '#0f2a1c',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <span style={{ color: '#9ca3af', fontWeight: 'bold', fontSize: '1rem', textTransform: 'uppercase' }}>
+                            තෝරාගත් බිල් එකතුව (Selected Bill Total)
+                        </span>
+                        <span style={{ color: '#28a745', fontWeight: 'bold', fontSize: '1.5rem' }}>
+                            Rs. {totalsupplierSales.toFixed(2)}
+                        </span>
+                    </div>
+                )}
                 <div style={{ textAlign: 'center' }}>
                     <button style={{ padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', backgroundColor: '#ffc107', color: '#343a40', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: '20px', opacity: selectedSupplier ? 1 : 0.5 }} onClick={handlePrint} disabled={!selectedSupplier || isDetailsLoading || supplierDetails.length === 0}>
                         🖨️ {isDetailsLoading ? 'Processing...' : (selectedSupplier ? (isUnprintedBill ? `Print & Finalize Bill (F4)` : `Print Copy (F4)`) : 'Select a Bill First')}
                     </button>
+                    <div style={{ marginTop: '8px', color: '#9ca3af', fontSize: '0.85rem' }}>
+                        Press F2 to preview this bill
+                    </div>
                 </div>
             </div>
         );
@@ -2271,7 +2308,7 @@ const SupplierReport = () => {
 
     return (
         <>
-            <nav style={navBarStyle}>
+            <nav className="sr-nav" style={navBarStyle}>
                 <h1 style={{ color: 'white', fontSize: '1.5rem', margin: 0 }}>සැපයුම්කරු වාර්තාව</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                     {/* Auto-refresh indicator with animation when refreshing */}
@@ -2313,18 +2350,18 @@ const SupplierReport = () => {
                 </div>
             </nav>
 
-            <div style={reportContainerStyle}>
-                <div style={sectionsContainerStyle}>
-                    <div style={printedContainerStyle}>
-                        <div style={printedSectionStyle}>
+            <div className="sr-container" style={reportContainerStyle}>
+                <div className="sr-sections" style={sectionsContainerStyle}>
+                    <div className="sr-side" style={printedContainerStyle}>
+                        <div className="sr-side-section" style={printedSectionStyle}>
                             <h2 style={{ ...printedHeaderStyle, padding: '0 25px 10px 25px', marginBottom: '15px' }}> මුද්‍රණය කළ </h2>
                             <input type="text" placeholder="🔍 මුද්‍රිත සෙවීම..." value={printedSearchTerm} onChange={(e) => setPrintedSearchTerm(e.target.value)} style={{ ...searchBarStyle, marginBottom: '20px', height: '22px', padding: '12px 25px' }} />
                             <SupplierCodeList items={filteredPrintedItems} type="printed" searchTerm={printedSearchTerm} />
                         </div>
                     </div>
-                    <div style={centerPanelContainerStyle}>{renderDetailsPanel()}</div>
-                    <div style={unprintedContainerStyle}>
-                        <div style={unprintedSectionStyle}>
+                    <div className="sr-center" style={centerPanelContainerStyle}>{renderDetailsPanel()}</div>
+                    <div className="sr-side" style={unprintedContainerStyle}>
+                        <div className="sr-side-section" style={unprintedSectionStyle}>
                             <h2 style={{ ...unprintedHeaderStyle, padding: '0 25px 10px 25px', marginBottom: '15px', whiteSpace: 'nowrap' }}>මුද්‍රණය නොකළ</h2>
                             <input type="text" placeholder="🔍 මුද්‍රණ නොකළ සෙවීම..." value={unprintedSearchTerm} onChange={(e) => setUnprintedSearchTerm(e.target.value)} style={{ ...searchBarStyle, marginBottom: '20px', height: '22px', padding: '12px 25px' }} />
                             <SupplierCodeList items={filteredUnprintedItems} type="unprinted" searchTerm={unprintedSearchTerm} />
@@ -2334,7 +2371,18 @@ const SupplierReport = () => {
             </div>
             {renderImageModal()}
             {renderEditModal()}
-            <BulkUpdateContextMenu />
+            {renderBillPreviewModal()}
+            <BulkUpdateContextMenu
+                show={bulkUpdateContextMenu.show}
+                selectionCriteria={selectionCriteria}
+                selectedTransactionIds={selectedTransactionIds}
+                bulkUpdateSupplierCode={bulkUpdateSupplierCode}
+                setBulkUpdateSupplierCode={setBulkUpdateSupplierCode}
+                bulkUpdateCustomerCode={bulkUpdateCustomerCode}
+                setBulkUpdateCustomerCode={setBulkUpdateCustomerCode}
+                handleBulkUpdate={handleBulkUpdate}
+                closeContextMenu={closeContextMenu}
+            />
         </>
     );
 };

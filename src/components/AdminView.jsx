@@ -1,6 +1,7 @@
 // src/components/AdminView.jsx
 import React, { useState, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { ThermalBillHTML, A4BillHTML } from './BillTemplates';
+import { SHOP_NAME, SHOP_PHONE } from '../config/shop';
 
 const AdminView = forwardRef(({ allSales, customers, items, suppliers }, ref) => {
     const [searchQueries, setSearchQueries] = useState({
@@ -106,7 +107,7 @@ const AdminView = forwardRef(({ allSales, customers, items, suppliers }, ref) =>
 
         const customerCode = sales[0].customer_code || "N/A";
         const customerName = sales[0].customer_code || sales[0].customer_code || customerCode;
-        const mobile = sales[0].mobile || "0777672838 / 071437115";
+        const mobile = sales[0].mobile || SHOP_PHONE;
         const billNo = sales[0].bill_no || 'N/A';
         
         // Calculate loan amount for this customer
@@ -158,7 +159,7 @@ const AdminView = forwardRef(({ allSales, customers, items, suppliers }, ref) =>
 
         const date = new Date().toLocaleDateString('si-LK');
         const time = new Date().toLocaleTimeString('si-LK');
-        const mobile = '0777672838/071437115';
+        const mobile = SHOP_PHONE;
         const displayName = sales[0].supplier_code || "";
         const billNo = sales[0].supplier_bill_no || sales[0].bill_no || 'N/A';
 
@@ -188,7 +189,7 @@ const AdminView = forwardRef(({ allSales, customers, items, suppliers }, ref) =>
             <div style="width: ${receiptMaxWidth}; margin: 0 auto; padding: 10px; background-color: white; font-family: 'Courier New', monospace; color: #000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 <div style="text-align: center; font-weight: bold;">
                     <div style="font-size: 24px;">මංජු සහ සහෝදරයෝ</div>
-                    <div style="font-size: 20px; margin-bottom: 5px;">colombage lanka (Pvt) Ltd</div>
+                    <div style="font-size: 20px; margin-bottom: 5px;">${SHOP_NAME}</div>
                     <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin: 12px 0;">
                         <span style="border: 2.5px solid #000; padding: 5px 12px; font-size: 22px;">N66</span>
                         <div style="font-size: 18px;">ගොවියා: <span style="border: 2.5px solid #000; padding: 5px 10px; font-size: 22px;">${displayName}</span></div>

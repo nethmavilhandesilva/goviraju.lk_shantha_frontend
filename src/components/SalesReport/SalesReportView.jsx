@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import api from '../../api';
+import { SHOP_NAME } from '../../config/shop';
 
 const SalesReportView = ({ reportData, onClose }) => {
     const { salesData: initialSalesData, filters: initialFilters } = reportData;
     const [salesData, setSalesData] = useState(initialSalesData || []);
     const [filteredData, setFilteredData] = useState(initialSalesData || []);
-    const [companyName, setCompanyName] = useState('Default Company');
+    const [companyName, setCompanyName] = useState(SHOP_NAME);
     const [settingDate, setSettingDate] = useState(new Date().toLocaleDateString('en-CA'));
     const [isClient, setIsClient] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
@@ -33,7 +34,7 @@ const SalesReportView = ({ reportData, onClose }) => {
         const fetchCompanyInfo = async () => {
             try {
                 const { data } = await api.get('/settings');
-                setCompanyName(data.company || 'Default Company');
+                setCompanyName(SHOP_NAME);
                 setSettingDate(data.value || new Date().toLocaleDateString('en-CA'));
             } catch (err) {
                 console.error('Error fetching company info:', err);

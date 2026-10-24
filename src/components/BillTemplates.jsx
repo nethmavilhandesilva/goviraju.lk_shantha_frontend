@@ -1,3 +1,4 @@
+import { SHOP_NAME, SHOP_PHONE } from '../config/shop';
 // src/components/BillTemplates.jsx
 
 export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billSize = '3inch' }) => {
@@ -18,9 +19,13 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     const date = new Date().toLocaleDateString();
     const time = new Date().toLocaleTimeString();
 
+    console.log('[ThermalBillHTML] incoming salesData Kuliya check:', salesData.map(s => ({
+        id: s.id, item_name: s.item_name, weight: s.weight, packs: s.packs, Kuliya: s.Kuliya
+    })));
+
     const groupedById = new Map();
-    salesData.forEach(s => {
-        const id = s.id;
+    salesData.forEach((s, index) => {
+        const id = s.id ?? `__row_${index}`;
         if (!groupedById.has(id)) {
             groupedById.set(id, {
                 ...s,
@@ -39,6 +44,10 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     });
 
     const uniqueSalesData = Array.from(groupedById.values());
+
+    console.log('[ThermalBillHTML] after grouping, Kuliya per row:', uniqueSalesData.map(s => ({
+        item_name: s.item_name, Kuliya: s.Kuliya
+    })));
 
     let totalSales = 0;
     let totalPackCost = 0;
@@ -129,7 +138,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
             <div class="header">
          <span class="badge" style="position: relative; top: 3px;">F2-1</span>
              <div style="margin-top: 8px; font-size: 22px; font-weight: bold;">
-    මහතුන් වෙළඳසැල
+    ${SHOP_NAME}
 </div>
 
 <div style="margin: 5px 0 10px 0;">
@@ -139,7 +148,7 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
             </div>
 
             <div class="info-section">
-                <div style="font-weight: bold; font-size: 14px;">Tel: 0777672838 / 0714371115</div>
+                <div style="font-weight: bold; font-size: 14px;">Tel: ${SHOP_PHONE}</div>
                 <div style="display:flex; justify-content:space-between; font-size: 13px; margin-top: 5px;">
                     <span>බිල් අංකය: ${billNo}</span>
                     <div style="text-align:right;">
@@ -188,11 +197,10 @@ export const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globa
     <td style="text-align:right;">${formatNumber(totalPackCost.toFixed(2))}</td>
 </tr>` : ''}
 
-${totalKuliyaSum > 0 ? `
 <tr>
     <td style="font-size:14px;">කුලිය:</td>
     <td style="text-align:right;">${formatNumber(totalKuliyaSum.toFixed(2))}</td>
-</tr>` : ''}
+</tr>
                 <tr>
                     <td style="padding-top:10px;">එකතුව:</td>
                     <td style="text-align:right; padding-top:10px;">
@@ -234,8 +242,8 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
     const time = new Date().toLocaleTimeString('si-LK', { hour: '2-digit', minute: '2-digit', hour12: false });
 
     const groupedById = new Map();
-    salesData.forEach(s => {
-        const id = s.id;
+    salesData.forEach((s, index) => {
+        const id = s.id ?? `__row_${index}`;
         if (!groupedById.has(id)) {
             groupedById.set(id, {
                 ...s,
@@ -381,9 +389,9 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         <div class="receipt-container" style="page-break-after: ${isLastPage ? 'avoid' : 'always'};">
             ${pageNumber === 1 ? `
             <div class="header">
-                <div class="shop-name">මහතුන් වෙළඳසැල</div>
+                <div class="shop-name">${SHOP_NAME}</div>
                 <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
+                <div class="shop-phone">දුරකථන: ${SHOP_PHONE}</div>
             </div>
             
             <div class="info-row" style="display: flex; justify-content: space-between; align-items: center;">
@@ -444,7 +452,7 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
             <div class="totals-section">
                 <div class="total-row"><span>භාණ්ඩ එකතුව:</span><span>රු. ${formatNumber(totalSales)}</span></div>
                 <div class="total-row"><span>මලු වියදම:</span><span>රු. ${formatNumber(totalPackCost)}</span></div>
-                ${totalKuliya > 0 ? `<div class="total-row"><span>කුලිය:</span><span>රු. ${formatNumber(totalKuliya)}</span></div>` : ''}
+                <div class="total-row"><span>කුලිය:</span><span>රු. ${formatNumber(totalKuliya)}</span></div>
                 ${globalLoanAmount !== 0 ? `<div class="total-row"><span>පෙර ණය:</span><span>රු. ${formatNumber(Math.abs(globalLoanAmount))}</span></div>` : ''}
                 <div class="net-total">
                     <span>මුළු ගෙවිය යුතු මුදල:</span>
@@ -470,9 +478,9 @@ export const A4BillHTML = ({ salesData, billNo, customerName, mobile, globalLoan
         allPagesHTML = `
             <div class="receipt-container">
                 <div class="header">
-                    <div class="shop-name">මහතුන් වෙළඳසැල</div>
+                    <div class="shop-name">${SHOP_NAME}</div>
                     <div class="shop-address">දඹුල්ල විශේෂ ආර්ථික මධ්‍යස්ථානය</div>
-                    <div class="shop-phone">දුරකථන: 0777672838 / 0714371115</div>
+                    <div class="shop-phone">දුරකථන: ${SHOP_PHONE}</div>
                 </div>
                 
                 <div class="info-row" style="display: flex; justify-content: space-between; align-items: center;">

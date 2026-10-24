@@ -20,7 +20,7 @@ const SupplierForm = () => {
 
         try {
             // Replace with your actual Laravel API URL
-            const response = await axios.post('https://goviraju.lk/DBS_backend_30500/api/suppliers/advance', payload);
+            const response = await axios.post('https://wday.lk/DBS_backend_30500/api/suppliers/advance', payload);
             
             setMessage({ 
                 type: 'success', 

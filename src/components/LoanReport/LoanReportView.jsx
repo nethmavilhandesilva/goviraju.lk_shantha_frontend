@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import api from "../../api"; 
+import { SHOP_NAME } from '../../config/shop';
 
 const LoanReportView = () => {
     const [loans, setLoans] = useState([]);
-    const [companyName, setCompanyName] = useState('Default Company');
+    const [companyName, setCompanyName] = useState(SHOP_NAME);
     const [settingDate, setSettingDate] = useState('');
     const [loading, setLoading] = useState(true);
 
@@ -19,7 +20,7 @@ const LoanReportView = () => {
             const response = await api.get('/customers-loans/report');
             const data = response.data;
             setLoans(data.loans || []);
-            setCompanyName(data.companyName || 'Default Company');
+            setCompanyName(SHOP_NAME);
             setSettingDate(data.settingDate || new Date().toISOString().split('T')[0]);
         } catch (error) {
             console.error('❌ Error fetching loan report:', error);

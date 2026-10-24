@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../../api"; // your axios instance
 import Sidebar from '../Sidebar'; 
+import { SHOP_NAME } from '../../config/shop';
 
 export default function SupplierProfitReport() {
     const [profitReport, setProfitReport] = useState([]);
@@ -10,7 +11,7 @@ export default function SupplierProfitReport() {
     const [isLoading, setIsLoading] = useState(true);
 
     // Company name and report date
-    const [companyName, setCompanyName] = useState("Loading...");
+    const [companyName, setCompanyName] = useState(SHOP_NAME);
     const [reportDate, setReportDate] = useState(new Date().toLocaleString());
 
     // Navigate back to the supplier report page
@@ -24,7 +25,7 @@ export default function SupplierProfitReport() {
             try {
                 const response = await api.get("/settings");
                 if (response.data) {
-                    setCompanyName(response.data.company || "Default Company");
+                    setCompanyName(SHOP_NAME);
                     setReportDate(response.data.value || new Date().toLocaleString());
                 }
             } catch (err) {

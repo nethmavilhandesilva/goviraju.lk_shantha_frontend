@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api'; // Your centralized axios instance
 import Sidebar from '../Sidebar'; // Adjust path if necessary
+import { SHOP_NAME } from '../../config/shop';
 
 const LoanReportManager = () => {
     const [showModal, setShowModal] = useState(false);
@@ -175,7 +176,7 @@ const ReportContent = ({ data }) => {
             <div className="p-4 border-bottom border-success border-opacity-25">
                 <div className="d-flex justify-content-between align-items-center">
                     <div>
-                        <h1 className="fw-bold mb-0 text-white letter-spacing-1">{data.companyName}</h1>
+                        <h1 className="fw-bold mb-0 text-white letter-spacing-1">{SHOP_NAME}</h1>
                         <h4 className="badge bg-success bg-opacity-75 text-uppercase p-2 mt-2">Loan Report</h4>
                     </div>
                     <div className="text-end">

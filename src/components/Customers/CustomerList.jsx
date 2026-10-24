@@ -10,7 +10,7 @@ export default function CustomerList() {
   const [searchTerm, setSearchTerm] = useState(""); // ✅ State for search
   const navigate = useNavigate();
 
-  const STORAGE_URL = "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
+  const STORAGE_URL = "https://wday.lk/DBS_backend_30500/application/public/storage/";
 
   const fetchCustomers = async () => {
     try {

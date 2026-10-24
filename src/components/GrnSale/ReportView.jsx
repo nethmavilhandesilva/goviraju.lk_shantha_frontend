@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { SHOP_NAME } from '../../config/shop';
 
 const GrnSaleReportView = ({ reportData, onClose }) => {
     const [isClient, setIsClient] = useState(false);
@@ -82,7 +83,7 @@ const GrnSaleReportView = ({ reportData, onClose }) => {
             </head>
             <body>
                 <div class="header">
-                    <h2>TGK ට්‍රේඩර්ස්</h2>
+                    <h2>${SHOP_NAME}</h2>
                     <h3>📄 GRN කේතය අනුව විකුණුම් වාර්තාව</h3>
                     <p>Report Date: ${new Date().toLocaleDateString('en-CA')}</p>
                 </div>
@@ -219,7 +220,7 @@ const GrnSaleReportView = ({ reportData, onClose }) => {
 
             {/* Report Header */}
             <div className="report-title-bar">
-                <h2 className="company-name">TGK ට්‍රේඩර්ස්</h2>
+                <h2 className="company-name">{SHOP_NAME}</h2>
                 <h4 className="fw-bold text-white">📄 GRN කේතය අනුව විකුණුම් වාර්තාව</h4>
                 <span className="right-info">
                     {new Date().toLocaleDateString('en-CA')}

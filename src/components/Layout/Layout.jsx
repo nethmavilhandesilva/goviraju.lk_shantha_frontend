@@ -11,6 +11,7 @@ import GrnSalesOverviewReport2 from '../GrnSalesOverview/GrnSalesOverviewReport2
 import SalesReportModal from '../SalesReport/SalesReportModal';
 import DayProcessModal from '../Modals/DayProcessModal';
 import TodaysKuliyaModal from '../Kuliya/TodaysKuliyaModal';
+import { SHOP_NAME } from '../../config/shop';
 
 const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintMode }) => {
     const location = useLocation();
@@ -20,7 +21,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const getBaseUrl = () => {
         const { protocol, hostname, port } = window.location;
         // Check if we're on the hosted domain
-        if (hostname.includes('goviraju.lk')) {
+        if (hostname.includes('wday.lk')) {
             return `${protocol}//${hostname}/DBS_frontend_30500`;
         }
         // Local development
@@ -53,6 +54,10 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     const [isGrnReportModalOpen, setIsGrnReportModalOpen] = useState(false);
     const [isDayProcessModalOpen, setIsDayProcessModalOpen] = useState(false);
     const [isTodaysKuliyaModalOpen, setIsTodaysKuliyaModalOpen] = useState(false);
+
+    // === Mobile nav collapse ===
+    const [isNavOpen, setIsNavOpen] = useState(false);
+    useEffect(() => { setIsNavOpen(false); }, [location.pathname]);
 
     // === User & Settings State ===
     const [user, setUser] = useState(null);
@@ -145,7 +150,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
         color: "#fff",
         fontWeight: "700",
         fontSize: "14px",
-        margin: "0 28px",
+        margin: "0 clamp(10px, 2vw, 28px)",
         padding: "0",
         cursor: "pointer",
         whiteSpace: "nowrap"
@@ -171,7 +176,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
     // Helper function for navigation with base path
     const navigateTo = (path) => {
         // If we're on hosted domain, ensure the path includes /DBS_frontend_30500
-        if (window.location.hostname.includes('goviraju.lk')) {
+        if (window.location.hostname.includes('wday.lk')) {
             const fullPath = path.startsWith('/') ? path : `/${path}`;
             navigate(`/DBS_frontend_30500${fullPath}`);
         } else {
@@ -184,14 +189,25 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
             {/* === Top Navigation Bar - Hidden on Supplier Report pages === */}
             {!shouldHideNavbar && (
                 <nav className="navbar navbar-expand-lg navbar-dark fixed-top" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
-                    <div className="container-fluid d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                            <Link className="navbar-brand fw-bold d-flex align-items-center me-3" to="/">
-                                <i className="material-icons align-middle me-2">warehouse</i>
-                                මුල් පිටුව
-                            </Link>
+                    <div className="container-fluid">
+                        <Link className="navbar-brand fw-bold d-flex align-items-center me-3" to="/">
+                            <i className="material-icons align-middle me-2">warehouse</i>
+                            {SHOP_NAME}
+                        </Link>
+                        <button
+                            className="navbar-toggler"
+                            type="button"
+                            aria-controls="layoutTopNav"
+                            aria-expanded={isNavOpen}
+                            aria-label="Toggle navigation"
+                            onClick={() => setIsNavOpen(o => !o)}
+                        >
+                            <span className="navbar-toggler-icon"></span>
+                        </button>
 
-                            <div className="navbar-nav d-flex flex-row align-items-center">
+                        <div id="layoutTopNav" className={`collapse navbar-collapse layout-top-collapse ${isNavOpen ? 'show' : ''}`}>
+                        <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center flex-grow-1 gap-2 gap-lg-0">
+                            <div className="navbar-nav d-flex flex-row flex-wrap align-items-center gap-2 gap-lg-0">
                                 <div className="nav-item dropdown mx-1">
                                     <button className="btn btn-outline-light btn-sm dropdown-toggle" id="masterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i className="material-icons align-middle me-1">menu_book</i> ප්‍රධාන ගොනුව
@@ -229,7 +245,7 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
 
                             {/* Print Mode and Bill Size Controls - Only show on Sales Entry page */}
                             {isSalesEntryPage && user?.role !== 'Admin' && (
-                                <div className="d-flex align-items-center me-3" style={{ marginLeft: '20px' }}>
+                                <div className="d-flex align-items-center me-3 ms-lg-4">
                                     <label className="text-white me-2" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Print Mode:</label>
                                     <select
                                         value={localPrintMode}
@@ -248,17 +264,18 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
                         </div>
 
                         {user && (
-                            <div className="d-flex align-items-center text-white">
+                            <div className="d-flex align-items-center text-white py-2 py-lg-0">
                                 <span className="me-3 fw-bold" style={{ color: '#ff4444', fontSize: '1.1rem' }}>{settingValue}</span>
                                 <button onClick={handleLogout} className="btn btn-sm btn-outline-light" style={{ fontWeight: 'bold' }}>Logout</button>
                             </div>
                         )}
+                        </div>
                     </div>
                 </nav>
             )}
 
             {/* Main Content - adjust top margin when navbar is hidden */}
-            <main className={isSalesEntryPage ? "p-0" : "container-fluid py-4"} style={{ 
+            <main className={`layout-main ${shouldHideNavbar ? "layout-main--no-nav" : ""} ${isSalesEntryPage ? "p-0" : "container-fluid py-4"}`} style={{ 
                 marginTop: shouldHideNavbar ? '20px' : '80px', 
                 marginBottom: '80px', 
                 width: '100%', 
@@ -269,8 +286,8 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
 
             {/* Bottom Navigation Bar - Hidden on Supplier Report pages */}
             {!shouldHideNavbar && (
-                <nav className="navbar navbar-expand-lg navbar-dark fixed-bottom" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
-                    <div className="container-fluid d-flex justify-content-start align-items-center">
+                <nav className="navbar navbar-dark fixed-bottom layout-bottom-nav" style={{ backgroundColor: '#004d00', width: '100%', zIndex: 1030 }}>
+                    <div className="container-fluid d-flex flex-nowrap justify-content-start align-items-center">
                         <input
                             type="password"
                             placeholder="Enter password"

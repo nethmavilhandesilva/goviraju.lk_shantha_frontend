@@ -4,7 +4,7 @@ import React from 'react';
 const ImagePreviewModal = ({ isOpen, onClose, data }) => {
     if (!isOpen || !data) return null;
 
-    const baseUrl = "https://goviraju.lk/DBS_backend_30500/application/public/storage/";
+    const baseUrl = "https://wday.lk/DBS_backend_30500/application/public/storage/";
 
     const formatUrl = (path) => {
         if (!path) return null;
