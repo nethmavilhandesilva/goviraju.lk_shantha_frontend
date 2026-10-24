@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { Link, useNavigate } from 'react-router-dom';
+import { APP_BASE } from '../../config/paths';
 
 const ItemList = () => {
     const [items, setItems] = useState([]);
@@ -34,7 +35,7 @@ const ItemList = () => {
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
-        window.location.href = '/login';
+        window.location.href = `${APP_BASE}/login`;
     };
 
     // 🔹 SEARCH + FORCE CAPITAL + SORT

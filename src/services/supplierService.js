@@ -1,6 +1,6 @@
 import axios from 'axios';
+import { API_BASE_URL, APP_BASE } from '../config/paths';
 
-const API_BASE_URL = 'https://wday.lk/DBS_backend_30500/api'; // ✅ Your live Laravel API URL
 
 // Create axios instance with base config
 const api = axios.create({
@@ -37,7 +37,7 @@ api.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('auth_token');
-            window.location.href = '/login';
+            window.location.href = `${APP_BASE}/login`;
         }
         return Promise.reject(error);
     }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import GrnReportView from './GrnReportView';
+import { API_BASE_URL } from '../../config/paths';
 
-const BACKEND_URL = 'http://localhost:8000/api';
+const BACKEND_URL = API_BASE_URL;
 
 const GrnReportModal = ({ isOpen, onClose }) => {
   const [codes, setCodes] = useState([]);

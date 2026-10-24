@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import { SHOP_NAME, SHOP_PHONE } from '../config/shop';
+import { API_BASE_URL } from '../config/paths';
 
 // Copy the exact ThermalBillHTML function here
 const ThermalBillHTML = ({ salesData, billNo, customerName, mobile, globalLoanAmount = 0, billSize = '3inch' }) => {
@@ -216,7 +217,7 @@ const PublicBill = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        axios.get(`https://wday.lk/DBS_backend_30500/api/public/bill/${token}`)
+        axios.get(`${API_BASE_URL}/public/bill/${token}`)
             .then(res => {
                 setBillData(res.data);
                 setLoading(false);

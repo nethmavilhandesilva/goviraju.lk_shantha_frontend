@@ -12,25 +12,14 @@ import SalesReportModal from '../SalesReport/SalesReportModal';
 import DayProcessModal from '../Modals/DayProcessModal';
 import TodaysKuliyaModal from '../Kuliya/TodaysKuliyaModal';
 import { SHOP_NAME } from '../../config/shop';
+import { APP_BASE } from '../../config/paths';
 
 const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintMode }) => {
     const location = useLocation();
     const navigate = useNavigate();
 
     // Get base URL dynamically
-    const getBaseUrl = () => {
-        const { protocol, hostname, port } = window.location;
-        // Check if we're on the hosted domain
-        if (hostname.includes('wday.lk')) {
-            return `${protocol}//${hostname}/DBS_frontend_30500`;
-        }
-        // Local development
-        if (port === '5173' || hostname === 'localhost') {
-            return 'http://localhost:5173';
-        }
-        // Fallback to current origin
-        return window.location.origin;
-    };
+    const getBaseUrl = () => `${window.location.origin}${APP_BASE}`;
 
     const BASE_URL = getBaseUrl();
 
@@ -173,16 +162,8 @@ const Layout = ({ children, billSize, handleBillSizeChange, printMode, setPrintM
         }
     };
 
-    // Helper function for navigation with base path
-    const navigateTo = (path) => {
-        // If we're on hosted domain, ensure the path includes /DBS_frontend_30500
-        if (window.location.hostname.includes('wday.lk')) {
-            const fullPath = path.startsWith('/') ? path : `/${path}`;
-            navigate(`/DBS_frontend_30500${fullPath}`);
-        } else {
-            navigate(path);
-        }
-    };
+    // Router basename already adds APP_BASE
+    const navigateTo = (path) => navigate(path);
 
     return (
         <div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import axios from "axios";
+import { API_BASE_URL, STORAGE_URL as BACKEND_STORAGE_URL } from '../../config/paths';
 
 export default function CustomerForm({ customer, onSubmit, onCancel }) {
 
@@ -30,7 +31,7 @@ export default function CustomerForm({ customer, onSubmit, onCancel }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const STORAGE_URL =
-    "https://wday.lk/DBS_backend_30500/application/public/storage/";
+    `${BACKEND_STORAGE_URL}/`;
 
   // ================= LOAD DATA FOR EDIT =================
   useEffect(() => {
@@ -89,7 +90,7 @@ export default function CustomerForm({ customer, onSubmit, onCancel }) {
       try {
         if (upperValue.trim()) {
           const response = await axios.get(
-            `https://wday.lk/DBS_backend_30500/api/customers/check-short-name/${upperValue}`
+            `${API_BASE_URL}/customers/check-short-name/${upperValue}`
           );
 
           const isDuplicate =

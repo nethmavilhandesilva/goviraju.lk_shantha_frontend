@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import CustomerForm from "./CustomerForm";
 import api from "../../api"; 
+import { STORAGE_URL as BACKEND_STORAGE_URL } from '../../config/paths';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState([]);
@@ -10,7 +11,7 @@ export default function CustomerList() {
   const [searchTerm, setSearchTerm] = useState(""); // ✅ State for search
   const navigate = useNavigate();
 
-  const STORAGE_URL = "https://wday.lk/DBS_backend_30500/application/public/storage/";
+  const STORAGE_URL = `${BACKEND_STORAGE_URL}/`;
 
   const fetchCustomers = async () => {
     try {

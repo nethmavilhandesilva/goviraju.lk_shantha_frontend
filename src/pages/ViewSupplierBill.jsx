@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import api from "../api";
 import { SHOP_NAME, SHOP_PHONE } from '../config/shop';
+import { API_BASE_URL } from '../config/paths';
 
 const ViewSupplierBill = () => {
     const { token } = useParams();
@@ -23,7 +24,7 @@ const ViewSupplierBill = () => {
 
     const fetchBillData = () => {
         setLoading(true);
-        api.get(`https://wday.lk/DBS_backend_30500/api/public/supplier-bill/${token}`)
+        api.get(`${API_BASE_URL}/public/supplier-bill/${token}`)
             .then(res => {
                 setBill(res.data);
                 if (res.data && res.data.bill_no) {

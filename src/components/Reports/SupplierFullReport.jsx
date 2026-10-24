@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import api from "../../api";
 import { useNavigate } from 'react-router-dom';
+import { STORAGE_URL } from '../../config/paths';
 
 const SupplierReport = () => {
     const navigate = useNavigate();
@@ -157,7 +158,7 @@ const SupplierReport = () => {
     const renderFullReportView = () => {
         if (!fullReportData) return null;
         const { profile, loans, sales } = fullReportData;
-        const storageUrl = "https://wday.lk/DBS_backend_30500/application/public/storage/";
+        const storageUrl = `${STORAGE_URL}/`;
 
         return (
             <div style={dashboardOverlay}>
@@ -286,7 +287,7 @@ const SupplierReport = () => {
                         <div style={mainDetailsPanel}>
                             <div style={headerStyle}>
                                 <h2 style={{ color: 'white' }}>බිල්පත් විස්තර: {selectedBillNo || '...'}</h2>
-                                {profilePic && <img src={`https://wday.lk/DBS_backend_30500/application/public/storage/${profilePic}`} style={profilePicStyle} alt="S" />}
+                                {profilePic && <img src={`${STORAGE_URL}/${profilePic}`} style={profilePicStyle} alt="S" />}
                             </div>
                             <table style={dataTable}>
                                 <thead><tr style={{ backgroundColor: '#4e73df', color: 'white' }}><th>බිල්</th><th>ගනුදෙ</th><th>අයිතමය</th><th>බර</th><th>එකතුව</th></tr></thead>

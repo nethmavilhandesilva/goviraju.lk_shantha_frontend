@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import api from "../../api";
 import { useNavigate } from 'react-router-dom';
 import { SHOP_NAME, SHOP_PHONE } from '../../config/shop';
+import { STORAGE_URL } from '../../config/paths';
 
 // Surfaces the real backend error (Laravel validation errors, custom error/message
 // fields, etc.) instead of a hardcoded generic string, so failures are diagnosable
@@ -1851,7 +1852,7 @@ const SupplierReport = () => {
         // Helper to format URLs correctly
         const formatUrl = (path) => {
             if (!path) return null;
-            return path.startsWith('http') ? path : `https://wday.lk/DBS_backend_30500/application/public/storage/${path}`;
+            return path.startsWith('http') ? path : `${STORAGE_URL}/${path}`;
         };
 
         const onClose = () => setIsImageModalOpen(false);
@@ -2162,7 +2163,7 @@ const SupplierReport = () => {
                     {profilePic && (
                         <div style={{ marginLeft: '20px' }}>
                             <img
-                                src={profilePic.startsWith('http') ? profilePic : `https://wday.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
+                                src={profilePic.startsWith('http') ? profilePic : `${STORAGE_URL}/${profilePic}`}
                                 alt="Supplier"
                                 onClick={() => setIsImageModalOpen(true)}
                                 style={{

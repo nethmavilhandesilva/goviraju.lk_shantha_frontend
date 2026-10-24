@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { APP_BASE } from '../config/paths';
 
 const Sidebar = () => {
     const location = useLocation();
@@ -7,7 +8,7 @@ const Sidebar = () => {
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
-        window.location.href = '/login';
+        window.location.href = `${APP_BASE}/login`;
     };
 
     // Helper to check if a link is active based on current URL

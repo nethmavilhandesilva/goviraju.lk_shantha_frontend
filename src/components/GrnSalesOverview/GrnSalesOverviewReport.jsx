@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { SHOP_NAME } from '../../config/shop';
+import { API_BASE_URL } from '../../config/paths';
 
-const BACKEND_URL = 'http://localhost:8000/api';
+const BACKEND_URL = API_BASE_URL;
 
 const GrnSalesOverviewReport = ({ isOpen, onClose }) => {
   const [reportData, setReportData] = useState([]);
@@ -29,7 +30,7 @@ const GrnSalesOverviewReport = ({ isOpen, onClose }) => {
       console.log('🟢 Setting loading to true');
       setLoading(true);
 
-      const apiUrl = `http://localhost:8000/api/reports/grn-sales-overview`;
+      const apiUrl = `${API_BASE_URL}/reports/grn-sales-overview`;
       
       console.log('🟢 API URL constructed:', apiUrl);
 

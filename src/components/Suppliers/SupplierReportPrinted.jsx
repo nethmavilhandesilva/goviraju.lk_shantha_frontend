@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import api from "../../api";
 import { useNavigate } from 'react-router-dom';
 import { SHOP_PHONE } from '../../config/shop';
+import { STORAGE_URL } from '../../config/paths';
 
 const SupplierReport = () => {
     const navigate = useNavigate();
@@ -794,7 +795,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
         // Helper to format URLs correctly
         const formatUrl = (path) => {
             if (!path) return null;
-            return path.startsWith('http') ? path : `https://wday.lk/DBS_backend_30500/application/public/storage/${path}`;
+            return path.startsWith('http') ? path : `${STORAGE_URL}/${path}`;
         };
 
         const onClose = () => setIsImageModalOpen(false);
@@ -1030,7 +1031,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
     const renderFullReportView = () => {
         if (!fullReportData) return null;
         const { profile, loans, sales } = fullReportData;
-        const storageUrl = "https://wday.lk/DBS_backend_30500/application/public/storage/";
+        const storageUrl = `${STORAGE_URL}/`;
 
         return (
             <div style={fullScreenReportOverlay}>
@@ -1224,7 +1225,7 @@ const handleUnprintedBillClick = async (supplierCode, billNo) => {
                     {profilePic && (
                         <div style={{ marginLeft: '20px' }}>
                             <img
-                                src={profilePic.startsWith('http') ? profilePic : `https://wday.lk/DBS_backend_30500/application/public/storage/${profilePic}`}
+                                src={profilePic.startsWith('http') ? profilePic : `${STORAGE_URL}/${profilePic}`}
                                 alt="Supplier"
                                 onClick={() => setIsImageModalOpen(true)}
                                 style={{

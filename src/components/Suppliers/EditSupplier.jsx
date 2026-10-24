@@ -3,9 +3,10 @@ import * as faceapi from "face-api.js";
 import { supplierService } from '../../services/supplierService';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
+import { BACKEND_URL } from '../../config/paths';
 
 // ⭐ UPDATED TO LOCALHOST FOR IMAGES
-const STORAGE_URL = "https://wday.lk/DBS_backend_30500/application/public";
+const STORAGE_URL = BACKEND_URL;
 
 const EditSupplier = () => {
 

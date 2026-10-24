@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api'; // ← Use global axios instance
 import { Link, useNavigate } from 'react-router-dom';
+import { APP_BASE, STORAGE_URL as BACKEND_STORAGE_URL } from '../../config/paths';
 
 const SupplierList = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -10,7 +11,7 @@ const SupplierList = () => {
   const navigate = useNavigate();
 
   // ⭐ LOCALHOST STORAGE LINK
-  const STORAGE_URL = "https://wday.lk/DBS_backend_30500/application/public/storage/";
+  const STORAGE_URL = `${BACKEND_STORAGE_URL}/`;
 
   useEffect(() => {
     loadSuppliers();
@@ -31,7 +32,7 @@ const SupplierList = () => {
   const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    window.location.href = '/login';
+    window.location.href = `${APP_BASE}/login`;
   };
 
   const handleSearch = async (value) => {

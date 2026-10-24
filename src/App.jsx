@@ -37,20 +37,13 @@ import FarmerLoanManager from './components/LoanManager/FarmerLoanManager';
 import SupplierReportPrinted from './components/Suppliers/SupplierReportPrinted';
 import SupplierLoanReport from './components/Reports/SupplierLoanReport'; 
 import SupplierFinalReport from './components/Reports/SupplierFullReport';
+import { APP_BASE } from './config/paths';
 
 // Import Layout
 import Layout from './components/Layout/Layout';
 
 // Helper function to get basename
-const getBasename = () => {
-    const { hostname } = window.location;
-    // Check if we're on the hosted domain
-    if (hostname.includes('wday.lk')) {
-        return '/DBS_frontend_30500';
-    }
-    // Local development or other environments
-    return '/';
-};
+const getBasename = () => APP_BASE || '/';
 
 // ✅ ProtectedRoute component — blocks access if user not logged in
 const ProtectedRoute = ({ children }) => {

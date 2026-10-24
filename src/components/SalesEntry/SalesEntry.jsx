@@ -7,6 +7,7 @@ import AdminView from "../AdminView";
 import { ThermalBillHTML, A4BillHTML } from '../BillTemplates';
 import ImagePreviewModal from '../ImagePreviewModal';
 import { SHOP_PHONE } from '../../config/shop';
+import { BACKEND_URL } from '../../config/paths';
 
 const routes = {
     markPrinted: "/sales/mark-printed",
@@ -1298,7 +1299,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
             );
 
             if (customer) {
-                const baseUrl = "https://wday.lk/DBS_backend_30500/application/public";
+                const baseUrl = BACKEND_URL;
                 let fileName = customer.profile_pic;
                 let fullPath = null;
 
@@ -1336,7 +1337,7 @@ export default function SalesEntry({ printMode: propPrintMode = 'thermal', setPr
 
             if (supplier) {
                 // Root path where the 'storage' symlink is located
-                const baseUrl = "https://wday.lk/DBS_backend_30500/application/public";
+                const baseUrl = BACKEND_URL;
                 let fileName = supplier.profile_pic;
 
                 let fullPath = null;

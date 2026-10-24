@@ -3,6 +3,7 @@ import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable'; 
 import api from '../../api';
 import Sidebar from '../Sidebar';
+import { APP_BASE } from '../../config/paths';
 
 const formatCustomerOptions = (customers) => customers.map(c => ({
     value: c.id,
@@ -440,7 +441,7 @@ const LoanManager = () => {
                             </tbody>
                         </table>
                         <div className="d-flex flex-wrap gap-2 mt-3">
-                            <a href="/DBS_frontend_30500/loan-report" className="btn btn-sm btn-dark">ණය වාර්තාව</a>
+                            <a href={`${APP_BASE}/loan-report`} className="btn btn-sm btn-dark">ණය වාර්තාව</a>
                         </div>
                     </div>
                 </div>

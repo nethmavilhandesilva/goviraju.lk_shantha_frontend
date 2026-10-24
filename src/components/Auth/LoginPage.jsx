@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import api from "../../api";
 import { SHOP_NAME, SHOP_PHONE } from "../../config/shop";
 import "./LoginPage.css";
+import { APP_BASE } from "../../config/paths";
 
 const LoginPage = () => {
   const [user_id, setUserId] = useState("");
@@ -43,7 +44,7 @@ const LoginPage = () => {
           localStorage.removeItem("remembered_user");
         }
 
-        window.location.href = "/DBS_frontend_30500/sales";
+        window.location.href = `${APP_BASE}/sales`;
       } else {
         setError("Invalid credentials");
       }
@@ -193,7 +194,7 @@ const LoginPage = () => {
                 />
                 <span>මතක තබා ගන්න</span>
               </label>
-              <a href="/DBS_frontend_30500/forgot-password" className="lp-link">
+              <a href={`${APP_BASE}/forgot-password`} className="lp-link">
                 Forgot password?
               </a>
             </div>
@@ -211,7 +212,7 @@ const LoginPage = () => {
 
             <div className="lp-register">
               New user?{" "}
-              <a href="/DBS_frontend_30500/register" className="lp-link">
+              <a href={`${APP_BASE}/register`} className="lp-link">
                 Create an account
               </a>
             </div>

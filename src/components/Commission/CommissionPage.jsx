@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
 import { Link } from 'react-router-dom';
 import CommissionForm from './CommissionForm';
+import { APP_BASE } from '../../config/paths';
 
 const CommissionPage = () => {
     const [commissions, setCommissions] = useState([]);
@@ -43,7 +44,7 @@ const CommissionPage = () => {
 
     const handleLogout = () => {
         localStorage.clear();
-        window.location.href = '/login';
+        window.location.href = `${APP_BASE}/login`;
     };
 
     const handleEditClick = (c) => {

@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL, APP_BASE } from './config/paths';
 
 const api = axios.create({
-  baseURL: "https://wday.lk/pos_backend_90500/api", // ✅ Your live Laravel API
+  baseURL: API_BASE_URL, // ✅ Your live Laravel API
   headers: {
     Accept: "application/json",
   },
@@ -41,7 +42,7 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
 
       // ✅ Subfolder-safe redirect (your original fix kept)
-      window.location.href = "/DBS_frontend_30500/login";
+      window.location.href = `${APP_BASE}/login`;
     }
     return Promise.reject(error);
   }

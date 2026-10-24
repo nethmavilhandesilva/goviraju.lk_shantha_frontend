@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import api from "../../api"; 
 import { SHOP_NAME } from '../../config/shop';
+import { APP_BASE } from '../../config/paths';
 
 const LoanReportView = () => {
     const [loans, setLoans] = useState([]);
@@ -33,7 +34,7 @@ const LoanReportView = () => {
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
-        window.location.href = '/login';
+        window.location.href = `${APP_BASE}/login`;
     };
 
     const getStatusFromColor = (color) => {

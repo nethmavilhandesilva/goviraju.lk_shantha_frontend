@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import toast from 'react-hot-toast';
+import { APP_BASE } from '../../config/paths';
 
 const DayProcessModal = ({ isOpen, onClose }) => {
     // Get today's date (YYYY-MM-DD)
@@ -47,7 +48,7 @@ const DayProcessModal = ({ isOpen, onClose }) => {
                 onClose();
 
                 // ✅ Redirect immediately to login page
-                window.location.href = "https://wday.lk/DBS_frontend_30500/login";
+                window.location.href = `${APP_BASE}/login`;
             } else {
                 toast.error(
                     response.data.message || "An unknown error occurred during day process."

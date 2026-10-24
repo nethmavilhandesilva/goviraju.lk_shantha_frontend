@@ -1,4 +1,5 @@
-const API_BASE = 'http://localhost:8000/api';
+import { API_BASE_URL } from '../config/paths';
+const API_BASE = API_BASE_URL;
 import axios from 'axios';
 
 export const fetchNotChangingGRNs = async () => {

@@ -1,10 +1,11 @@
 // src/components/ImagePreviewModal.jsx
 import React from 'react';
+import { STORAGE_URL } from '../config/paths';
 
 const ImagePreviewModal = ({ isOpen, onClose, data }) => {
     if (!isOpen || !data) return null;
 
-    const baseUrl = "https://wday.lk/DBS_backend_30500/application/public/storage/";
+    const baseUrl = `${STORAGE_URL}/`;
 
     const formatUrl = (path) => {
         if (!path) return null;

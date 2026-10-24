@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../config/paths';
 
 const SupplierForm = () => {
     const [payload, setPayload] = useState({
@@ -20,7 +21,7 @@ const SupplierForm = () => {
 
         try {
             // Replace with your actual Laravel API URL
-            const response = await axios.post('https://wday.lk/DBS_backend_30500/api/suppliers/advance', payload);
+            const response = await axios.post(`${API_BASE_URL}/suppliers/advance`, payload);
             
             setMessage({ 
                 type: 'success', 
