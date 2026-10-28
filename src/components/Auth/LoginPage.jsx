@@ -7,9 +7,11 @@ import { APP_BASE } from "../../config/paths";
 const LoginPage = () => {
   const [user_id, setUserId] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showPassword2, setShowPassword2] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
   React.useEffect(() => {
@@ -29,6 +31,7 @@ const LoginPage = () => {
       const response = await api.post("/login", {
         user_id,
         password,
+        password2,
       });
 
       if (response.data.token) {
@@ -49,7 +52,9 @@ const LoginPage = () => {
         setError("Invalid credentials");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Please check your credentials.");
+      const fieldErrors = err.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat()[0] : null;
+      setError(firstFieldError || err.response?.data?.message || "Login failed. Please check your credentials.");
     } finally {
       setIsLoading(false);
     }
@@ -181,6 +186,30 @@ const LoginPage = () => {
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            <div className="lp-field">
+              <label className="lp-label" htmlFor="lp-pass2">දෙවන මුරපදය / Second Password</label>
+              <div className="lp-input-wrap">
+                <span className="lp-input-icon" aria-hidden="true">🔐</span>
+                <input
+                  id="lp-pass2"
+                  type={showPassword2 ? "text" : "password"}
+                  className="lp-input has-toggle"
+                  value={password2}
+                  onChange={(e) => setPassword2(e.target.value)}
+                  placeholder="Enter your second password"
+                  autoComplete="off"
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  className="lp-toggle"
+                  onClick={() => setShowPassword2(!showPassword2)}
+                >
+                  {showPassword2 ? "Hide" : "Show"}
                 </button>
               </div>
             </div>

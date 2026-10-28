@@ -1606,7 +1606,9 @@ const SupplierReport = () => {
 
         let finalBillNo = selectedBillNo;
 
-        // If it's a new bill (Unprinted), we must finalize and send SMS
+        // If it's a new bill (Unprinted), finalize it first to get the bill number.
+        // The backend sends the SMS only after replying (and only if SMS is configured),
+        // so the bill prints straight away.
         if (isUnprintedBill) {
             setIsDetailsLoading(true);
             try {
@@ -1619,48 +1621,15 @@ const SupplierReport = () => {
 
                 finalBillNo = response.data.new_bill_no;
                 setSelectedBillNo(finalBillNo);
-
-                if (phoneNo) {
-                    console.log(`Finalized Bill ${finalBillNo}. SMS triggered for ${phoneNo}`);
-                }
+                console.log(`Finalized Bill ${finalBillNo}. SMS: ${response.data.sms || 'unknown'}`);
             } catch (err) {
-                console.error('Finalize/SMS Error:', err);
-                alert('Finalize failed. SMS could not be sent.');
+                console.error('Finalize Error:', err);
+                alert(`Bill could not be finalized:\n${extractApiErrorMessage(err, 'Unknown error')}`);
                 setIsDetailsLoading(false);
                 isPrintingOrUpdatingRef.current = false;
                 return;
             } finally {
                 setIsDetailsLoading(false);
-            }
-        } else {
-            // For printed bills, send SMS without finalizing
-            if (phoneNo) {
-                setIsDetailsLoading(true);
-                try {
-                    const smsResponse = await api.post('/suppliers/resend-sms', {
-                        bill_no: selectedBillNo,
-                        telephone_no: phoneNo,
-                        supplier_code: selectedSupplier,
-                        transaction_ids: supplierDetails.map(r => r.id),
-                        advance_amount: advanceAmount,
-                        is_reprint: true
-                    });
-
-                    console.log(`Reprint SMS triggered for ${phoneNo} on bill ${selectedBillNo}`);
-
-                    setPhoneStatus('📱 SMS resent');
-                    setTimeout(() => setPhoneStatus(''), 2000);
-
-                } catch (err) {
-                    console.error('SMS Resend Error:', err);
-                    setPhoneStatus('⚠️ SMS failed');
-                    setTimeout(() => setPhoneStatus(''), 2000);
-                } finally {
-                    setIsDetailsLoading(false);
-                }
-            } else {
-                setPhoneStatus('⚠️ No phone number');
-                setTimeout(() => setPhoneStatus(''), 2000);
             }
         }
 
@@ -1740,6 +1709,34 @@ const SupplierReport = () => {
         // calling print() was pure dead time on every F4 press.
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
+
+        // Reprint of an already printed bill: resend the SMS after printing.
+        // The backend skips it when no SMS credentials are configured.
+        if (!isUnprintedBill) {
+            if (phoneNo) {
+                api.post('/suppliers/resend-sms', {
+                    bill_no: selectedBillNo,
+                    telephone_no: phoneNo,
+                    supplier_code: selectedSupplier,
+                    transaction_ids: supplierDetails.map(r => r.id),
+                    advance_amount: advanceAmount,
+                    is_reprint: true
+                })
+                    .then(res => {
+                        console.log(`Reprint SMS for bill ${selectedBillNo}: ${res.data?.sms || 'unknown'}`);
+                        setPhoneStatus(res.data?.sms === 'queued' ? '📱 SMS resent' : '⚠️ SMS not configured');
+                        setTimeout(() => setPhoneStatus(''), 2000);
+                    })
+                    .catch(err => {
+                        console.error('SMS Resend Error:', err);
+                        setPhoneStatus('⚠️ SMS failed');
+                        setTimeout(() => setPhoneStatus(''), 2000);
+                    });
+            } else {
+                setPhoneStatus('⚠️ No phone number');
+                setTimeout(() => setPhoneStatus(''), 2000);
+            }
+        }
 
         // Remove iframe after print dialog closes
         const checkPrintDone = setInterval(() => {

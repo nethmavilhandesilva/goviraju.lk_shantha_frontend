@@ -443,3 +443,60 @@
     animation: none;
   }
 }
+
+/* ---------- Register page (reuses the login layout) ---------- */
+.lp-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--lp-green-100);
+  border-left: 4px solid var(--lp-green-500);
+  color: var(--lp-green-900);
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+
+.lp-section-title {
+  margin: 22px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lp-border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--lp-green-700);
+}
+
+.lp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+
+.lp-field-note {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.lp-field-note.ok { color: var(--lp-green-700); }
+.lp-field-note.bad { color: #b3261e; }
+
+.lp-strength {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.lp-strength span {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--lp-border);
+  transition: background 0.2s;
+}
+.lp-strength.s1 span:nth-child(-n+1) { background: var(--lp-red); }
+.lp-strength.s2 span:nth-child(-n+2) { background: var(--lp-orange); }
+.lp-strength.s3 span:nth-child(-n+3) { background: var(--lp-yellow); }
+.lp-strength.s4 span:nth-child(-n+4) { background: var(--lp-green-500); }
+
+@media (max-width: 480px) {
+  .lp-row { grid-template-columns: 1fr; }
+}

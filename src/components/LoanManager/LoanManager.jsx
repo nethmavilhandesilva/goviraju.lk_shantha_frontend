@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Select from 'react-select';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import CreatableSelect from 'react-select/creatable'; 
 import api from '../../api';
 import Sidebar from '../Sidebar';
@@ -10,6 +9,12 @@ const formatCustomerOptions = (customers) => customers.map(c => ({
     label: `${c.short_name}`,
     shortName: c.short_name,
     creditLimit: c.credit_limit
+}));
+
+const formatSupplierOptions = (suppliers) => suppliers.map(s => ({
+    value: s.code,
+    label: `${s.code}`,
+    shortName: s.code,
 }));
 
 const expenseOptions = [
@@ -24,6 +29,8 @@ const getInitialFormState = () => ({
     loan_type: 'old',
     settling_way: 'cash',
     customer_id: null,
+    customer_short_name: '', // typed-in customer name when not picked from the list
+    supplier_code: null,
     bill_no: '',
     amount: '',
     description: '',
@@ -44,6 +51,7 @@ const getInitialFormState = () => ({
 const LoanManager = () => {
     const [form, setForm] = useState(getInitialFormState());
     const [customersRaw, setCustomersRaw] = useState([]);
+    const [suppliersRaw, setSuppliersRaw] = useState([]);
     const [grnCodes, setGrnCodes] = useState([]);
     const [loans, setLoans] = useState([]);
     const [billNos, setBillNos] = useState([]);
@@ -51,9 +59,12 @@ const LoanManager = () => {
     const [creditLimitMessage, setCreditLimitMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [isEditMode, setIsEditMode] = useState(false);
+    const formRef = useRef(null);
 
     const isCustomerRelated = form.loan_type === 'old' || form.loan_type === 'today';
-    const isSettlingWayVisible = form.loan_type === 'old';
+    const isFarmerRelated = form.loan_type === 'farmer_old' || form.loan_type === 'farmer_today';
+    const isLoanRelated = isCustomerRelated || isFarmerRelated;
+    const isSettlingWayVisible = form.loan_type === 'old' || form.loan_type === 'farmer_old';
     const isCheque = form.settling_way === 'cheque';
     const isReturns = form.loan_type === 'returns';
     const isIncomeOrExpense = form.loan_type === 'ingoing' || form.loan_type === 'outgoing';
@@ -65,6 +76,15 @@ const LoanManager = () => {
             setCustomersRaw(data);
         } catch (error) {
             console.error('Error fetching customers:', error);
+        }
+    }, []);
+
+    const fetchSuppliers = useCallback(async () => {
+        try {
+            const { data } = await api.get('/suppliers');
+            setSuppliersRaw(Array.isArray(data) ? data : (data?.data || []));
+        } catch (error) {
+            console.error('Error fetching suppliers:', error);
         }
     }, []);
 
@@ -91,19 +111,32 @@ const LoanManager = () => {
 
     useEffect(() => {
         fetchCustomers();
+        fetchSuppliers();
         fetchData();
         fetchBillNos();
-    }, [fetchCustomers, fetchData, fetchBillNos]);
+    }, [fetchCustomers, fetchSuppliers, fetchData, fetchBillNos]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setForm(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSelectChange = (name) => (selectedOption) => {
+    // Customer: pick an existing customer, or type a new name (stored as customer_short_name)
+    const handleCustomerChange = (selectedOption) => {
+        if (!selectedOption) {
+            setForm(prev => ({ ...prev, customer_id: null, customer_short_name: '' }));
+        } else if (selectedOption.__isNew__) {
+            setForm(prev => ({ ...prev, customer_id: null, customer_short_name: selectedOption.value.trim().toUpperCase() }));
+        } else {
+            setForm(prev => ({ ...prev, customer_id: selectedOption.value, customer_short_name: '' }));
+        }
+    };
+
+    // Farmer: pick an existing supplier code, or type a new farmer name
+    const handleFarmerChange = (selectedOption) => {
         setForm(prev => ({
             ...prev,
-            [name]: selectedOption ? selectedOption.value : null,
+            supplier_code: selectedOption ? selectedOption.value.trim().toUpperCase() : null,
         }));
     };
 
@@ -116,9 +149,14 @@ const LoanManager = () => {
 
     const handleLoanTypeChange = (e) => {
         const { value } = e.target;
-        const resetFields = (value === 'ingoing' || value === 'outgoing' || value === 'returns')
-            ? { customer_id: null, bill_no: '', settling_way: 'cash' }
-            : {};
+        let resetFields = {};
+        if (value === 'ingoing' || value === 'outgoing' || value === 'returns') {
+            resetFields = { customer_id: null, customer_short_name: '', supplier_code: null, bill_no: '', settling_way: 'cash' };
+        } else if (value === 'farmer_old' || value === 'farmer_today') {
+            resetFields = { customer_id: null, customer_short_name: '' };
+        } else {
+            resetFields = { supplier_code: null };
+        }
 
         if (value === 'returns') setIsEditMode(false);
 
@@ -129,10 +167,10 @@ const LoanManager = () => {
         }));
     };
 
-    const fetchLoanTotal = useCallback(async (customerId, showTotalLoan) => {
-        if (customerId && showTotalLoan) {
+    const fetchLoanTotal = useCallback(async (totalUrl) => {
+        if (totalUrl) {
             try {
-                const res = await api.get(`/customers/${customerId}/loans-total`);
+                const res = await api.get(totalUrl);
                 const totalAmount = Math.abs(parseFloat(res.data.total_amount));
                 setTotalLoanDisplay(`(Total Loans: ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`);
             } catch (error) {
@@ -153,6 +191,10 @@ const LoanManager = () => {
             newDescription = settling_way === 'cheque' ? `Cheque payment from ${bank || 'bank'}` : "වෙළෙන්දාගේ ලාද පරණ නය";
         } else if (loan_type === 'today') {
             newDescription = "වෙළෙන්දාගේ අද දින නය ගැනීම";
+        } else if (loan_type === 'farmer_old') {
+            newDescription = settling_way === 'cheque' ? `Cheque payment from ${bank || 'bank'}` : "ගොවියා ලාද පරණ නය";
+        } else if (loan_type === 'farmer_today') {
+            newDescription = "ගොවියා අද දින නය ගැනීම";
         } else if (loan_type === 'ingoing') {
             newDescription = "වෙනත් ලාභීම/ආදායම්";
         }
@@ -163,8 +205,16 @@ const LoanManager = () => {
     }, [form.loan_type, form.settling_way, form.bank, isEditMode]);
 
     useEffect(() => {
-        fetchLoanTotal(form.customer_id, isCustomerRelated);
-    }, [form.customer_id, isCustomerRelated, fetchLoanTotal]);
+        let totalUrl = null;
+        if (isCustomerRelated && form.customer_id) {
+            totalUrl = `/customers/${form.customer_id}/loans-total`;
+        } else if (isCustomerRelated && form.customer_short_name) {
+            totalUrl = `/customers-loans-total-by-name?name=${encodeURIComponent(form.customer_short_name)}`;
+        } else if (isFarmerRelated && form.supplier_code) {
+            totalUrl = `/farmers/${encodeURIComponent(form.supplier_code)}/loans-total`;
+        }
+        fetchLoanTotal(totalUrl);
+    }, [form.customer_id, form.customer_short_name, form.supplier_code, isCustomerRelated, isFarmerRelated, fetchLoanTotal]);
 
     useEffect(() => {
         const { customer_id, amount } = form;
@@ -234,6 +284,8 @@ const LoanManager = () => {
             loan_type: loan.loan_type,
             settling_way: loan.settling_way || 'cash',
             customer_id: loan.customer_id,
+            customer_short_name: (!loan.customer_id && !loan.supplier_code) ? (loan.customer_short_name || '') : '',
+            supplier_code: loan.supplier_code || null,
             bill_no: loan.bill_no || '',
             amount: Math.abs(loan.amount),
             description: loan.description,
@@ -256,6 +308,28 @@ const LoanManager = () => {
     };
 
     const customerOptions = useMemo(() => formatCustomerOptions(customersRaw), [customersRaw]);
+    const supplierOptions = useMemo(() => formatSupplierOptions(suppliersRaw), [suppliersRaw]);
+
+    // Enter moves the cursor to the next field instead of submitting the form.
+    // For dropdowns, react-select picks the highlighted option first, then focus moves on.
+    // Enter on the submit button still submits. Loan-type radios are skipped as targets.
+    const handleFormKeyDown = (e) => {
+        if (e.key !== 'Enter' || e.target.type === 'submit') return;
+        e.preventDefault();
+
+        const current = e.target;
+        setTimeout(() => {
+            const form = formRef.current;
+            if (!form) return;
+            const fields = Array.from(form.querySelectorAll(
+                'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button[type="submit"]:not([disabled])'
+            )).filter(el => el.type !== 'radio' && el.offsetParent !== null);
+
+            // Field after the current one in page order (works for radios, which are not in the list)
+            const next = fields.find(el => current.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+            if (next) next.focus();
+        }, 0);
+    };
 
     const customFilter = (option, searchText) => {
         const term = searchText.toLowerCase().trim();
@@ -286,15 +360,17 @@ const LoanManager = () => {
                 <div className="custom-card">
                     <h3 className="mb-4">ණය කළමනාකරණ පුවරුව</h3>
 
-                    <form onSubmit={e => handleSubmit(e, isReturns)} className="p-3 border border-2 border-dark rounded bg-custom-dark">
+                    <form ref={formRef} onSubmit={e => handleSubmit(e, isReturns)} onKeyDown={handleFormKeyDown} className="p-3 border border-2 border-dark rounded bg-custom-dark">
                         <div className="row gy-2">
                             <div className="col-md-8">
-                                {['old', 'today', 'ingoing', 'outgoing', 'returns'].map(type => (
+                                {['old', 'today', 'farmer_old', 'farmer_today', 'ingoing', 'outgoing', 'returns'].map(type => (
                                     <label key={type} className="me-3">
                                         <input type="radio" name="loan_type" value={type} checked={form.loan_type === type} onChange={handleLoanTypeChange} />
                                         {' '}
                                         {type === 'old' && 'වෙළෙන්දාගේ ලාද පරණ නය'}
                                         {type === 'today' && 'වෙළෙන්දාගේ අද දින නය ගැනීම'}
+                                        {type === 'farmer_old' && 'ගොවියා ලාද පරණ නය'}
+                                        {type === 'farmer_today' && 'ගොවියා අද දින නය ගැනීම'}
                                         {type === 'ingoing' && 'වෙනත් ලාභීම/ආදායම්'}
                                         {type === 'outgoing' && 'වි‍යදම්'}
                                         {type === 'returns' && 'Returns'}
@@ -317,10 +393,14 @@ const LoanManager = () => {
                             {isCustomerRelated && (
                                 <div className="col-md-4">
                                     <label className="text-form-label">ගෙණුම්කරු</label>
-                                    <Select
+                                    <CreatableSelect
                                         options={customerOptions}
-                                        onChange={handleSelectChange('customer_id')}
-                                        value={customerOptions.find(opt => opt.value === form.customer_id)}
+                                        onChange={handleCustomerChange}
+                                        value={
+                                            customerOptions.find(opt => opt.value === form.customer_id) ||
+                                            (form.customer_short_name ? { value: form.customer_short_name, label: form.customer_short_name } : null)
+                                        }
+                                        formatCreateLabel={(inputValue) => `නව ගෙණුම්කරු: ${inputValue.toUpperCase()}`}
                                         filterOption={customFilter}
                                         placeholder="-- Select Customer --"
                                         isClearable
@@ -333,7 +413,30 @@ const LoanManager = () => {
                                 </div>
                             )}
 
-                            {isCustomerRelated && !isCheque && (
+                            {isFarmerRelated && (
+                                <div className="col-md-4">
+                                    <label className="text-form-label">ගොවියා</label>
+                                    <CreatableSelect
+                                        options={supplierOptions}
+                                        onChange={handleFarmerChange}
+                                        value={
+                                            supplierOptions.find(opt => opt.value === form.supplier_code) ||
+                                            (form.supplier_code ? { value: form.supplier_code, label: form.supplier_code } : null)
+                                        }
+                                        formatCreateLabel={(inputValue) => `නව ගොවියා: ${inputValue.toUpperCase()}`}
+                                        filterOption={customFilter}
+                                        placeholder="-- Select Farmer --"
+                                        isClearable
+                                        classNamePrefix="select"
+                                        styles={{
+                                            option: (provided) => ({ ...provided, fontWeight: 'bold', color: '#000' }),
+                                            singleValue: (provided) => ({ ...provided, fontWeight: 'bold', color: '#000' }),
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                            {isLoanRelated && !isCheque && (
                                 <div className="col-md-3">
                                     <label className="text-form-label">බිල් අං</label>
                                     <input type="text" className="form-control form-control-sm" name="bill_no" value={form.bill_no} onChange={handleInputChange} />
@@ -369,7 +472,7 @@ const LoanManager = () => {
                                                 input: (provided) => ({ ...provided, color: '#000' }),
                                             }}
                                         />
-                                        {isCustomerRelated && <span className="text-white-50 small fw-bold">{totalLoanDisplay}</span>}
+                                        {isLoanRelated && <span className="text-white-50 small fw-bold">{totalLoanDisplay}</span>}
                                     </div>
                                 </div>
                             )}
