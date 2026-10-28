@@ -403,6 +403,9 @@ const SupplierReport = () => {
 
     // 🚀 NEW STATE: To hold the advance amount from the suppliers table
     const [advanceAmount, setAdvanceAmount] = useState(0);
+    // Farmer's outstanding loan from the loan manager (ගොවියා ලාද පරණ නය / අද දින නය ගැනීම),
+    // printed on the bill as "පෙර ණය" the same way customer bills show it
+    const [farmerLoanTotal, setFarmerLoanTotal] = useState(0);
 
     // 🚀 NEW STATE: For the Advance Entry Form Logic
     const [advancePayload, setAdvancePayload] = useState({ code: '', advance_amount: '' });
@@ -467,12 +470,24 @@ const SupplierReport = () => {
     }, []);
 
     // 🚀 NEW: Function to refresh supplier profile data
+    const fetchFarmerLoanTotal = useCallback(async (supplierCode) => {
+        if (!supplierCode) return 0;
+        try {
+            const res = await api.get(`/farmers/${encodeURIComponent(supplierCode)}/loans-total`);
+            return parseFloat(res.data?.total_amount) || 0;
+        } catch (error) {
+            console.error("Error fetching farmer loan total:", error.message);
+            return 0;
+        }
+    }, []);
+
     // 🚀 NEW: Function to refresh supplier profile data (preserves manual phone changes)
     const fetchSupplierProfile = useCallback(async (supplierCode) => {
         if (!supplierCode || isPrintingOrUpdatingRef.current) return;
 
         try {
             const supRes = await api.get(`/suppliers/search-by-code/${supplierCode}`);
+            setFarmerLoanTotal(await fetchFarmerLoanTotal(supplierCode));
             if (supRes.data) {
                 setAdvanceAmount(parseFloat(supRes.data.advance_amount) || 0);
                 setProfilePic(supRes.data.profile_pic);
@@ -492,7 +507,7 @@ const SupplierReport = () => {
         } catch (error) {
             console.error("Error refreshing supplier profile:", error);
         }
-    }, [isPhoneManuallyChanged]);
+    }, [isPhoneManuallyChanged, fetchFarmerLoanTotal]);
 
     // 🚀 NEW: Function to refresh bill details
     const refreshBillDetails = useCallback(async () => {
@@ -671,6 +686,7 @@ const SupplierReport = () => {
         setSelectedTransactionIds([]); // Ticks belong to the previous bill's rows
         setSelectionCriteria(null);
         setAdvanceAmount(0);
+        setFarmerLoanTotal(0);
         setProfilePic(null);
         setPhoneNo(''); // Reset before fetch
         setIsPhoneManuallyChanged(false); // 🔄 RESET manual change flag for new bill
@@ -709,7 +725,10 @@ const SupplierReport = () => {
             })
             .catch(error => console.error(`❌ Error fetching supplier profile:`, error.message));
 
-        await Promise.allSettled([detailsPromise, profilePromise]);
+        const loanPromise = fetchFarmerLoanTotal(supplierCode)
+            .then(total => { if (!isStale()) setFarmerLoanTotal(total); });
+
+        await Promise.allSettled([detailsPromise, profilePromise, loanPromise]);
         setTimeout(() => {
             if (!isStale()) isPrintingOrUpdatingRef.current = false;
         }, 500);
@@ -729,6 +748,7 @@ const SupplierReport = () => {
         setIsUnprintedBill(false);
         setSupplierDetails([]);
         setAdvanceAmount(0);
+        setFarmerLoanTotal(0);
         setAdvancePayload({ code: '', advance_amount: '' });
         setProfilePic(null);
         fetchSummary();
@@ -1214,6 +1234,7 @@ const SupplierReport = () => {
                     <span>ගෙවිය යුතු මුදල:</span>
                     <span>රු. ${formatNumber(grandNetPayable)}</span>
                 </div>
+                ${farmerLoanTotal !== 0 ? `<div class="total-row"><span>පෙර ණය:</span><span>රු. ${Math.abs(farmerLoanTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>` : ''}
             </div>
             
             <div class="footer">
@@ -1418,7 +1439,7 @@ const SupplierReport = () => {
     ${allPagesHTML}
 </body>
 </html>`;
-    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost]);
+    }, [selectedSupplier, supplierDetails, totalsupplierSales, advanceAmount, payingAmount, totalPacksSum, totalWeight, totalCustomerPackCost, farmerLoanTotal]);
 
     const getBillContent = useCallback((currentBillNo) => {
         const date = new Date().toLocaleDateString('si-LK');
@@ -1590,13 +1611,20 @@ const SupplierReport = () => {
             </span>
            </td>
         </tr>
+        ${farmerLoanTotal !== 0 ? `
+        <tr>
+          <td style="font-size:18px; padding-top:10px;">පෙර ණය:</td>
+          <td style="text-align:right; font-size:20px; padding-top:10px;">
+            Rs. ${Math.abs(farmerLoanTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </td>
+        </tr>` : ''}
     </table>
 
     <div style="margin-top:25px; border-top:1px dashed #000; padding-top:10px;"><table style="width:100%; border-collapse:collapse; font-size:14px; text-align:center;">${itemSummaryHtml}</table></div>
 </div>
 </body>
 </html>`;
-    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount, totalCustomerPackCost]);
+    }, [selectedSupplier, supplierDetails, totalPacksSum, totalsupplierSales, itemSummaryData, billSize, advanceAmount, payingAmount, totalCustomerPackCost, farmerLoanTotal]);
 
     const handlePrint = useCallback(async () => {
         if (!supplierDetails || supplierDetails.length === 0) return;
